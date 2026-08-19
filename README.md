@@ -91,6 +91,7 @@ that ships unauthenticated.
 ./gradlew :app:assembleDebug --no-daemon
 ```
 
-`local.properties` (gitignored) supplies `sdk.dir` and `DEBUG_KEYSTORE`. The
-keystore is pinned outside the ephemeral home directory so rebuilds keep the
+`local.properties` (gitignored) supplies `sdk.dir` and `DEBUG_KEYSTORE`, which
+points at a keystore kept outside the repo. The keystore is pinned
+outside the ephemeral home directory so rebuilds keep the
 same signature and the APK installs over the copy already on the phone.
