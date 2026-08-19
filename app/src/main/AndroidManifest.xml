@@ -9,10 +9,15 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <!-- Granted without a prompt for apps whose core purpose is alarms/timers,
-         unlike SCHEDULE_EXACT_ALARM which the user must approve. -->
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
-    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Lets us hand timers to the clock app. A normal permission: granted at
+         install, no prompt. -->
+    <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
+    <!-- Not for drawing anything. Since Android 10 a background app may not
+         start an activity, and a foreground service does not earn the right —
+         this is the only exemption a normal app can obtain, so without it the
+         intent to the clock app is silently dropped. The user must grant it by
+         hand in Settings. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <application
         android:allowBackup="true"
@@ -51,10 +56,6 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
-
-        <receiver
-            android:name=".TimerReceiver"
-            android:exported="false" />
 
     </application>
 </manifest>

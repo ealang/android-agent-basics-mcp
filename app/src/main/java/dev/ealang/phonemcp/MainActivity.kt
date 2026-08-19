@@ -37,6 +37,7 @@ class MainActivity : Activity() {
     private lateinit var portField: EditText
     private lateinit var tokenView: TextView
     private lateinit var toggle: Button
+    private lateinit var overlayStatus: TextView
 
     private val stateChanged = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) = refresh()
@@ -113,6 +114,24 @@ class MainActivity : Activity() {
         )
         root.addView(tokenButtons)
 
+        root.addView(label("Permissions"))
+        overlayStatus = TextView(this).apply { textSize = 13f }
+        root.addView(overlayStatus)
+
+        root.addView(
+            Button(this).apply {
+                text = "Allow starting the clock app"
+                // Confusingly named: we draw nothing over anything. It is just
+                // the one exemption that lets a background app start an activity.
+                setOnClickListener {
+                    startActivity(
+                        Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
+                            .setData(Uri.parse("package:$packageName")),
+                    )
+                }
+            },
+        )
+
         root.addView(
             Button(this).apply {
                 text = "Battery settings"
@@ -173,6 +192,14 @@ class MainActivity : Activity() {
         val running = McpService.running
         toggle.text = if (running) "Stop server" else "Start server"
         tokenView.text = config.token
+
+        overlayStatus.text = if (Clock.canStartFromBackground(this)) {
+            "Can hand timers to the clock app."
+        } else {
+            "\"Display over other apps\" is off, so timer requests will be " +
+                "dropped. Grant it below — Android needs it before a background " +
+                "app may open the clock."
+        }
 
         status.text = if (running) {
             val urls = McpService.localAddresses()

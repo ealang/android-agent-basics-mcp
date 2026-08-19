@@ -154,9 +154,9 @@ class McpServer(
             .put("name", "set_timer")
             .put(
                 "description",
-                "Set a timer on the user's phone. The phone rings and shows a " +
-                    "notification when it elapses, whether or not this server is " +
-                    "still being talked to. Use for 'remind me in N minutes' and " +
+                "Start a timer in the clock app on the user's phone. It rings " +
+                    "with their usual alarm sound and appears alongside any timers " +
+                    "they set by hand. Use for 'remind me in N minutes' and " +
                     "kitchen-timer style requests.",
             )
             .put(
@@ -176,24 +176,23 @@ class McpServer(
                                 JSONObject().put("type", "string")
                                     .put(
                                         "description",
-                                        "What the timer is for, shown in the notification.",
+                                        "What the timer is for. Shown on the phone, and " +
+                                            "the only way to cancel this specific timer later.",
                                     ),
                             ),
                     )
                     .put("required", JSONArray().put("seconds")),
             )
 
-        val listTimers = JSONObject()
-            .put("name", "list_timers")
-            .put("description", "List the timers currently pending on the phone.")
-            .put(
-                "inputSchema",
-                JSONObject().put("type", "object").put("properties", JSONObject()),
-            )
-
         val cancelTimer = JSONObject()
             .put("name", "cancel_timer")
-            .put("description", "Cancel a pending timer by its id, as shown by list_timers.")
+            .put(
+                "description",
+                "Cancel a running timer. Give the label it was set with; with no " +
+                    "label, cancels whichever timer is due to ring next. There is no " +
+                    "way to read back the phone's timers, so this cannot be checked " +
+                    "first — say what was cancelled and let the user confirm.",
+            )
             .put(
                 "inputSchema",
                 JSONObject()
@@ -201,15 +200,26 @@ class McpServer(
                     .put(
                         "properties",
                         JSONObject().put(
-                            "id",
-                            JSONObject().put("type", "integer")
-                                .put("description", "The timer id from list_timers."),
+                            "label",
+                            JSONObject().put("type", "string")
+                                .put("description", "The label the timer was set with."),
                         ),
-                    )
-                    .put("required", JSONArray().put("id")),
+                    ),
             )
 
-        return JSONArray().put(setTimer).put(listTimers).put(cancelTimer)
+        val showTimers = JSONObject()
+            .put("name", "show_timers")
+            .put(
+                "description",
+                "Open the clock app's timer screen on the phone, so the user can " +
+                    "see what is running. Returns nothing about the timers themselves.",
+            )
+            .put(
+                "inputSchema",
+                JSONObject().put("type", "object").put("properties", JSONObject()),
+            )
+
+        return JSONArray().put(setTimer).put(cancelTimer).put(showTimers)
     }
 
     /** Returns (text, isError). */
@@ -220,36 +230,53 @@ class McpServer(
             when {
                 seconds <= 0 ->
                     "FAILED: seconds is required and must be greater than zero." to true
-                seconds > 24 * 3600 ->
-                    "FAILED: that is longer than 24 hours; use a calendar reminder instead." to true
-                else -> {
-                    val timer = Timers.set(context, label, seconds)
-                    Log.i(TAG, "set_timer -> ${Timers.describe(timer)}")
-                    "CONFIRMED - timer ${Timers.describe(timer)}. It is now scheduled on the " +
-                        "phone and will fire even if this connection closes." to false
+                seconds > Clock.MAX_SECONDS ->
+                    "FAILED: that is longer than 24 hours, which is the most a timer " +
+                        "can be. Set an alarm or a calendar reminder instead." to true
+                else -> Clock.setTimer(context, seconds, label).let { result ->
+                    Log.i(TAG, "set_timer ${Clock.humanize(seconds)} \"$label\" -> $result")
+                    when (result) {
+                        Clock.Result.Ok ->
+                            "CONFIRMED - the phone's clock app is now running a " +
+                                "${Clock.humanize(seconds)} timer labelled \"$label\". It will " +
+                                "ring even if this connection closes." to false
+                        else -> describe(result)
+                    }
                 }
             }
         }
 
-        "list_timers" -> {
-            val timers = Timers.list(context)
-            if (timers.isEmpty()) {
-                "No timers are pending." to false
-            } else {
-                timers.joinToString("\n") { "  " + Timers.describe(it) } to false
+        "cancel_timer" -> {
+            val label = args.optString("label").ifBlank { null }
+            when (val result = Clock.dismissTimer(context, label)) {
+                Clock.Result.Ok ->
+                    if (label == null) {
+                        "Asked the clock app to cancel the next timer due to ring." to false
+                    } else {
+                        "Asked the clock app to cancel the timer labelled \"$label\"." to false
+                    }
+                else -> describe(result)
             }
         }
 
-        "cancel_timer" -> {
-            val id = args.optInt("id", -1)
-            if (Timers.cancel(context, id)) {
-                "CONFIRMED - timer #$id cancelled." to false
-            } else {
-                "FAILED: no pending timer with id $id. Call list_timers for current ids." to true
-            }
+        "show_timers" -> when (val result = Clock.showTimers(context)) {
+            Clock.Result.Ok -> "Opened the timer screen on the phone." to false
+            else -> describe(result)
         }
 
         else -> "No such tool: $name" to true
+    }
+
+    private fun describe(result: Clock.Result): Pair<String, Boolean> = when (result) {
+        Clock.Result.NeedsOverlayPermission ->
+            "FAILED: the phone is blocking this app from opening the clock app in the " +
+                "background. Tell the user to open Phone MCP and grant \"Display over " +
+                "other apps\" — Android allows a background app to start an activity " +
+                "only with that permission. Nothing was scheduled." to true
+        Clock.Result.NoClockApp ->
+            "FAILED: no app on the phone handles timer intents. Nothing was " +
+                "scheduled." to true
+        Clock.Result.Ok -> "OK" to false
     }
 
     // ------------------------------- helpers -------------------------------
@@ -271,8 +298,11 @@ class McpServer(
 private const val INSTRUCTIONS = """Tools that run on the user's Android phone.
 
 These act on the physical device the user is carrying, so effects are real and
-immediate: a timer set here rings on that phone. Prefer them over anything that
-merely records an intention when the user asks for something to happen at a
-specific time.
+immediate: a timer set here rings on that phone, in their own clock app. Prefer
+them over anything that merely records an intention when the user asks for
+something to happen at a specific time.
 
-set_timer takes a duration in seconds, not a wall-clock time — convert first."""
+set_timer takes a duration in seconds, not a wall-clock time — convert first.
+
+Android offers no way to read back the clock app's timers, so there is nothing
+to list and no way to verify. Report what was requested, not what is running."""
