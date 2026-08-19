@@ -1,7 +1,8 @@
 # phone-mcp
 
 An MCP server that runs on an Android phone, so an agent can act on the device
-the user is actually carrying. Currently it exposes timers.
+the user is actually carrying — timers, the paired Pebble watch, and where the
+phone is.
 
 ## Why this exists
 
@@ -25,6 +26,12 @@ nothing to push, so every exchange is ordinary request/response JSON.
 - `set_timer(seconds, label?)` — rejects ≤ 0 and > 24h.
 - `cancel_timer(label?)` — by label, or the next one to ring.
 - `show_timers()` — opens the clock app's timer screen.
+- `launch_watch_app(app)` / `stop_watch_app(app)` — a Pebble watchapp, by UUID
+  or by a name from `Watch.KNOWN_APPS`.
+- `get_location(max_age_seconds?)` — coordinates, accuracy, fix age, and a
+  street address when the geocoder can supply one.
+
+### Timers
 
 Timers are handed to whichever app answers `AlarmClock.ACTION_SET_TIMER`, which
 is normally the stock clock. That is worth more than ringing them ourselves: the
@@ -51,9 +58,47 @@ for a tool an agent is trusting, so `Clock.canStartFromBackground` checks first
 and the tools return a hard error naming the permission rather than reporting a
 timer that was never set.
 
+### The watch
+
+Nothing links against PebbleKit. The Core companion app (`coredevices.coreapp`)
+registers the PebbleKit Classic broadcast receivers at runtime and exports them,
+so `com.getpebble.action.app.START` with a `uuid` extra reaches
+`libPebble.launchApp(uuid)` and goes down the wire as an `AppRunStateStart`
+packet. `.STOP` likewise. The broadcast is addressed to the companion's package
+rather than sent implicitly.
+
+These are broadcasts, not activity starts, so none of the background rules that
+govern the timer intents apply here. No permission is needed beyond the
+`<queries>` entries that let this app see the companion at all.
+
+Launching cannot pass parameters — the app opens in its default state. Doing
+more requires `com.getpebble.action.app.SEND`, which delivers an AppMessage, but
+that listener only exists while a non-system watchapp is running and is skipped
+for apps that ship PKJS or declare an Android companion package. So it is a
+route to a watchapp we write, not to a stock one.
+
+Nothing reports back. The watch never acknowledges the launch, so the tools
+answer with what was asked for. To keep that from being a silent failure they
+first check the companion is installed and query its exported state provider
+(`content://com.getpebble.android.provider.basalt/state`, column 0) for a
+connected watch, and refuse to send if there isn't one.
+
+### Location
+
+Framework `LocationManager`, not Play Services, so the dependency list stays at
+one. Every enabled provider is asked at once and the first fix wins, with a 20 s
+ceiling. A cached fix younger than `max_age_seconds` short-circuits that; a
+cached fix older than it is still returned if the fresh request comes back
+empty, with its age stated, since a stale position beats none.
+
+The service declares `location` alongside `specialUse` so it can hold the
+permission while running in the background. Reverse geocoding is best effort —
+it needs the network, and the response says so by simply omitting the address.
+
 ## Running
 
-Open the app, press **Start server**, and grant **Allow starting the clock app**.
+Open the app, press **Start server**, and grant **Allow starting the clock app**
+and **Allow location**.
 The screen lists the URLs it's reachable on (one per network interface — LAN and
 tailnet both appear) and the bearer token, with a copy button.
 

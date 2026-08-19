@@ -253,8 +253,37 @@ class McpServer(
             )
             .put("inputSchema", appArgument)
 
+        val getLocation = JSONObject()
+            .put("name", "get_location")
+            .put(
+                "description",
+                "Where the user's phone is right now: coordinates, how accurate " +
+                    "the fix is, and a street address when one can be resolved. Use " +
+                    "for anything that depends on where they are — nearby places, " +
+                    "local weather, travel times, which timezone they are in.",
+            )
+            .put(
+                "inputSchema",
+                JSONObject()
+                    .put("type", "object")
+                    .put(
+                        "properties",
+                        JSONObject().put(
+                            "max_age_seconds",
+                            JSONObject().put("type", "integer")
+                                .put(
+                                    "description",
+                                    "Accept a cached fix this old before waiting for a " +
+                                        "new one. Defaults to 120. Raise it when a rough " +
+                                        "area will do, since a fresh fix can take " +
+                                        "several seconds and wakes the GPS.",
+                                ),
+                        ),
+                    ),
+            )
+
         return JSONArray().put(setTimer).put(cancelTimer).put(showTimers)
-            .put(launchWatchApp).put(stopWatchApp)
+            .put(launchWatchApp).put(stopWatchApp).put(getLocation)
     }
 
     /** Returns (text, isError). */
@@ -297,6 +326,40 @@ class McpServer(
         "show_timers" -> when (val result = Clock.showTimers(context)) {
             Clock.Result.Ok -> "Opened the timer screen on the phone." to false
             else -> describe(result)
+        }
+
+        "get_location" -> {
+            val maxAge = args.optLong("max_age_seconds", 120).coerceAtLeast(0)
+            when (val result = Locator.locate(context, maxAge)) {
+                is Locator.Result.Fix -> {
+                    val here = result.location
+                    val age = Locator.ageSeconds(here)
+                    Log.i(TAG, "get_location -> ${here.provider} ±${here.accuracy}m ${age}s old")
+                    buildString {
+                        append("%.5f, %.5f".format(here.latitude, here.longitude))
+                        result.address?.let { append(" — ").append(it) }
+                        append("\nAccurate to about ${here.accuracy.toInt()} m")
+                        append(", fix taken ${Clock.humanize(age)} ago")
+                        append(" (${here.provider}).")
+                        if (age > 600) {
+                            append(
+                                "\nThat fix is old — the phone may have moved since. " +
+                                    "Call again with max_age_seconds set low if it matters.",
+                            )
+                        }
+                    } to false
+                }
+                Locator.Result.NoPermission ->
+                    "FAILED: the user has not granted this app location access. Tell " +
+                        "them to open Phone MCP and grant location." to true
+                Locator.Result.Disabled ->
+                    "FAILED: location is switched off on the phone, so no provider can " +
+                        "answer. Tell the user to turn it on." to true
+                Locator.Result.NoFix ->
+                    "FAILED: location is on and permitted, but no fix came back in time " +
+                        "and nothing was cached. This happens indoors. Ask the user to " +
+                        "try near a window, or to say where they are." to true
+            }
         }
 
         "launch_watch_app" -> describe(Watch.launch(context, args.optString("app")), "opened")
@@ -364,4 +427,8 @@ to list and no way to verify. Report what was requested, not what is running.
 
 The watch tools reach a Pebble paired to that phone, by way of its companion
 app. Launching a watchapp cannot parameterise it — it opens in its default
-state, and the user drives it from there."""
+state, and the user drives it from there.
+
+get_location is the phone's own position, so it is where the user is. Call it
+rather than asking them where they are, and rather than assuming a city from
+earlier in the conversation."""

@@ -134,6 +134,24 @@ class MainActivity : Activity() {
 
         root.addView(
             Button(this).apply {
+                text = "Allow location"
+                setOnClickListener {
+                    if (Locator.hasPermission(this@MainActivity)) {
+                        // Already granted, or granted then revoked in Settings —
+                        // requestPermissions would do nothing visible either way.
+                        startActivity(
+                            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                                .setData(Uri.parse("package:$packageName")),
+                        )
+                    } else {
+                        requestPermissions(Locator.PERMISSIONS, 2)
+                    }
+                }
+            },
+        )
+
+        root.addView(
+            Button(this).apply {
                 text = "Battery settings"
                 // Without an exemption, aggressive OEM power management can kill
                 // the service and with it the listening socket.
@@ -193,13 +211,19 @@ class MainActivity : Activity() {
         toggle.text = if (running) "Stop server" else "Start server"
         tokenView.text = config.token
 
-        overlayStatus.text = if (Clock.canStartFromBackground(this)) {
+        val overlay = if (Clock.canStartFromBackground(this)) {
             "Can hand timers to the clock app."
         } else {
             "\"Display over other apps\" is off, so timer requests will be " +
                 "dropped. Grant it below — Android needs it before a background " +
                 "app may open the clock."
         }
+        val location = if (Locator.hasPermission(this)) {
+            "Can report the phone's location."
+        } else {
+            "Location is not granted, so get_location will fail."
+        }
+        overlayStatus.text = "$overlay\n\n$location"
 
         status.text = if (running) {
             val urls = McpService.localAddresses()
@@ -216,6 +240,15 @@ class MainActivity : Activity() {
             PackageManager.PERMISSION_GRANTED
         ) return
         requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        refresh()
     }
 
     private fun header(text: String) = TextView(this).apply {
