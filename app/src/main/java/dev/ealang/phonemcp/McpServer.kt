@@ -219,7 +219,42 @@ class McpServer(
                 JSONObject().put("type", "object").put("properties", JSONObject()),
             )
 
+        val appArgument = JSONObject()
+            .put("type", "object")
+            .put(
+                "properties",
+                JSONObject().put(
+                    "app",
+                    JSONObject().put("type", "string")
+                        .put(
+                            "description",
+                            "The watchapp, either by UUID or by one of these names: " +
+                                Watch.KNOWN_APPS.keys.joinToString(", "),
+                        ),
+                ),
+            )
+            .put("required", JSONArray().put("app"))
+
+        val launchWatchApp = JSONObject()
+            .put("name", "launch_watch_app")
+            .put(
+                "description",
+                "Open an app on the user's Pebble watch. The app takes over the " +
+                    "screen on their wrist. It starts in its default state — this " +
+                    "cannot set a duration or any other parameter.",
+            )
+            .put("inputSchema", appArgument)
+
+        val stopWatchApp = JSONObject()
+            .put("name", "stop_watch_app")
+            .put(
+                "description",
+                "Close an app on the user's Pebble watch, returning it to the watchface.",
+            )
+            .put("inputSchema", appArgument)
+
         return JSONArray().put(setTimer).put(cancelTimer).put(showTimers)
+            .put(launchWatchApp).put(stopWatchApp)
     }
 
     /** Returns (text, isError). */
@@ -264,7 +299,27 @@ class McpServer(
             else -> describe(result)
         }
 
+        "launch_watch_app" -> describe(Watch.launch(context, args.optString("app")), "opened")
+
+        "stop_watch_app" -> describe(Watch.stop(context, args.optString("app")), "closed")
+
         else -> "No such tool: $name" to true
+    }
+
+    private fun describe(result: Watch.Result, verb: String): Pair<String, Boolean> = when (result) {
+        Watch.Result.Sent ->
+            "Asked the watch to have the app $verb. The watch does not report back, " +
+                "so this cannot be confirmed — ask the user what they see." to false
+        Watch.Result.NoCompanionApp ->
+            "FAILED: the Pebble companion app (${Watch.COREAPP_PACKAGE}) is not " +
+                "installed on the phone. Nothing was sent." to true
+        Watch.Result.NoWatchConnected ->
+            "FAILED: the companion app reports no watch connected. Tell the user to " +
+                "check the watch is paired and in range. Nothing was sent." to true
+        is Watch.Result.UnknownApp ->
+            "FAILED: \"${result.given}\" is not a UUID and not a known app name. " +
+                "Known names: ${Watch.KNOWN_APPS.keys.joinToString(", ")}. Nothing " +
+                "was sent." to true
     }
 
     private fun describe(result: Clock.Result): Pair<String, Boolean> = when (result) {
@@ -305,4 +360,8 @@ something to happen at a specific time.
 set_timer takes a duration in seconds, not a wall-clock time — convert first.
 
 Android offers no way to read back the clock app's timers, so there is nothing
-to list and no way to verify. Report what was requested, not what is running."""
+to list and no way to verify. Report what was requested, not what is running.
+
+The watch tools reach a Pebble paired to that phone, by way of its companion
+app. Launching a watchapp cannot parameterise it — it opens in its default
+state, and the user drives it from there."""

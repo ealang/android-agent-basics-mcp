@@ -19,6 +19,13 @@
          hand in Settings. -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
+    <!-- Android 11+ hides other packages by default. Without these, the Pebble
+         companion looks uninstalled and its state provider unreadable. -->
+    <queries>
+        <package android:name="coredevices.coreapp" />
+        <provider android:authorities="com.getpebble.android.provider.basalt" />
+    </queries>
+
     <application
         android:allowBackup="true"
         android:label="Phone MCP"
