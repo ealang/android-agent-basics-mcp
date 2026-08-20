@@ -282,8 +282,48 @@ class McpServer(
                     ),
             )
 
+        val findMyPhone = JSONObject()
+            .put("name", "find_my_phone")
+            .put(
+                "description",
+                "Make the phone ring loudly so the user can find it. Plays as an " +
+                    "alarm, so it sounds even if the phone is on silent or in Do " +
+                    "Not Disturb. Stops on its own. Use when the user has lost the " +
+                    "phone, not to get their attention for something else.",
+            )
+            .put(
+                "inputSchema",
+                JSONObject()
+                    .put("type", "object")
+                    .put(
+                        "properties",
+                        JSONObject().put(
+                            "seconds",
+                            JSONObject().put("type", "integer")
+                                .put(
+                                    "description",
+                                    "How long to ring for. Defaults to " +
+                                        "${Sound.DEFAULT_SECONDS}, at most ${Sound.MAX_SECONDS}.",
+                                ),
+                        ),
+                    ),
+            )
+
+        val silencePhone = JSONObject()
+            .put("name", "silence_phone")
+            .put(
+                "description",
+                "Stop the find_my_phone ringing early, once the user says they have " +
+                    "found it.",
+            )
+            .put(
+                "inputSchema",
+                JSONObject().put("type", "object").put("properties", JSONObject()),
+            )
+
         return JSONArray().put(setTimer).put(cancelTimer).put(showTimers)
             .put(launchWatchApp).put(stopWatchApp).put(getLocation)
+            .put(findMyPhone).put(silencePhone)
     }
 
     /** Returns (text, isError). */
@@ -362,6 +402,32 @@ class McpServer(
             }
         }
 
+        "find_my_phone" -> {
+            val seconds = args.optLong("seconds", Sound.DEFAULT_SECONDS)
+                .coerceIn(1, Sound.MAX_SECONDS)
+            when (val result = Sound.play(context, seconds)) {
+                is Sound.Result.Playing ->
+                    "The phone is ringing now for ${Clock.humanize(result.seconds)}, " +
+                        "playing ${result.source}. It stops by itself; call " +
+                        "silence_phone to stop it sooner." to false
+                Sound.Result.Silent ->
+                    "FAILED: the phone's alarm volume is turned all the way down, so " +
+                        "ringing it would make no sound. Nothing was played. Try " +
+                        "get_location instead." to true
+                is Sound.Result.Failed ->
+                    "FAILED: could not play a sound (${result.reason}). If it mentions " +
+                        "permission, the user needs to grant Phone MCP access to " +
+                        "audio files." to true
+            }
+        }
+
+        "silence_phone" ->
+            if (Sound.stop()) {
+                "Stopped the ringing." to false
+            } else {
+                "The phone was not ringing." to false
+            }
+
         "launch_watch_app" -> describe(Watch.launch(context, args.optString("app")), "opened")
 
         "stop_watch_app" -> describe(Watch.stop(context, args.optString("app")), "closed")
@@ -431,4 +497,7 @@ state, and the user drives it from there.
 
 get_location is the phone's own position, so it is where the user is. Call it
 rather than asking them where they are, and rather than assuming a city from
-earlier in the conversation."""
+earlier in the conversation.
+
+find_my_phone is loud and overrides silent mode, so use it only for a phone the
+user has actually lost. If they are reading the reply, they have their phone."""

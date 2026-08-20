@@ -30,6 +30,7 @@ nothing to push, so every exchange is ordinary request/response JSON.
   or by a name from `Watch.KNOWN_APPS`.
 - `get_location(max_age_seconds?)` — coordinates, accuracy, fix age, and a
   street address when the geocoder can supply one.
+- `find_my_phone(seconds?)` / `silence_phone()` — ring the phone to locate it.
 
 ### Timers
 
@@ -95,10 +96,28 @@ The service declares `location` alongside `specialUse` so it can hold the
 permission while running in the background. Reverse geocoding is best effort —
 it needs the network, and the response says so by simply omitting the address.
 
+### Finding the phone
+
+`find_my_phone` plays a looping tone with `USAGE_ALARM`. That usage is the whole
+feature: alarms are exempt from silent mode and from Do Not Disturb, so a phone
+face-down under a cushion still answers. Being loud by definition, every ring is
+bounded — a deadline stops it after `seconds` (30 by default, 300 at most) even
+if `silence_phone` is never called, and stopping the service stops the tone,
+since nothing would be left to answer `silence_phone`.
+
+The one thing an alarm cannot override is a zeroed alarm slider, so the tool
+reads the volume first and refuses rather than ringing inaudibly and reporting
+success.
+
+The tone is `Alarms/alarm.mp3`, resolved by direct path, then by
+MediaStore filename, then falling back to the system alarm sound. A moved file
+degrades to a duller ring instead of failing, which is the right trade for a
+tool used when something is already lost.
+
 ## Running
 
-Open the app, press **Start server**, and grant **Allow starting the clock app**
-and **Allow location**.
+Open the app, press **Start server**, and grant **Allow starting the clock app**,
+**Allow location**, and **Allow audio files**.
 The screen lists the URLs it's reachable on (one per network interface — LAN and
 tailnet both appear) and the bearer token, with a copy button.
 

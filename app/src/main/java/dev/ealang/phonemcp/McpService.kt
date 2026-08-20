@@ -99,6 +99,9 @@ class McpService : Service() {
     }
 
     override fun onDestroy() {
+        // Nothing would be left able to answer silence_phone, so a ring that
+        // outlived the server would have to be waited out.
+        Sound.stop()
         server?.stop()
         server = null
         running = false

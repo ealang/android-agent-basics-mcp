@@ -134,6 +134,22 @@ class MainActivity : Activity() {
 
         root.addView(
             Button(this).apply {
+                text = "Allow audio files"
+                setOnClickListener {
+                    if (Sound.hasPermission(this@MainActivity)) {
+                        startActivity(
+                            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                                .setData(Uri.parse("package:$packageName")),
+                        )
+                    } else {
+                        requestPermissions(Sound.PERMISSIONS, 3)
+                    }
+                }
+            },
+        )
+
+        root.addView(
+            Button(this).apply {
                 text = "Allow location"
                 setOnClickListener {
                     if (Locator.hasPermission(this@MainActivity)) {
@@ -223,7 +239,13 @@ class MainActivity : Activity() {
         } else {
             "Location is not granted, so get_location will fail."
         }
-        overlayStatus.text = "$overlay\n\n$location"
+        val audio = if (Sound.hasPermission(this)) {
+            "Can play the find-my-phone tone."
+        } else {
+            "Audio files are not granted, so find_my_phone falls back to the " +
+                "phone's default alarm sound."
+        }
+        overlayStatus.text = "$overlay\n\n$location\n\n$audio"
 
         status.text = if (running) {
             val urls = McpService.localAddresses()
