@@ -1,18 +1,16 @@
 package dev.ealang.phonemcp
 
 import android.content.Context
-import android.content.pm.PackageManager
 import android.media.AudioAttributes
+import android.media.AudioFormat
 import android.media.AudioManager
-import android.media.MediaPlayer
-import android.media.RingtoneManager
-import android.net.Uri
-import android.os.Build
+import android.media.AudioTrack
 import android.os.Handler
 import android.os.Looper
-import android.provider.MediaStore
 import android.util.Log
-import java.io.File
+import kotlin.math.PI
+import kotlin.math.min
+import kotlin.math.sin
 
 /**
  * Makes the phone audible so the user can find it.
@@ -21,6 +19,9 @@ import java.io.File
  * silent mode and from Do Not Disturb, so a phone face-down in a sofa still
  * answers. It also means this is loud by definition and must stop on its own —
  * every play is bounded by a deadline.
+ *
+ * The tone is synthesised rather than loaded from a file, so there is no media
+ * permission to grant, no file to go missing, and nothing to fall back to.
  */
 object Sound {
 
@@ -28,40 +29,37 @@ object Sound {
     const val MAX_SECONDS = 300L
     const val DEFAULT_SECONDS = 30L
 
-    /** The ring tone. Missing files fall back to the system alarm. */
-    private const val DEFAULT_FILE = "/storage/emulated/0/Alarms/alarm.mp3"
+    /** 48 kHz divides evenly by 2 kHz, so a cycle is a whole 24 samples. */
+    private const val SAMPLE_RATE = 48_000
+    private const val FREQUENCY = 2_000.0
 
-    val PERMISSIONS: Array<String> =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            arrayOf(android.Manifest.permission.READ_MEDIA_AUDIO)
-        } else {
-            arrayOf(android.Manifest.permission.READ_EXTERNAL_STORAGE)
-        }
+    /** A second of tone then a second of silence: pulses are easier to locate. */
+    private const val TONE_SAMPLES = SAMPLE_RATE
+    private const val SILENCE_SAMPLES = SAMPLE_RATE
+
+    /** Long enough to kill the click at each edge, short enough to stay abrupt. */
+    private const val RAMP_SAMPLES = SAMPLE_RATE / 200
 
     private val main = Handler(Looper.getMainLooper())
 
-    private var player: MediaPlayer? = null
+    private var track: AudioTrack? = null
     private var stopAt: Runnable? = null
     /** The user's own alarm volume, and the manager to put it back with. */
     private var restoreVolume: Int? = null
     private var mixer: AudioManager? = null
 
     sealed interface Result {
-        data class Playing(val seconds: Long, val source: String, val percent: Int) : Result
+        data class Playing(val seconds: Long, val percent: Int) : Result
         data object Silent : Result
         data class Failed(val reason: String) : Result
     }
 
-    fun hasPermission(context: Context): Boolean = PERMISSIONS.any {
-        context.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED
-    }
-
     /** True while a ring is in progress, so the caller can say so. */
     @Synchronized
-    fun isPlaying(): Boolean = player != null
+    fun isPlaying(): Boolean = track != null
 
     /**
-     * @param percent 0–100 of the maximum alarm volume, or null to ring at
+     * @param percent 1–100 of the maximum alarm volume, or null to ring at
      *   whatever the user has the alarm slider set to.
      */
     @Synchronized
@@ -76,9 +74,6 @@ object Sound {
         // volume asked for, saying so beats ringing inaudibly and reporting
         // success.
         if (percent == null && current == 0) return Result.Silent
-
-        val (uri, source) = resolve(context)
-            ?: return Result.Failed("no tone file and no system alarm sound")
 
         stop()
 
@@ -98,31 +93,22 @@ object Sound {
         if (playedAt == 0) return Result.Silent
 
         return try {
-            val fresh = MediaPlayer().apply {
-                setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_ALARM)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                        .build(),
-                )
-                setDataSource(context, uri)
-                isLooping = true
-                prepare()
-                start()
-            }
-            player = fresh
+            val samples = pulse()
+            val fresh = build(samples)
+            fresh.play()
+            track = fresh
 
             val deadline = Runnable { stop() }
             stopAt = deadline
             main.postDelayed(deadline, seconds * 1000)
 
             val asPercent = playedAt * 100 / max
-            Log.i(TAG, "Ringing for ${seconds}s from $source at $asPercent% alarm volume")
-            Result.Playing(seconds, source, asPercent)
+            Log.i(TAG, "Ringing for ${seconds}s at $asPercent% alarm volume")
+            Result.Playing(seconds, asPercent)
         } catch (e: Exception) {
-            Log.w(TAG, "Could not play $uri", e)
-            player?.release()
-            player = null
+            Log.w(TAG, "Could not start the tone", e)
+            track?.release()
+            track = null
             restore()
             Result.Failed(e.message ?: e::class.java.simpleName)
         }
@@ -135,15 +121,59 @@ object Sound {
 
         restore()
 
-        val current = player ?: return false
-        player = null
+        val current = track ?: return false
+        track = null
         try {
             current.stop()
         } catch (e: IllegalStateException) {
-            // Already finished; releasing is all that is left to do.
+            // Never got out of the stopped state; releasing is all that is left.
         }
         current.release()
         return true
+    }
+
+    /**
+     * One pulse of the loop, as 16-bit mono PCM. The tone is ramped in and out
+     * because a sine cut off mid-amplitude is a step change, which is a click.
+     */
+    private fun pulse(): ShortArray {
+        val samples = ShortArray(TONE_SAMPLES + SILENCE_SAMPLES)
+        val step = 2 * PI * FREQUENCY / SAMPLE_RATE
+        for (i in 0 until TONE_SAMPLES) {
+            val envelope = min(i, TONE_SAMPLES - 1 - i).toDouble() / RAMP_SAMPLES
+            samples[i] = (sin(i * step) * envelope.coerceAtMost(1.0) * Short.MAX_VALUE).toInt()
+                .toShort()
+        }
+        return samples
+    }
+
+    /**
+     * A static track, so the whole pulse sits in the buffer and the hardware
+     * loops it. A streaming track would need a thread kept alive to feed it.
+     */
+    private fun build(samples: ShortArray): AudioTrack {
+        val bytes = samples.size * Short.SIZE_BYTES
+        val track = AudioTrack.Builder()
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ALARM)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build(),
+            )
+            .setAudioFormat(
+                AudioFormat.Builder()
+                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                    .setSampleRate(SAMPLE_RATE)
+                    .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                    .build(),
+            )
+            .setTransferMode(AudioTrack.MODE_STATIC)
+            .setBufferSizeInBytes(bytes)
+            .build()
+
+        track.write(samples, 0, samples.size)
+        track.setLoopPoints(0, samples.size, -1)
+        return track
     }
 
     /**
@@ -165,39 +195,5 @@ object Sound {
         restoreVolume = null
         mixer = null
         if (audio != null) setVolume(audio, previous)
-    }
-
-    /**
-     * The configured file if it is there, else the same file located through
-     * MediaStore (the direct path fails if the volume is mounted elsewhere),
-     * else the system alarm sound. Find-my-phone should not fail because a
-     * file moved.
-     */
-    private fun resolve(context: Context): Pair<Uri, String>? {
-        val file = File(DEFAULT_FILE)
-        if (file.canRead()) return Uri.fromFile(file) to file.name
-
-        indexed(context, file.name)?.let { return it to "${file.name} (via MediaStore)" }
-
-        val fallback = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
-        return fallback?.let { it to "the phone's default alarm sound" }
-    }
-
-    private fun indexed(context: Context, name: String): Uri? = try {
-        val collection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
-        context.contentResolver.query(
-            collection,
-            arrayOf(MediaStore.Audio.Media._ID),
-            "${MediaStore.Audio.Media.DISPLAY_NAME} = ?",
-            arrayOf(name),
-            null,
-        )?.use { cursor ->
-            if (cursor.moveToFirst()) Uri.withAppendedPath(collection, cursor.getLong(0).toString())
-            else null
-        }
-    } catch (e: Exception) {
-        Log.w(TAG, "MediaStore lookup failed for $name", e)
-        null
     }
 }

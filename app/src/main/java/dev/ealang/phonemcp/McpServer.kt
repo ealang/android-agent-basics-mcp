@@ -420,16 +420,14 @@ class McpServer(
             when (val result = Sound.play(context, seconds, volume)) {
                 is Sound.Result.Playing ->
                     "The phone is ringing now for ${Clock.humanize(result.seconds)} at " +
-                        "${result.percent}% volume, playing ${result.source}. It stops " +
-                        "by itself; call silence_phone to stop it sooner." to false
+                        "${result.percent}% volume. It stops by itself; call " +
+                        "silence_phone to stop it sooner." to false
                 Sound.Result.Silent ->
                     "FAILED: the phone's alarm volume is turned all the way down, so " +
                         "ringing it would make no sound. Nothing was played. Pass a " +
                         "volume to override it, or try get_location instead." to true
                 is Sound.Result.Failed ->
-                    "FAILED: could not play a sound (${result.reason}). If it mentions " +
-                        "permission, the user needs to grant Phone MCP access to " +
-                        "audio files." to true
+                    "FAILED: could not play a sound (${result.reason})." to true
             }
         }
 

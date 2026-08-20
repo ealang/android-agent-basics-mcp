@@ -116,15 +116,19 @@ Raising the stream is refused while Do Not Disturb is on unless the app holds
 `ACCESS_NOTIFICATION_POLICY`, a much broader grant than this is worth, so in
 that case the ring falls back to the user's volume instead of failing.
 
-The tone is `Alarms/alarm.mp3`, resolved by direct path, then by
-MediaStore filename, then falling back to the system alarm sound. A moved file
-degrades to a duller ring instead of failing, which is the right trade for a
-tool used when something is already lost.
+The tone is synthesised, not loaded: a second of 2 kHz sine then a second of
+silence, looped, because a pulse is easier to locate by ear than a continuous
+note. That means there is no audio file to go missing and no media permission to
+grant. It is generated at 48 kHz, which divides evenly by 2 kHz so a cycle is a
+whole 24 samples and the loop point lands mid-cycle-free; the burst is ramped in
+and out over 5 ms, since a sine cut off mid-amplitude is a step change, which is
+a click. It plays from a `MODE_STATIC` `AudioTrack`, so the hardware loops the
+buffer and no thread has to stay alive feeding it.
 
 ## Running
 
-Open the app, press **Start server**, and grant **Allow starting the clock app**,
-**Allow location**, and **Allow audio files**.
+Open the app, press **Start server**, and grant **Allow starting the clock app**
+and **Allow location**.
 The screen lists the URLs it's reachable on (one per network interface — LAN and
 tailnet both appear) and the bearer token, with a copy button.
 
