@@ -30,7 +30,8 @@ nothing to push, so every exchange is ordinary request/response JSON.
   or by a name from `Watch.KNOWN_APPS`.
 - `get_location(max_age_seconds?)` — coordinates, accuracy, fix age, and a
   street address when the geocoder can supply one.
-- `find_my_phone(seconds?)` / `silence_phone()` — ring the phone to locate it.
+- `find_my_phone(seconds?, volume?)` / `silence_phone()` — ring the phone to
+  locate it.
 
 ### Timers
 
@@ -105,9 +106,15 @@ bounded — a deadline stops it after `seconds` (30 by default, 300 at most) eve
 if `silence_phone` is never called, and stopping the service stops the tone,
 since nothing would be left to answer `silence_phone`.
 
-The one thing an alarm cannot override is a zeroed alarm slider, so the tool
-reads the volume first and refuses rather than ringing inaudibly and reporting
-success.
+The one thing the usage cannot override is a zeroed alarm slider, so `volume`
+(1–100) sets the alarm stream for the length of the ring and puts the user's own
+setting back afterwards. Without it the tool reads the volume and refuses at
+zero, rather than ringing inaudibly and reporting success — a phone turned down
+is exactly the phone you can't find.
+
+Raising the stream is refused while Do Not Disturb is on unless the app holds
+`ACCESS_NOTIFICATION_POLICY`, a much broader grant than this is worth, so in
+that case the ring falls back to the user's volume instead of failing.
 
 The tone is `Alarms/alarm.mp3`, resolved by direct path, then by
 MediaStore filename, then falling back to the system alarm sound. A moved file

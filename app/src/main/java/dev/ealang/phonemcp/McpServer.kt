@@ -305,6 +305,17 @@ class McpServer(
                                     "How long to ring for. Defaults to " +
                                         "${Sound.DEFAULT_SECONDS}, at most ${Sound.MAX_SECONDS}.",
                                 ),
+                        ).put(
+                            "volume",
+                            JSONObject().put("type", "integer")
+                                .put(
+                                    "description",
+                                    "Loudness, 1 to 100. Overrides the phone's alarm " +
+                                        "volume for the length of the ring and puts it " +
+                                        "back afterwards, so it works even when the " +
+                                        "alarm is turned all the way down. Omit to ring " +
+                                        "at whatever the user has it set to.",
+                                ),
                         ),
                     ),
             )
@@ -405,15 +416,16 @@ class McpServer(
         "find_my_phone" -> {
             val seconds = args.optLong("seconds", Sound.DEFAULT_SECONDS)
                 .coerceIn(1, Sound.MAX_SECONDS)
-            when (val result = Sound.play(context, seconds)) {
+            val volume = if (args.has("volume")) args.optInt("volume", 100).coerceIn(1, 100) else null
+            when (val result = Sound.play(context, seconds, volume)) {
                 is Sound.Result.Playing ->
-                    "The phone is ringing now for ${Clock.humanize(result.seconds)}, " +
-                        "playing ${result.source}. It stops by itself; call " +
-                        "silence_phone to stop it sooner." to false
+                    "The phone is ringing now for ${Clock.humanize(result.seconds)} at " +
+                        "${result.percent}% volume, playing ${result.source}. It stops " +
+                        "by itself; call silence_phone to stop it sooner." to false
                 Sound.Result.Silent ->
                     "FAILED: the phone's alarm volume is turned all the way down, so " +
-                        "ringing it would make no sound. Nothing was played. Try " +
-                        "get_location instead." to true
+                        "ringing it would make no sound. Nothing was played. Pass a " +
+                        "volume to override it, or try get_location instead." to true
                 is Sound.Result.Failed ->
                     "FAILED: could not play a sound (${result.reason}). If it mentions " +
                         "permission, the user needs to grant Phone MCP access to " +

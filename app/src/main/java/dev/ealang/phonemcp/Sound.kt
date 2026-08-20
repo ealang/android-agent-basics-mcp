@@ -42,9 +42,12 @@ object Sound {
 
     private var player: MediaPlayer? = null
     private var stopAt: Runnable? = null
+    /** The user's own alarm volume, and the manager to put it back with. */
+    private var restoreVolume: Int? = null
+    private var mixer: AudioManager? = null
 
     sealed interface Result {
-        data class Playing(val seconds: Long, val source: String, val volume: Int) : Result
+        data class Playing(val seconds: Long, val source: String, val percent: Int) : Result
         data object Silent : Result
         data class Failed(val reason: String) : Result
     }
@@ -57,20 +60,42 @@ object Sound {
     @Synchronized
     fun isPlaying(): Boolean = player != null
 
+    /**
+     * @param percent 0–100 of the maximum alarm volume, or null to ring at
+     *   whatever the user has the alarm slider set to.
+     */
     @Synchronized
-    fun play(context: Context, seconds: Long): Result {
-        val audio = context.getSystemService(AudioManager::class.java)
+    fun play(context: Context, seconds: Long, percent: Int?): Result {
+        val audio = context.applicationContext.getSystemService(AudioManager::class.java)
             ?: return Result.Failed("no audio service")
 
-        // Alarms ignore silent mode but not a zeroed alarm slider. Saying so
-        // beats ringing inaudibly and reporting success.
-        val volume = audio.getStreamVolume(AudioManager.STREAM_ALARM)
-        if (volume == 0) return Result.Silent
+        val max = audio.getStreamMaxVolume(AudioManager.STREAM_ALARM)
+        val current = audio.getStreamVolume(AudioManager.STREAM_ALARM)
+
+        // Alarms ignore silent mode but not a zeroed alarm slider. With no
+        // volume asked for, saying so beats ringing inaudibly and reporting
+        // success.
+        if (percent == null && current == 0) return Result.Silent
 
         val (uri, source) = resolve(context)
             ?: return Result.Failed("no tone file and no system alarm sound")
 
         stop()
+
+        val playedAt = if (percent == null) {
+            current
+        } else {
+            // Ceil, so 1% is still audible rather than rounding to silence.
+            val target = ((percent * max + 99) / 100).coerceIn(1, max)
+            if (setVolume(audio, target)) {
+                restoreVolume = current
+                mixer = audio
+                target
+            } else {
+                current
+            }
+        }
+        if (playedAt == 0) return Result.Silent
 
         return try {
             val fresh = MediaPlayer().apply {
@@ -91,12 +116,14 @@ object Sound {
             stopAt = deadline
             main.postDelayed(deadline, seconds * 1000)
 
-            Log.i(TAG, "Ringing for ${seconds}s from $source at alarm volume $volume")
-            Result.Playing(seconds, source, volume)
+            val asPercent = playedAt * 100 / max
+            Log.i(TAG, "Ringing for ${seconds}s from $source at $asPercent% alarm volume")
+            Result.Playing(seconds, source, asPercent)
         } catch (e: Exception) {
             Log.w(TAG, "Could not play $uri", e)
             player?.release()
             player = null
+            restore()
             Result.Failed(e.message ?: e::class.java.simpleName)
         }
     }
@@ -105,6 +132,8 @@ object Sound {
     fun stop(): Boolean {
         stopAt?.let { main.removeCallbacks(it) }
         stopAt = null
+
+        restore()
 
         val current = player ?: return false
         player = null
@@ -115,6 +144,27 @@ object Sound {
         }
         current.release()
         return true
+    }
+
+    /**
+     * Raising the alarm stream is refused while Do Not Disturb is on unless the
+     * app holds `ACCESS_NOTIFICATION_POLICY`, which is a heavier grant than
+     * find-my-phone is worth. Ring at the user's own volume instead.
+     */
+    private fun setVolume(audio: AudioManager, index: Int): Boolean = try {
+        audio.setStreamVolume(AudioManager.STREAM_ALARM, index, 0)
+        true
+    } catch (e: SecurityException) {
+        Log.w(TAG, "Not allowed to change the alarm volume", e)
+        false
+    }
+
+    private fun restore() {
+        val previous = restoreVolume ?: return
+        val audio = mixer
+        restoreVolume = null
+        mixer = null
+        if (audio != null) setVolume(audio, previous)
     }
 
     /**
