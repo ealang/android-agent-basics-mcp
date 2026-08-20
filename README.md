@@ -129,8 +129,26 @@ buffer and no thread has to stay alive feeding it.
 
 Open the app, press **Start server**, and grant **Allow starting the clock app**
 and **Allow location**.
-The screen lists the URLs it's reachable on (one per network interface — LAN and
-tailnet both appear) and the bearer token, with a copy button.
+The screen lists the URLs it's reachable on and the bearer token, with a copy
+button.
+
+**Bind address** decides which interfaces answer. Left blank, the server binds
+the wildcard address and is reachable on every interface, the LAN included. Set
+it to the phone's tailnet address (`100.x.y.z`) and the socket is bound to that
+address alone, so nothing on the LAN can reach it — the port is not merely
+guarded there, it isn't listening.
+
+The address is used rather than the interface name because Android runs
+Tailscale as a `VpnService`, which gets a generic `tunN` name that belongs to
+whichever VPN connected first and can change number across reconnects. The
+tailnet address is pinned to the node and survives reboots and reinstalls.
+
+The consequence to know about: binding one address fails if that address is
+absent, which is what happens when the phone boots and gets to `BOOT_COMPLETED`
+before Tailscale connects. The service then reports "Could not bind" in its
+notification and stops, and nothing retries — press **Start server** once the
+VPN is up. It deliberately does *not* clear the enabled flag, so this stays a
+missed start rather than a silent permanent disable.
 
 The server runs in a foreground service; the persistent notification is a
 requirement of holding a socket open, not decoration. Android kills plain
@@ -156,6 +174,8 @@ least once since install, and some OEM battery managers suppress it. The
 ```
 
 Traffic is plain HTTP — fine on a tailnet or trusted LAN, not on anything else.
+Setting the bind address to the tailnet address is what keeps that true, since
+it stops the server answering on the LAN at all.
 The token is generated with `SecureRandom` on first launch rather than left
 blank, because a server whose auth is `""` until someone fills it in is a server
 that ships unauthenticated.

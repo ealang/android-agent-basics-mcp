@@ -18,6 +18,18 @@ class Config(context: Context) {
         get() = prefs.getInt(KEY_PORT, DEFAULT_PORT)
         set(value) = prefs.edit().putInt(KEY_PORT, value).apply()
 
+    /**
+     * The address to listen on, or "" for every interface.
+     *
+     * Set to the phone's tailnet address to keep the server off the LAN. The
+     * Tailscale interface is a generic `tunN` on Android, so there is nothing
+     * stable to match on by name — the address itself is the durable handle,
+     * since Tailscale pins it to the node.
+     */
+    var bindAddress: String
+        get() = prefs.getString(KEY_BIND, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_BIND, value.trim()).apply()
+
     var token: String
         get() {
             prefs.getString(KEY_TOKEN, null)?.let { return it }
@@ -43,6 +55,7 @@ class Config(context: Context) {
     companion object {
         const val DEFAULT_PORT = 8910
         private const val KEY_PORT = "port"
+        private const val KEY_BIND = "bind_address"
         private const val KEY_TOKEN = "token"
         private const val KEY_ENABLED = "enabled"
     }

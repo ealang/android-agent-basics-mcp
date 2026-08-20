@@ -35,6 +35,7 @@ class MainActivity : Activity() {
     private lateinit var config: Config
     private lateinit var status: TextView
     private lateinit var portField: EditText
+    private lateinit var bindField: EditText
     private lateinit var tokenView: TextView
     private lateinit var toggle: Button
     private lateinit var overlayStatus: TextView
@@ -75,10 +76,18 @@ class MainActivity : Activity() {
         }
         root.addView(portField)
 
+        root.addView(label("Bind address (blank = every interface)"))
+        bindField = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_TEXT
+            hint = "e.g. 100.x.y.z"
+            setText(config.bindAddress)
+        }
+        root.addView(bindField)
+
         root.addView(
             Button(this).apply {
-                text = "Save port and restart"
-                setOnClickListener { savePort() }
+                text = "Save and restart"
+                setOnClickListener { saveNetwork() }
             },
         )
 
@@ -192,18 +201,38 @@ class MainActivity : Activity() {
         status.postDelayed({ refresh() }, 400)
     }
 
-    private fun savePort() {
-        val value = portField.text.toString().toIntOrNull()
-        if (value == null || value !in 1024..65535) {
+    private fun saveNetwork() {
+        val port = portField.text.toString().toIntOrNull()
+        if (port == null || port !in 1024..65535) {
             toast("Port must be between 1024 and 65535")
             return
         }
-        config.port = value
+
+        val bind = bindField.text.toString().trim()
+        if (bind.isNotEmpty() && !LITERAL_IPV4.matches(bind)) {
+            // Only literal addresses: NanoHTTPD would otherwise resolve the
+            // string, and a name that resolves off-device binds nothing.
+            toast("Bind address must be a literal IPv4 address, or blank")
+            return
+        }
+
+        config.port = port
+        config.bindAddress = bind
+
         if (McpService.running) {
             McpService.stop(this)
             status.postDelayed({ startServer() }, 300)
         }
-        toast("Port set to $value")
+
+        // Saving an address the phone does not currently hold is allowed — the
+        // tailnet address is gone whenever Tailscale is down, and refusing it
+        // would make the field unsettable exactly when it needs setting.
+        val present = McpService.localAddresses().any { it.substringBefore(' ') == bind }
+        if (bind.isNotEmpty() && !present) {
+            toast("Saved, but $bind is not on this phone right now — is Tailscale up?")
+        } else {
+            toast("Saved")
+        }
     }
 
     private fun refresh() {
@@ -226,9 +255,18 @@ class MainActivity : Activity() {
         overlayStatus.text = "$overlay\n\n$location"
 
         status.text = if (running) {
-            val urls = McpService.localAddresses()
-                .joinToString("\n") { "  http://${it.substringBefore(' ')}:${config.port}${McpServer.MCP_PATH}  ${it.substringAfter(' ')}" }
-            "Running.\n\n" + (urls.ifEmpty { "  (no network interface found)" })
+            val bind = config.bindAddress
+            if (bind.isNotEmpty()) {
+                // Bound to one address, so the other interfaces are not
+                // reachable and listing them would misrepresent the server.
+                "Running, reachable only on $bind.\n\n" +
+                    "  http://$bind:${config.port}${McpServer.MCP_PATH}"
+            } else {
+                val urls = McpService.localAddresses()
+                    .joinToString("\n") { "  http://${it.substringBefore(' ')}:${config.port}${McpServer.MCP_PATH}  ${it.substringAfter(' ')}" }
+                "Running on every interface, this phone's LAN included.\n\n" +
+                    (urls.ifEmpty { "  (no network interface found)" })
+            }
         } else {
             "Stopped."
         }
@@ -266,3 +304,6 @@ class MainActivity : Activity() {
 
     private fun toast(text: String) = Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
 }
+
+private val LITERAL_IPV4 =
+    Regex("""^((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$""")

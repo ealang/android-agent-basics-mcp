@@ -16,9 +16,12 @@ import org.json.JSONObject
  */
 class McpServer(
     private val context: Context,
+    bindAddress: String,
     port: Int,
     private val token: String,
-) : NanoHTTPD(port) {
+    // A null hostname makes NanoHTTPD bind the wildcard address; anything else
+    // binds that one address, which is how the server is kept off the LAN.
+) : NanoHTTPD(bindAddress.ifBlank { null }, port) {
 
     companion object {
         private const val TAG = "PhoneMcpServer"

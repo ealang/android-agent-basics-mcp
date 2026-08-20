@@ -75,24 +75,38 @@ class McpService : Service() {
         val config = Config(this)
         config.enabled = true
 
+        val listeningOn = config.bindAddress.ifBlank { "every interface" }
+
         if (server == null) {
-            val instance = McpServer(applicationContext, config.port, config.token)
+            val instance = McpServer(
+                applicationContext,
+                config.bindAddress,
+                config.port,
+                config.token,
+            )
             try {
                 // daemon=false: the socket should outlive the thread that made it.
                 instance.start(NanoTimeouts.SOCKET_READ_MS, false)
                 server = instance
                 running = true
-                Log.i(TAG, "Listening on port ${config.port}")
+                Log.i(TAG, "Listening on $listeningOn port ${config.port}")
             } catch (e: Exception) {
-                Log.e(TAG, "Could not bind port ${config.port}", e)
-                startForeground(NOTIFICATION_ID, notification("Failed to bind port ${config.port}"))
-                config.enabled = false
+                Log.e(TAG, "Could not bind $listeningOn port ${config.port}", e)
+                // Deliberately leaves config.enabled alone. Binding one address
+                // fails whenever that interface is missing — the usual case
+                // being a boot that got here before the VPN connected — and
+                // clearing the flag would turn a temporary miss into a server
+                // that stays off until someone notices and taps Start.
+                startForeground(
+                    NOTIFICATION_ID,
+                    notification("Could not bind $listeningOn:${config.port}"),
+                )
                 stopSelf()
                 return START_NOT_STICKY
             }
         }
 
-        startForeground(NOTIFICATION_ID, notification("Listening on port ${config.port}"))
+        startForeground(NOTIFICATION_ID, notification("Listening on $listeningOn:${config.port}"))
         sendBroadcast(Intent(ACTION_STATE_CHANGED).setPackage(packageName))
         // START_STICKY: if Android reclaims us under memory pressure, come back.
         return START_STICKY
