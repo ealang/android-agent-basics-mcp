@@ -33,7 +33,7 @@
     <application
         android:allowBackup="true"
         android:label="Phone MCP"
-        android:icon="@android:drawable/ic_menu_manage"
+        android:icon="@mipmap/ic_launcher"
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
         tools:targetApi="35">
