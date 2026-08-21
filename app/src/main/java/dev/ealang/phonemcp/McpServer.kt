@@ -277,7 +277,8 @@ class McpServer(
                 "description",
                 "Open an app on the user's Pebble watch. The app takes over the " +
                     "screen on their wrist. It starts in its default state — this " +
-                    "cannot set a duration or any other parameter.",
+                    "cannot set a duration or any other parameter, so to start a " +
+                    "countdown use set_watch_timer instead.",
             )
             .put("inputSchema", appArgument)
 
@@ -288,6 +289,38 @@ class McpServer(
                 "Close an app on the user's Pebble watch, returning it to the watchface.",
             )
             .put("inputSchema", appArgument)
+
+        val setWatchTimer = JSONObject()
+            .put("name", "set_watch_timer")
+            .put(
+                "description",
+                "Start a countdown on the user's Pebble watch. The watch buzzes " +
+                    "on their wrist when it finishes, and keeps counting even if " +
+                    "the phone is elsewhere. Prefer set_timer when they are with " +
+                    "their phone and want the usual alarm sound; use this when " +
+                    "they say watch, wrist, or Pebble, or are away from the phone. " +
+                    "The timer app is brought to the front of the watch, so this " +
+                    "interrupts whatever is on screen.",
+            )
+            .put(
+                "inputSchema",
+                JSONObject()
+                    .put("type", "object")
+                    .put(
+                        "properties",
+                        JSONObject().put(
+                            "seconds",
+                            JSONObject().put("type", "integer")
+                                .put(
+                                    "description",
+                                    "How long the countdown runs, in seconds. Between " +
+                                        "${Watch.TIMER_MIN_SECONDS} and " +
+                                        "${Watch.TIMER_MAX_SECONDS} (just under a day).",
+                                ),
+                        ),
+                    )
+                    .put("required", JSONArray().put("seconds")),
+            )
 
         val getLocation = JSONObject()
             .put("name", "get_location")
@@ -369,7 +402,7 @@ class McpServer(
             )
 
         return JSONArray().put(setTimer).put(cancelTimer).put(showTimers)
-            .put(launchWatchApp).put(stopWatchApp).put(getLocation)
+            .put(launchWatchApp).put(stopWatchApp).put(setWatchTimer).put(getLocation)
             .put(findMyPhone).put(silencePhone)
     }
 
@@ -477,6 +510,39 @@ class McpServer(
         "launch_watch_app" -> describe(Watch.launch(context, args.optString("app")), "opened")
 
         "stop_watch_app" -> describe(Watch.stop(context, args.optString("app")), "closed")
+
+        "set_watch_timer" -> {
+            val seconds = args.optLong("seconds", -1)
+            when {
+                seconds < Watch.TIMER_MIN_SECONDS ->
+                    "FAILED: seconds is required, and the watch's timer app will not " +
+                        "accept anything under ${Watch.TIMER_MIN_SECONDS} seconds." to true
+                seconds > Watch.TIMER_MAX_SECONDS ->
+                    "FAILED: the watch's timer app tops out just under 24 hours. Set " +
+                        "an alarm or a calendar reminder instead." to true
+                else -> when (Watch.setTimer(context, seconds)) {
+                    Watch.TimerResult.Confirmed ->
+                        "CONFIRMED - the watch is now counting down " +
+                            "${Clock.humanize(seconds)} and will buzz when it finishes. " +
+                            "The timer app is on screen on their wrist." to false
+                    Watch.TimerResult.NoCompanionApp ->
+                        "FAILED: the Pebble companion app (${Watch.COREAPP_PACKAGE}) is " +
+                            "not installed on the phone. Nothing was sent." to true
+                    Watch.TimerResult.NoWatchConnected ->
+                        "FAILED: the companion app reports no watch connected. Tell the " +
+                            "user to check the watch is paired and in range. Nothing " +
+                            "was sent." to true
+                    Watch.TimerResult.NoAcknowledgement ->
+                        "UNCERTAIN: the timer app was opened on the watch and sent the " +
+                            "duration, but never confirmed it. It may have been too slow " +
+                            "to start. Ask the user whether the watch is counting down, " +
+                            "and offer to try again — do not assume it worked." to true
+                    Watch.TimerResult.Rejected ->
+                        "FAILED: the watch received the request and refused it. Nothing " +
+                            "is counting down." to true
+                }
+            }
+        }
 
         else -> "No such tool: $name" to true
     }
