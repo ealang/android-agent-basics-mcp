@@ -158,6 +158,12 @@ class McpServer(
 
             method == "tools/list" -> rpcOk(id, JSONObject().put("tools", toolDefinitions()))
 
+            // Not declared in capabilities, but clients probe for them anyway,
+            // and some treat a "Method not found" as a reason to give up on the
+            // server entirely. An empty list is the truthful answer.
+            method == "resources/list" -> rpcOk(id, JSONObject().put("resources", JSONArray()))
+            method == "prompts/list" -> rpcOk(id, JSONObject().put("prompts", JSONArray()))
+
             method == "tools/call" -> {
                 val name = params.optString("name")
                 val args = params.optJSONObject("arguments") ?: JSONObject()
