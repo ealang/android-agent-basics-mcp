@@ -143,12 +143,19 @@ Tailscale as a `VpnService`, which gets a generic `tunN` name that belongs to
 whichever VPN connected first and can change number across reconnects. The
 tailnet address is pinned to the node and survives reboots and reinstalls.
 
-The consequence to know about: binding one address fails if that address is
-absent, which is what happens when the phone boots and gets to `BOOT_COMPLETED`
-before Tailscale connects. The service then reports "Could not bind" in its
-notification and stops, and nothing retries — press **Start server** once the
-VPN is up. It deliberately does *not* clear the enabled flag, so this stays a
-missed start rather than a silent permanent disable.
+Binding one address fails whenever that address is absent — a boot that gets to
+`BOOT_COMPLETED` before Tailscale connects, or the VPN dropping mid-day. The
+service rides this out rather than stopping: the notification reads "Waiting to
+bind" and it retries on a backoff that settles at once a minute, which costs
+nothing and never wakes a sleeping phone. The same recovery runs if the socket
+dies underneath a running server.
+
+The socket itself is wrapped (`ResilientServerSocket`) because NanoHTTPD's
+listener loop retries a failed `accept()` instantly and logs it invisibly — a
+socket in a persistent error state, as when Tailscale tears down the tun
+interface under an address-bound socket, pegged a core for hours and once put
+the app at 26% of a day's battery. The wrapper paces failures and, after ~5
+seconds of unbroken ones, closes the socket so the service can rebind.
 
 The server runs in a foreground service; the persistent notification is a
 requirement of holding a socket open, not decoration. Android kills plain

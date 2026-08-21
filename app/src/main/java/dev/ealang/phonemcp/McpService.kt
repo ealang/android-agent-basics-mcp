@@ -8,7 +8,9 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.util.Log
 import java.net.Inet4Address
 import java.net.NetworkInterface
@@ -28,6 +30,10 @@ class McpService : Service() {
         private const val NOTIFICATION_ID = 1
 
         const val ACTION_STOP = "dev.ealang.phonemcp.STOP"
+
+        private const val INITIAL_RETRY_MS = 5_000L
+        /** A capped once-a-minute retry costs nothing and never wakes a sleeping phone. */
+        private const val MAX_RETRY_MS = 60_000L
         /** Broadcast whenever the server starts or stops, so the UI can refresh. */
         const val ACTION_STATE_CHANGED = "dev.ealang.phonemcp.STATE_CHANGED"
 
@@ -63,6 +69,10 @@ class McpService : Service() {
 
     private var server: McpServer? = null
 
+    private val main = Handler(Looper.getMainLooper())
+    private val retry = Runnable { attemptStart() }
+    private var retryDelayMs = INITIAL_RETRY_MS
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -72,47 +82,71 @@ class McpService : Service() {
             return START_NOT_STICKY
         }
 
-        val config = Config(this)
-        config.enabled = true
+        Config(this).enabled = true
 
-        val listeningOn = config.bindAddress.ifBlank { "every interface" }
+        // Started before the first bind attempt: the five-second foreground
+        // deadline must be met even if binding waits on Tailscale.
+        startForeground(NOTIFICATION_ID, notification("Starting…"))
+        retryDelayMs = INITIAL_RETRY_MS
+        attemptStart()
 
-        if (server == null) {
-            val instance = McpServer(
-                applicationContext,
-                config.bindAddress,
-                config.port,
-                config.token,
-            )
-            try {
-                // daemon=false: the socket should outlive the thread that made it.
-                instance.start(NanoTimeouts.SOCKET_READ_MS, false)
-                server = instance
-                running = true
-                Log.i(TAG, "Listening on $listeningOn port ${config.port}")
-            } catch (e: Exception) {
-                Log.e(TAG, "Could not bind $listeningOn port ${config.port}", e)
-                // Deliberately leaves config.enabled alone. Binding one address
-                // fails whenever that interface is missing — the usual case
-                // being a boot that got here before the VPN connected — and
-                // clearing the flag would turn a temporary miss into a server
-                // that stays off until someone notices and taps Start.
-                startForeground(
-                    NOTIFICATION_ID,
-                    notification("Could not bind $listeningOn:${config.port}"),
-                )
-                stopSelf()
-                return START_NOT_STICKY
-            }
-        }
-
-        startForeground(NOTIFICATION_ID, notification("Listening on $listeningOn:${config.port}"))
-        sendBroadcast(Intent(ACTION_STATE_CHANGED).setPackage(packageName))
         // START_STICKY: if Android reclaims us under memory pressure, come back.
         return START_STICKY
     }
 
+    /**
+     * Binds now if possible, otherwise leaves a retry scheduled. The service
+     * stays up and keeps trying rather than stopping: binding one address
+     * fails whenever that interface is missing — the usual case being a boot
+     * or a reconnect that got here before Tailscale — and a service that gave
+     * up turned that into a server off until someone noticed.
+     */
+    private fun attemptStart() {
+        main.removeCallbacks(retry)
+        if (server != null) return
+
+        val config = Config(this)
+        val listeningOn = config.bindAddress.ifBlank { "every interface" }
+        val instance = McpServer(
+            applicationContext,
+            config.bindAddress,
+            config.port,
+            config.token,
+            onDied = ::onServerDied,
+        )
+        try {
+            // daemon=false: the socket should outlive the thread that made it.
+            instance.start(NanoTimeouts.SOCKET_READ_MS, false)
+            server = instance
+            running = true
+            retryDelayMs = INITIAL_RETRY_MS
+            notify("Listening on $listeningOn:${config.port}")
+            Log.i(TAG, "Listening on $listeningOn port ${config.port}")
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not bind $listeningOn port ${config.port}; will retry", e)
+            notify("Waiting to bind $listeningOn:${config.port}")
+            main.postDelayed(retry, retryDelayMs)
+            retryDelayMs = (retryDelayMs * 2).coerceAtMost(MAX_RETRY_MS)
+        }
+        sendBroadcast(Intent(ACTION_STATE_CHANGED).setPackage(packageName))
+    }
+
+    /**
+     * Called from the listener thread when the socket has failed repeatedly
+     * and shut itself. Tears the server down and goes back to binding.
+     */
+    private fun onServerDied() {
+        main.post {
+            Log.w(TAG, "Server died underneath us; rebinding")
+            server?.stop()
+            server = null
+            running = false
+            attemptStart()
+        }
+    }
+
     override fun onDestroy() {
+        main.removeCallbacks(retry)
         // Nothing would be left able to answer silence_phone, so a ring that
         // outlived the server would have to be waited out.
         Sound.stop()
@@ -122,6 +156,11 @@ class McpService : Service() {
         sendBroadcast(Intent(ACTION_STATE_CHANGED).setPackage(packageName))
         Log.i(TAG, "Stopped")
         super.onDestroy()
+    }
+
+    private fun notify(text: String) {
+        getSystemService(NotificationManager::class.java)
+            .notify(NOTIFICATION_ID, notification(text))
     }
 
     private fun notification(text: String): Notification {

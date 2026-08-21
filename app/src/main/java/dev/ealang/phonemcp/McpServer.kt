@@ -19,6 +19,7 @@ class McpServer(
     bindAddress: String,
     port: Int,
     private val token: String,
+    onDied: () -> Unit,
     // A null hostname makes NanoHTTPD bind the wildcard address; anything else
     // binds that one address, which is how the server is kept off the LAN.
 ) : NanoHTTPD(bindAddress.ifBlank { null }, port) {
@@ -27,6 +28,10 @@ class McpServer(
         private const val TAG = "PhoneMcpServer"
         private const val FALLBACK_PROTOCOL = "2025-11-25"
         const val MCP_PATH = "/mcp"
+    }
+
+    init {
+        serverSocketFactory = ServerSocketFactory { ResilientServerSocket(onDied) }
     }
 
     override fun serve(session: IHTTPSession): Response {
