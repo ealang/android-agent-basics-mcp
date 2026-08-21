@@ -78,6 +78,7 @@ class McpService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
             Config(this).enabled = false
+            EventLog.record("stopped by user")
             stopSelf()
             return START_NOT_STICKY
         }
@@ -120,10 +121,15 @@ class McpService : Service() {
             server = instance
             running = true
             retryDelayMs = INITIAL_RETRY_MS
+            EventLog.record("listening on $listeningOn:${config.port}")
             notify("Listening on $listeningOn:${config.port}")
             Log.i(TAG, "Listening on $listeningOn port ${config.port}")
         } catch (e: Exception) {
             Log.w(TAG, "Could not bind $listeningOn port ${config.port}; will retry", e)
+            EventLog.record(
+                "bind $listeningOn:${config.port} failed " +
+                    "(${e.message ?: e::class.java.simpleName}); retry in ${retryDelayMs / 1000}s",
+            )
             notify("Waiting to bind $listeningOn:${config.port}")
             main.postDelayed(retry, retryDelayMs)
             retryDelayMs = (retryDelayMs * 2).coerceAtMost(MAX_RETRY_MS)
@@ -138,6 +144,7 @@ class McpService : Service() {
     private fun onServerDied() {
         main.post {
             Log.w(TAG, "Server died underneath us; rebinding")
+            EventLog.record("server restarting after socket death")
             server?.stop()
             server = null
             running = false

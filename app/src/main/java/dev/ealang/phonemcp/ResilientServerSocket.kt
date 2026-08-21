@@ -51,10 +51,17 @@ internal class ResilientServerSocket(
             if (isClosed) throw e
 
             consecutiveFailures++
+            EventLog.countAcceptFailure()
             Log.w(TAG, "accept() failed ($consecutiveFailures in a row)", e)
+            if (consecutiveFailures == 1) {
+                // The first of a streak carries the interesting error; logging
+                // all twenty would flood the ring with one incident.
+                EventLog.record("accept() failing: ${e.message ?: e::class.java.simpleName}")
+            }
 
             if (consecutiveFailures >= FAILURE_LIMIT) {
                 Log.e(TAG, "Listening socket looks dead; closing it for a rebind")
+                EventLog.record("socket dead after $FAILURE_LIMIT failures in a row")
                 try {
                     close()
                 } catch (closing: IOException) {

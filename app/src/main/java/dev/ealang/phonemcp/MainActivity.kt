@@ -40,6 +40,7 @@ class MainActivity : Activity() {
     private lateinit var toggle: Button
     private lateinit var overlayStatus: TextView
     private lateinit var requestsView: TextView
+    private lateinit var eventsView: TextView
 
     /** Keeps the request log current while the screen is open, and only then. */
     private val ticker = object : Runnable {
@@ -139,6 +140,14 @@ class MainActivity : Activity() {
             setTextIsSelectable(true)
         }
         root.addView(requestsView)
+
+        root.addView(label("Server events"))
+        eventsView = TextView(this).apply {
+            textSize = 12f
+            typeface = android.graphics.Typeface.MONOSPACE
+            setTextIsSelectable(true)
+        }
+        root.addView(eventsView)
 
         root.addView(label("Permissions"))
         overlayStatus = TextView(this).apply { textSize = 13f }
@@ -261,6 +270,15 @@ class MainActivity : Activity() {
             if (lines.isNotEmpty()) {
                 append("\n\n")
                 append(lines.joinToString("\n"))
+            }
+        }
+
+        val events = EventLog.tail(10)
+        eventsView.text = buildString {
+            append("Accept failures since app start: ${EventLog.acceptFailureCount()}")
+            if (events.isNotEmpty()) {
+                append("\n\n")
+                append(events.joinToString("\n"))
             }
         }
     }
