@@ -40,7 +40,6 @@ class MainActivity : Activity() {
     private lateinit var toggle: Button
     private lateinit var overlayStatus: TextView
     private lateinit var requestsView: TextView
-    private lateinit var eventsView: TextView
 
     /** Keeps the request log current while the screen is open, and only then. */
     private val ticker = object : Runnable {
@@ -133,21 +132,22 @@ class MainActivity : Activity() {
         )
         root.addView(tokenButtons)
 
-        root.addView(label("Requests"))
-        requestsView = TextView(this).apply {
-            textSize = 12f
-            typeface = android.graphics.Typeface.MONOSPACE
-            setTextIsSelectable(true)
-        }
+        root.addView(label("Logs"))
+        requestsView = TextView(this).apply { textSize = 13f }
         root.addView(requestsView)
 
-        root.addView(label("Server events"))
-        eventsView = TextView(this).apply {
-            textSize = 12f
-            typeface = android.graphics.Typeface.MONOSPACE
-            setTextIsSelectable(true)
-        }
-        root.addView(eventsView)
+        root.addView(
+            Button(this).apply {
+                text = "View requests"
+                setOnClickListener { showLog("Requests", RequestLog.tail(LOG_DIALOG_LINES)) }
+            },
+        )
+        root.addView(
+            Button(this).apply {
+                text = "View server events"
+                setOnClickListener { showLog("Server events", EventLog.tail(LOG_DIALOG_LINES)) }
+            },
+        )
 
         root.addView(label("Permissions"))
         overlayStatus = TextView(this).apply { textSize = 13f }
@@ -264,23 +264,25 @@ class MainActivity : Activity() {
     }
 
     private fun refreshRequests() {
-        val lines = RequestLog.tail(10)
-        requestsView.text = buildString {
-            append("Total since app start: ${RequestLog.count()}")
-            if (lines.isNotEmpty()) {
-                append("\n\n")
-                append(lines.joinToString("\n"))
-            }
-        }
+        requestsView.text =
+            "Requests since app start: ${RequestLog.count()}\n" +
+                "Accept failures since app start: ${EventLog.acceptFailureCount()}"
+    }
 
-        val events = EventLog.tail(10)
-        eventsView.text = buildString {
-            append("Accept failures since app start: ${EventLog.acceptFailureCount()}")
-            if (events.isNotEmpty()) {
-                append("\n\n")
-                append(events.joinToString("\n"))
-            }
+    /** The full ring buffer in a dialog of its own, so it can scroll freely. */
+    private fun showLog(title: String, lines: List<String>) {
+        val content = TextView(this).apply {
+            textSize = 12f
+            typeface = android.graphics.Typeface.MONOSPACE
+            setTextIsSelectable(true)
+            setPadding(32, 16, 32, 16)
+            text = if (lines.isEmpty()) "(nothing yet)" else lines.joinToString("\n")
         }
+        android.app.AlertDialog.Builder(this)
+            .setTitle(title)
+            .setView(ScrollView(this).apply { addView(content) })
+            .setPositiveButton("Close", null)
+            .show()
     }
 
     private fun refresh() {
@@ -352,6 +354,9 @@ class MainActivity : Activity() {
 
     private fun toast(text: String) = Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
 }
+
+/** Matches the ring buffers' capacity — "everything we still have". */
+private const val LOG_DIALOG_LINES = 50
 
 private val LITERAL_IPV4 =
     Regex("""^((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$""")
