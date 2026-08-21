@@ -34,7 +34,25 @@ class McpServer(
         serverSocketFactory = ServerSocketFactory { ResilientServerSocket(onDied) }
     }
 
+    /**
+     * Set by [dispatch] on the handling thread, so the log line can name the
+     * MCP method (and tool) instead of just "POST /mcp". NanoHTTPD keeps one
+     * session on one thread, which is what makes a ThreadLocal sound here.
+     */
+    private val detail = ThreadLocal<String?>()
+
     override fun serve(session: IHTTPSession): Response {
+        detail.remove()
+        val response = handle(session)
+        val what = detail.get()?.let { " $it" } ?: ""
+        RequestLog.record(
+            session.remoteIpAddress,
+            "${session.method} ${session.uri}$what → ${response.status.description}",
+        )
+        return response
+    }
+
+    private fun handle(session: IHTTPSession): Response {
         val uri = session.uri.trimEnd('/').ifEmpty { "/" }
 
         // Open on purpose: something has to be probe-able to tell "wrong port"
@@ -114,6 +132,10 @@ class McpServer(
         val method = msg.optString("method")
         val id = if (msg.isNull("id")) null else msg.opt("id")
         val params = msg.optJSONObject("params") ?: JSONObject()
+
+        detail.set(
+            if (method == "tools/call") "tools/call ${params.optString("name")}" else method,
+        )
 
         return when {
             method == "initialize" -> rpcOk(

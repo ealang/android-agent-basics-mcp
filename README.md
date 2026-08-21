@@ -132,6 +132,11 @@ and **Allow location**.
 The screen lists the URLs it's reachable on and the bearer token, with a copy
 button.
 
+A **Requests** section shows a running total and the last few requests — time,
+caller, MCP method and tool, HTTP status. It is in-memory and resets with the
+process; it exists so "is anything actually hitting this?" is a glance rather
+than a guess, health probes and client retries included.
+
 **Bind address** decides which interfaces answer. Left blank, the server binds
 the wildcard address and is reachable on every interface, the LAN included. Set
 it to the phone's tailnet address (`100.x.y.z`) and the socket is bound to that

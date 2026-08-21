@@ -39,6 +39,15 @@ class MainActivity : Activity() {
     private lateinit var tokenView: TextView
     private lateinit var toggle: Button
     private lateinit var overlayStatus: TextView
+    private lateinit var requestsView: TextView
+
+    /** Keeps the request log current while the screen is open, and only then. */
+    private val ticker = object : Runnable {
+        override fun run() {
+            refreshRequests()
+            requestsView.postDelayed(this, 2_000)
+        }
+    }
 
     private val stateChanged = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) = refresh()
@@ -123,6 +132,14 @@ class MainActivity : Activity() {
         )
         root.addView(tokenButtons)
 
+        root.addView(label("Requests"))
+        requestsView = TextView(this).apply {
+            textSize = 12f
+            typeface = android.graphics.Typeface.MONOSPACE
+            setTextIsSelectable(true)
+        }
+        root.addView(requestsView)
+
         root.addView(label("Permissions"))
         overlayStatus = TextView(this).apply { textSize = 13f }
         root.addView(overlayStatus)
@@ -187,9 +204,11 @@ class MainActivity : Activity() {
             registerReceiver(stateChanged, filter)
         }
         refresh()
+        ticker.run()
     }
 
     override fun onStop() {
+        requestsView.removeCallbacks(ticker)
         unregisterReceiver(stateChanged)
         super.onStop()
     }
@@ -232,6 +251,17 @@ class MainActivity : Activity() {
             toast("Saved, but $bind is not on this phone right now — is Tailscale up?")
         } else {
             toast("Saved")
+        }
+    }
+
+    private fun refreshRequests() {
+        val lines = RequestLog.tail(10)
+        requestsView.text = buildString {
+            append("Total since app start: ${RequestLog.count()}")
+            if (lines.isNotEmpty()) {
+                append("\n\n")
+                append(lines.joinToString("\n"))
+            }
         }
     }
 
