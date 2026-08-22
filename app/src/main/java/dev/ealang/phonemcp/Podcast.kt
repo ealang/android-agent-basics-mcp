@@ -7,6 +7,7 @@ import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.util.Log
+import android.view.KeyEvent
 
 /**
  * Drives Pocket Casts through its media session via
@@ -25,6 +26,7 @@ object Podcast {
 
     sealed interface Result {
         data object Played : Result
+        data object AlreadyPlaying : Result
         data class NowPlaying(
             val podcast: String?,
             val episode: String?,
@@ -41,7 +43,26 @@ object Podcast {
 
     fun play(context: Context): Result =
         withController(context) { controller ->
-            controller.transportControls.play()
+            if (controller.playbackState?.state == PlaybackState.STATE_PLAYING) {
+                return@withController Result.AlreadyPlaying
+            }
+            // A media button, not transportControls.play(): receiving a button
+            // event exempts Pocket Casts from the background
+            // foreground-service-start restriction that (apparently) swallows a
+            // plain play() when the app is cached. Pocket Casts treats a PLAY
+            // key as play/pause toggle, so only send it when paused — checked
+            // above — or the toggle would mean "pause".
+            val sent =
+                controller.dispatchMediaButtonEvent(
+                    KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PLAY),
+                ) &&
+                    controller.dispatchMediaButtonEvent(
+                        KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PLAY),
+                    )
+            if (!sent) {
+                Log.w(TAG, "Pocket Casts session: media button not accepted, falling back to play()")
+                controller.transportControls.play()
+            }
             Result.Played
         }
 

@@ -538,6 +538,8 @@ class McpServer(
             Podcast.Result.Played ->
                 "Told Pocket Casts to resume. Call podcast_now_playing to " +
                     "confirm audio is actually running." to false
+            Podcast.Result.AlreadyPlaying ->
+                "Pocket Casts is already playing — nothing to do." to false
             else -> podcastFailure(r)
         }
 
