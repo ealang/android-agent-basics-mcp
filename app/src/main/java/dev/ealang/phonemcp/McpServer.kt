@@ -356,8 +356,9 @@ class McpServer(
             .put(
                 "description",
                 "Resume podcast playback in Pocket Casts on the phone, picking up " +
-                    "the episode the user was last listening to. Cannot choose a " +
-                    "specific show or episode.",
+                    "the episode the user was last listening to. Opens Pocket Casts " +
+                    "on the phone's screen as a side effect, and takes up to ten " +
+                    "seconds. Cannot choose a specific show or episode.",
             )
             .put(
                 "inputSchema",
@@ -536,10 +537,14 @@ class McpServer(
 
         "play_podcast" -> when (val r = Podcast.play(context)) {
             Podcast.Result.Played ->
-                "Told Pocket Casts to resume. Call podcast_now_playing to " +
-                    "confirm audio is actually running." to false
+                "CONFIRMED - Pocket Casts reports it is now playing. The app " +
+                    "was opened on screen to do it." to false
             Podcast.Result.AlreadyPlaying ->
                 "Pocket Casts is already playing — nothing to do." to false
+            Podcast.Result.NotStarted ->
+                "UNCERTAIN: Pocket Casts was opened and sent the play press, " +
+                    "but never reported that playback started. Ask the user " +
+                    "whether audio is running — do not assume it worked." to true
             else -> podcastFailure(r)
         }
 

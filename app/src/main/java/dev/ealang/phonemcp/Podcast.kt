@@ -2,8 +2,8 @@ package dev.ealang.phonemcp
 
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
-import android.media.AudioManager
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
@@ -25,9 +25,17 @@ object Podcast {
 
     const val POCKET_CASTS_PACKAGE = "au.com.shiftyjelly.pocketcasts"
 
+    /** Matches the watch tools' launch-then-send delay. */
+    private const val LAUNCH_WAIT_MS = 2_500L
+
+    /** How long to wait for the session to actually report STATE_PLAYING. */
+    private const val CONFIRM_WAIT_MS = 6_000L
+
     sealed interface Result {
         data object Played : Result
         data object AlreadyPlaying : Result
+        /** The press was sent but the session never reported STATE_PLAYING. */
+        data object NotStarted : Result
         data class NowPlaying(
             val podcast: String?,
             val episode: String?,
@@ -44,21 +52,40 @@ object Podcast {
 
     fun play(context: Context): Result =
         withController(context) { controller ->
-            if (controller.playbackState?.state == PlaybackState.STATE_PLAYING) {
-                return@withController Result.AlreadyPlaying
+            if (isPlaying(controller)) return@withController Result.AlreadyPlaying
+
+            // Bring Pocket Casts to the foreground first — the same overlay
+            // exemption the watch tools use to open the clock app. A play
+            // command reaching a *backgrounded* Pocket Casts is accepted and
+            // then dies: One UI has frozen the process, and Android denies its
+            // foreground-service start (which also kills its media
+            // notification). With the app on screen the press is proven to
+            // work. Pocket Casts treats PLAY as a play/pause toggle, so it is
+            // only sent when paused — checked above.
+            val launch = context.packageManager.getLaunchIntentForPackage(POCKET_CASTS_PACKAGE)
+                ?: return@withController Result.NotInstalled
+            context.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            Thread.sleep(LAUNCH_WAIT_MS)
+
+            controller.dispatchMediaButtonEvent(
+                KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PLAY),
+            )
+            controller.dispatchMediaButtonEvent(
+                KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PLAY),
+            )
+
+            // Their button handler debounces taps for a moment before acting,
+            // then playback has to spin up; poll instead of trusting the send.
+            val deadline = System.currentTimeMillis() + CONFIRM_WAIT_MS
+            while (System.currentTimeMillis() < deadline) {
+                Thread.sleep(500)
+                if (isPlaying(controller)) return@withController Result.Played
             }
-            // System-level media key dispatch — the same path as a headset
-            // button, with the OS handling process unfreezing and the
-            // foreground-service-start exemption. Both transportControls.play()
-            // and a button dispatched through the session controller were
-            // accepted but never started audio. Pocket Casts treats PLAY as a
-            // play/pause toggle, so only send it when paused — checked above —
-            // or the toggle would mean "pause".
-            val audio = context.getSystemService(AudioManager::class.java)
-            audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PLAY))
-            audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PLAY))
-            Result.Played
+            Result.NotStarted
         }
+
+    private fun isPlaying(controller: MediaController): Boolean =
+        controller.playbackState?.state == PlaybackState.STATE_PLAYING
 
     fun nowPlaying(context: Context): Result =
         withController(context) { controller ->
