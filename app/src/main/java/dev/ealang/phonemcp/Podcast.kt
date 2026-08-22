@@ -3,6 +3,7 @@ package dev.ealang.phonemcp
 import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
+import android.media.AudioManager
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
@@ -46,23 +47,16 @@ object Podcast {
             if (controller.playbackState?.state == PlaybackState.STATE_PLAYING) {
                 return@withController Result.AlreadyPlaying
             }
-            // A media button, not transportControls.play(): receiving a button
-            // event exempts Pocket Casts from the background
-            // foreground-service-start restriction that (apparently) swallows a
-            // plain play() when the app is cached. Pocket Casts treats a PLAY
-            // key as play/pause toggle, so only send it when paused — checked
-            // above — or the toggle would mean "pause".
-            val sent =
-                controller.dispatchMediaButtonEvent(
-                    KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PLAY),
-                ) &&
-                    controller.dispatchMediaButtonEvent(
-                        KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PLAY),
-                    )
-            if (!sent) {
-                Log.w(TAG, "Pocket Casts session: media button not accepted, falling back to play()")
-                controller.transportControls.play()
-            }
+            // System-level media key dispatch — the same path as a headset
+            // button, with the OS handling process unfreezing and the
+            // foreground-service-start exemption. Both transportControls.play()
+            // and a button dispatched through the session controller were
+            // accepted but never started audio. Pocket Casts treats PLAY as a
+            // play/pause toggle, so only send it when paused — checked above —
+            // or the toggle would mean "pause".
+            val audio = context.getSystemService(AudioManager::class.java)
+            audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PLAY))
+            audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PLAY))
             Result.Played
         }
 
