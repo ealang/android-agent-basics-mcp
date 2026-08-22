@@ -2,7 +2,9 @@ package dev.ealang.phonemcp
 
 import android.Manifest
 import android.app.Activity
+import android.app.NotificationManager
 import android.content.BroadcastReceiver
+import android.content.ComponentName
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -199,7 +201,25 @@ class MainActivity : Activity() {
             },
         )
 
-        setContentView(ScrollView(this).apply { addView(root, MATCH_PARENT, WRAP_CONTENT) })
+        root.addView(
+            Button(this).apply {
+                text = "Allow media control"
+                // Holding notification access is what authorizes reading media
+                // sessions (the podcast tools). We never read notifications.
+                setOnClickListener {
+                    startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                }
+            },
+        )
+
+        setContentView(
+            ScrollView(this).apply {
+                // Targeting SDK 35 forces edge-to-edge, which slid the last
+                // buttons under the gesture nav bar; this pads them back out.
+                fitsSystemWindows = true
+                addView(root, MATCH_PARENT, WRAP_CONTENT)
+            },
+        )
 
         requestNotificationPermission()
     }
@@ -302,7 +322,19 @@ class MainActivity : Activity() {
         } else {
             "Location is not granted, so get_location will fail."
         }
-        overlayStatus.text = "$overlay\n\n$location"
+        val media = if (
+            getSystemService(NotificationManager::class.java)
+                .isNotificationListenerAccessGranted(
+                    ComponentName(this, MediaListenerService::class.java),
+                )
+        ) {
+            "Can control the podcast app."
+        } else {
+            "Notification access is not granted, so the podcast tools will " +
+                "fail. Grant it below — it is what authorizes reading media " +
+                "sessions; no notifications are read."
+        }
+        overlayStatus.text = "$overlay\n\n$location\n\n$media"
 
         status.text = if (running) {
             val bind = config.bindAddress
