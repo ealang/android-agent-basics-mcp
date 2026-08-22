@@ -357,9 +357,21 @@ class McpServer(
                 "description",
                 "Resume podcast playback in Pocket Casts on the phone, picking up " +
                     "the episode the user was last listening to. Cannot choose a " +
-                    "specific show or episode. There is no confirmation back from " +
-                    "Pocket Casts, so tell the user it was asked to play rather " +
-                    "than promising audio is running.",
+                    "specific show or episode.",
+            )
+            .put(
+                "inputSchema",
+                JSONObject().put("type", "object").put("properties", JSONObject()),
+            )
+
+        val nowPlaying = JSONObject()
+            .put("name", "podcast_now_playing")
+            .put(
+                "description",
+                "What Pocket Casts on the phone is playing or paused on: podcast, " +
+                    "episode title, position, and whether audio is running. Useful " +
+                    "before answering questions about \"this episode\" — the title " +
+                    "is enough to find its transcript or show notes on the web.",
             )
             .put(
                 "inputSchema",
@@ -418,7 +430,7 @@ class McpServer(
 
         return JSONArray().put(setTimer).put(cancelTimer).put(showTimers)
             .put(launchWatchApp).put(stopWatchApp).put(setWatchTimer).put(getLocation)
-            .put(playPodcast).put(findMyPhone).put(silencePhone)
+            .put(playPodcast).put(nowPlaying).put(findMyPhone).put(silencePhone)
     }
 
     /** Returns (text, isError). */
@@ -522,14 +534,27 @@ class McpServer(
                 "The phone was not ringing." to false
             }
 
-        "play_podcast" -> when (Podcast.play(context)) {
-            Podcast.Result.Sent ->
-                "Asked Pocket Casts to resume playback. It does not confirm, so if " +
-                    "the user says nothing is playing, they may need to open the " +
-                    "app once — it cannot always start from a cold stop." to false
-            Podcast.Result.NotInstalled ->
-                "FAILED: Pocket Casts (${Podcast.POCKET_CASTS_PACKAGE}) is not " +
-                    "installed on the phone." to true
+        "play_podcast" -> when (val r = Podcast.play(context)) {
+            Podcast.Result.Played ->
+                "Told Pocket Casts to resume. Call podcast_now_playing to " +
+                    "confirm audio is actually running." to false
+            else -> podcastFailure(r)
+        }
+
+        "podcast_now_playing" -> when (val r = Podcast.nowPlaying(context)) {
+            is Podcast.Result.NowPlaying -> {
+                val position = if (r.positionMs >= 0 && r.durationMs > 0) {
+                    " at ${Clock.humanize(r.positionMs / 1000)} of " +
+                        Clock.humanize(r.durationMs / 1000)
+                } else ""
+                val state = if (r.playing) "Playing" else "Paused"
+                "$state: \"${r.episode ?: "unknown episode"}\" from " +
+                    "\"${r.podcast ?: "unknown podcast"}\"$position." to false
+            }
+            Podcast.Result.NothingLoaded ->
+                "Pocket Casts has no episode loaded — nothing is playing and " +
+                    "nothing is paused." to false
+            else -> podcastFailure(r)
         }
 
         "launch_watch_app" -> describe(Watch.launch(context, args.optString("app")), "opened")
@@ -570,6 +595,16 @@ class McpServer(
         }
 
         else -> "No such tool: $name" to true
+    }
+
+    private fun podcastFailure(result: Podcast.Result): Pair<String, Boolean> = when (result) {
+        Podcast.Result.NotInstalled ->
+            "FAILED: Pocket Casts (${Podcast.POCKET_CASTS_PACKAGE}) is not " +
+                "installed on the phone." to true
+        Podcast.Result.NoConnection ->
+            "FAILED: Pocket Casts refused the media session connection or did " +
+                "not answer. Opening the app once may help." to true
+        else -> "FAILED: unexpected result $result." to true
     }
 
     private fun describe(result: Watch.Result, verb: String): Pair<String, Boolean> = when (result) {
