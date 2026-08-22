@@ -200,7 +200,7 @@ class McpService : Service() {
         return Notification.Builder(this, CHANNEL_ID)
             .setContentTitle("Phone MCP")
             .setContentText(text)
-            .setSmallIcon(R.drawable.ic_stat_eye)
+            .setSmallIcon(R.drawable.ic_stat_pyramid)
             .setContentIntent(open)
             .addAction(Notification.Action.Builder(null, "Stop", stop).build())
             .setOngoing(true)

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Status-bar icon: a pyramid in three slices. Notification small icons are
+     rendered from the alpha channel alone, so it is a plain silhouette. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,4 L15.56,10 L8.44,10 Z
+            M7.96,10.8 L16.04,10.8 L18.53,15 L5.47,15 Z
+            M4.99,15.8 L19.01,15.8 L21.5,20 L2.5,20 Z" />
+</vector>
