@@ -351,6 +351,21 @@ class McpServer(
                     ),
             )
 
+        val playPodcast = JSONObject()
+            .put("name", "play_podcast")
+            .put(
+                "description",
+                "Resume podcast playback in Pocket Casts on the phone, picking up " +
+                    "the episode the user was last listening to. Cannot choose a " +
+                    "specific show or episode. There is no confirmation back from " +
+                    "Pocket Casts, so tell the user it was asked to play rather " +
+                    "than promising audio is running.",
+            )
+            .put(
+                "inputSchema",
+                JSONObject().put("type", "object").put("properties", JSONObject()),
+            )
+
         val findMyPhone = JSONObject()
             .put("name", "find_my_phone")
             .put(
@@ -403,7 +418,7 @@ class McpServer(
 
         return JSONArray().put(setTimer).put(cancelTimer).put(showTimers)
             .put(launchWatchApp).put(stopWatchApp).put(setWatchTimer).put(getLocation)
-            .put(findMyPhone).put(silencePhone)
+            .put(playPodcast).put(findMyPhone).put(silencePhone)
     }
 
     /** Returns (text, isError). */
@@ -506,6 +521,16 @@ class McpServer(
             } else {
                 "The phone was not ringing." to false
             }
+
+        "play_podcast" -> when (Podcast.play(context)) {
+            Podcast.Result.Sent ->
+                "Asked Pocket Casts to resume playback. It does not confirm, so if " +
+                    "the user says nothing is playing, they may need to open the " +
+                    "app once — it cannot always start from a cold stop." to false
+            Podcast.Result.NotInstalled ->
+                "FAILED: Pocket Casts (${Podcast.POCKET_CASTS_PACKAGE}) is not " +
+                    "installed on the phone." to true
+        }
 
         "launch_watch_app" -> describe(Watch.launch(context, args.optString("app")), "opened")
 

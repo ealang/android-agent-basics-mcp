@@ -28,6 +28,7 @@
     <queries>
         <package android:name="coredevices.coreapp" />
         <provider android:authorities="com.getpebble.android.provider.basalt" />
+        <package android:name="au.com.shiftyjelly.pocketcasts" />
     </queries>
 
     <application
