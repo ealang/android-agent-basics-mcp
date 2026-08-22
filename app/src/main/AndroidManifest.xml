@@ -61,6 +61,19 @@
                 android:value="Local MCP server for the paired Pebble/agent to call" />
         </service>
 
+        <!-- Empty listener; enabling it in Settings > Notification access is
+             what authorizes MediaSessionManager.getActiveSessions, which is the
+             only route into Pocket Casts' media session that release builds
+             don't block. We never read notifications. -->
+        <service
+            android:name=".MediaListenerService"
+            android:exported="true"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
         <receiver
             android:name=".BootReceiver"
             android:exported="true">

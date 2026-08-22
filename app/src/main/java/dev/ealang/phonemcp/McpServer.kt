@@ -551,9 +551,6 @@ class McpServer(
                 "$state: \"${r.episode ?: "unknown episode"}\" from " +
                     "\"${r.podcast ?: "unknown podcast"}\"$position." to false
             }
-            Podcast.Result.NothingLoaded ->
-                "Pocket Casts has no episode loaded — nothing is playing and " +
-                    "nothing is paused." to false
             else -> podcastFailure(r)
         }
 
@@ -601,9 +598,15 @@ class McpServer(
         Podcast.Result.NotInstalled ->
             "FAILED: Pocket Casts (${Podcast.POCKET_CASTS_PACKAGE}) is not " +
                 "installed on the phone." to true
-        Podcast.Result.NoConnection ->
-            "FAILED: Pocket Casts refused the media session connection or did " +
-                "not answer. Opening the app once may help." to true
+        Podcast.Result.NoAccess ->
+            "FAILED: this app has not been granted notification access, which " +
+                "is what authorizes reading media sessions. The user must " +
+                "enable \"Phone MCP\" under Settings > Notifications > " +
+                "Notification access (or Device & app notifications)." to true
+        Podcast.Result.NoSession ->
+            "FAILED: Pocket Casts has no active media session — it has likely " +
+                "not been opened since the phone restarted, or was swiped " +
+                "away. Opening the app once will fix it." to true
         else -> "FAILED: unexpected result $result." to true
     }
 
