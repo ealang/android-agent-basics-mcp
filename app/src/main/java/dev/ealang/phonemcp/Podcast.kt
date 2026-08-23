@@ -76,15 +76,14 @@ object Podcast {
             ?: return Result.NotInstalled
         context.startActivity(
             launch.addFlags(
-                // CLEAR_TOP|SINGLE_TOP is what makes this work when Pocket Casts
-                // is already running. Their MainActivity is singleTop, and a
-                // plain launcher intent aimed at an existing task is treated as
-                // "the user tapped the icon again": the task is resumed and the
-                // intent is never delivered, so onNewIntent — and our extra —
-                // are never seen. These flags force the delivery instead.
-                Intent.FLAG_ACTIVITY_NEW_TASK or
-                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                    Intent.FLAG_ACTIVITY_SINGLE_TOP,
+                // CLEAR_TASK is what makes this work when Pocket Casts is
+                // already running. Their MainActivity reads our extra from
+                // handleIntent, which runs from onCreate and from onNewIntent —
+                // and onNewIntent arrives on the resume path, which the
+                // keyguard blocks. Tearing the task down forces a fresh
+                // onCreate, the same path a cold start takes, and that one is
+                // proven to work from lock.
+                Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK,
             ).putExtra(ASSISTANT_EXTRA, true),
         )
 
