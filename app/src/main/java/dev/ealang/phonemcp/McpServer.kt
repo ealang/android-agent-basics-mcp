@@ -356,9 +356,9 @@ class McpServer(
             .put(
                 "description",
                 "Resume podcast playback in Pocket Casts on the phone, picking up " +
-                    "the episode the user was last listening to. Opens Pocket Casts " +
-                    "on the phone's screen as a side effect, and takes up to ten " +
-                    "seconds. Cannot choose a specific show or episode.",
+                    "the episode the user was last listening to. Works whether or " +
+                    "not the phone is locked, and whether or not Pocket Casts is " +
+                    "already running. Cannot choose a specific show or episode.",
             )
             .put(
                 "inputSchema",
@@ -593,19 +593,22 @@ class McpServer(
 
         "play_podcast" -> when (val r = Podcast.play(context)) {
             Podcast.Result.Played ->
-                "CONFIRMED - Pocket Casts reports it is now playing. It was " +
-                    "opened to do it, so it is the app the user will find in " +
-                    "front of them when they next look at the phone." to false
+                "CONFIRMED - the podcast is playing." to false
             Podcast.Result.AlreadyPlaying ->
-                "Pocket Casts is already playing — nothing to do." to false
+                "It was already playing — nothing to do." to false
             Podcast.Result.NotStarted ->
                 "UNCERTAIN: Pocket Casts was asked to play but never reported " +
-                    "that playback started. Ask the user whether audio is " +
-                    "running — do not assume it worked." to true
+                    "that it started. Ask the user whether audio is running — " +
+                    "do not assume it worked." to true
             else -> podcastFailure(r)
         }
 
         "podcast_now_playing" -> when (val r = Podcast.nowPlaying(context)) {
+            // Idle is a normal answer to "what's playing?", not a failure —
+            // reporting it as an error makes callers apologise for the phone.
+            Podcast.Result.NoSession ->
+                "Nothing is playing — Pocket Casts is idle. Call play_podcast " +
+                    "to start it." to false
             is Podcast.Result.NowPlaying -> {
                 val position = if (r.positionMs >= 0 && r.durationMs > 0) {
                     " at ${Clock.humanize(r.positionMs / 1000)} of " +
@@ -736,12 +739,6 @@ class McpServer(
                 "is what authorizes reading media sessions. The user must " +
                 "enable \"Phone MCP\" under Settings > Notifications > " +
                 "Notification access (or Device & app notifications)." to true
-        Podcast.Result.NoSession ->
-            "FAILED: Pocket Casts has no active media session, so there is " +
-                "nothing to report on. It publishes one only once playback " +
-                "has been prepared, and the system reclaims it when the app " +
-                "sits idle — so this is ordinary, not a fault. play_podcast " +
-                "does not need an existing session and will still work." to true
         else -> "FAILED: unexpected result $result." to true
     }
 

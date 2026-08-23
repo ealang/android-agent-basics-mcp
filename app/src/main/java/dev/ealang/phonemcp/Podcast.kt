@@ -24,11 +24,14 @@ object Podcast {
 
     const val POCKET_CASTS_PACKAGE = "au.com.shiftyjelly.pocketcasts"
 
-    /** How long to wait for the session to actually report STATE_PLAYING. */
-    private const val CONFIRM_WAIT_MS = 6_000L
-
-    /** How long a cold-started Pocket Casts gets to publish a media session. */
-    private const val SESSION_WAIT_MS = 8_000L
+    /**
+     * How long to wait for Pocket Casts to report STATE_PLAYING, covering both
+     * a cold app starting up and playback spinning up. Every observed success
+     * lands inside 1.3 s, so this is generous; it only costs anything when
+     * something is actually wrong, and then the caller is waiting for a "we
+     * don't know" it cannot act on anyway.
+     */
+    private const val PLAY_TIMEOUT_MS = 10_000L
 
     /**
      * Pocket Casts reads this as "an assistant opened us with no other
@@ -51,7 +54,12 @@ object Podcast {
         data object NotInstalled : Result
         /** Notification access has not been granted to MediaListenerService. */
         data object NoAccess : Result
-        /** Installed, but no media session is active (app not started or killed). */
+        /**
+         * No media session is active. Only [nowPlaying] reports this — it is
+         * the ordinary idle state, not a fault: Pocket Casts publishes a
+         * session only once playback has been prepared, and the system
+         * reclaims it when the app sits idle.
+         */
         data object NoSession : Result
     }
 
@@ -87,9 +95,7 @@ object Podcast {
             ).putExtra(ASSISTANT_EXTRA, true),
         )
 
-        // A cold app has to start before it can publish a session, so allow for
-        // both that and the spin-up of playback itself.
-        val deadline = System.currentTimeMillis() + SESSION_WAIT_MS + CONFIRM_WAIT_MS
+        val deadline = System.currentTimeMillis() + PLAY_TIMEOUT_MS
         var appeared = false
         while (System.currentTimeMillis() < deadline) {
             Thread.sleep(500)
@@ -98,8 +104,11 @@ object Podcast {
             appeared = true
             if (isPlaying(controller)) return Result.Played
         }
+        // Whether a session ever appeared tells us something (did the app start
+        // at all?) but tells the caller nothing it could act on differently, so
+        // it goes to the log and both cases answer the same way.
         Log.w(TAG, "Pocket Casts play: sessionAppeared=$appeared, never played")
-        return if (appeared) Result.NotStarted else Result.NoSession
+        return Result.NotStarted
     }
 
     private fun isPlaying(controller: MediaController): Boolean =
