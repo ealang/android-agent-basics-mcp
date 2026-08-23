@@ -31,6 +31,9 @@ object Podcast {
     /** How long to wait for the session to actually report STATE_PLAYING. */
     private const val CONFIRM_WAIT_MS = 6_000L
 
+    /** How long a cold-started Pocket Casts gets to publish a media session. */
+    private const val SESSION_WAIT_MS = 8_000L
+
     sealed interface Result {
         data object Played : Result
         data object AlreadyPlaying : Result
@@ -51,7 +54,7 @@ object Podcast {
     }
 
     fun play(context: Context): Result =
-        withController(context) { controller ->
+        withController(context, launchIfMissing = true) { controller ->
             if (isPlaying(controller)) return@withController Result.AlreadyPlaying
 
             // Bring Pocket Casts to the foreground first — the same overlay
@@ -100,8 +103,19 @@ object Podcast {
             )
         }
 
+    /**
+     * Resolve Pocket Casts' media session and hand it to [block].
+     *
+     * With [launchIfMissing], a missing session is not the end of the story:
+     * Android reclaims the process after a few hours idle and the session goes
+     * with it, leaving nothing to drive until the app runs again. Starting it
+     * ourselves and waiting for the session to appear turns "open it once
+     * yourself" into something we can do. Read-only callers pass false — asking
+     * what is playing should never drag an app onto the user's screen.
+     */
     private fun withController(
         context: Context,
+        launchIfMissing: Boolean = false,
         block: (MediaController) -> Result,
     ): Result {
         if (!installed(context)) return Result.NotInstalled
@@ -115,16 +129,33 @@ object Podcast {
             return Result.NoAccess
         }
 
-        val controller = sessions.firstOrNull { it.packageName == POCKET_CASTS_PACKAGE }
-            ?: run {
-                Log.w(
-                    TAG,
-                    "Pocket Casts session: not among active sessions " +
-                        sessions.map { it.packageName },
-                )
-                return Result.NoSession
+        sessions.firstOrNull { it.packageName == POCKET_CASTS_PACKAGE }
+            ?.let { return block(it) }
+
+        Log.w(
+            TAG,
+            "Pocket Casts session: not among active sessions " +
+                sessions.map { it.packageName },
+        )
+        if (!launchIfMissing) return Result.NoSession
+
+        val launch = context.packageManager.getLaunchIntentForPackage(POCKET_CASTS_PACKAGE)
+            ?: return Result.NotInstalled
+        context.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+
+        val deadline = System.currentTimeMillis() + SESSION_WAIT_MS
+        while (System.currentTimeMillis() < deadline) {
+            Thread.sleep(500)
+            val controller = try {
+                manager.getActiveSessions(listener)
+                    .firstOrNull { it.packageName == POCKET_CASTS_PACKAGE }
+            } catch (e: SecurityException) {
+                null
             }
-        return block(controller)
+            if (controller != null) return block(controller)
+        }
+        Log.w(TAG, "Pocket Casts session: none appeared ${SESSION_WAIT_MS}ms after launch")
+        return Result.NoSession
     }
 
     private fun installed(context: Context): Boolean = try {

@@ -738,7 +738,9 @@ class McpServer(
         Podcast.Result.NoSession ->
             "FAILED: Pocket Casts has no active media session — it has likely " +
                 "not been opened since the phone restarted, or was swiped " +
-                "away. Opening the app once will fix it." to true
+                "away. play_podcast launches it to create one, so if that is " +
+                "what just failed, the phone is probably locked and the " +
+                "launch cannot get far enough to help." to true
         else -> "FAILED: unexpected result $result." to true
     }
 
