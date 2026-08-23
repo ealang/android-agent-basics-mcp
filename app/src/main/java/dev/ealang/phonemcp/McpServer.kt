@@ -593,14 +593,15 @@ class McpServer(
 
         "play_podcast" -> when (val r = Podcast.play(context)) {
             Podcast.Result.Played ->
-                "CONFIRMED - Pocket Casts reports it is now playing. The app " +
-                    "was opened on screen to do it." to false
+                "CONFIRMED - Pocket Casts reports it is now playing. It was " +
+                    "opened on screen to do it, so it is now the app in " +
+                    "front of the user." to false
             Podcast.Result.AlreadyPlaying ->
                 "Pocket Casts is already playing — nothing to do." to false
             Podcast.Result.NotStarted ->
-                "UNCERTAIN: Pocket Casts was opened and sent the play press, " +
-                    "but never reported that playback started. Ask the user " +
-                    "whether audio is running — do not assume it worked." to true
+                "UNCERTAIN: Pocket Casts was asked to play but never reported " +
+                    "that playback started. Ask the user whether audio is " +
+                    "running — do not assume it worked." to true
             else -> podcastFailure(r)
         }
 

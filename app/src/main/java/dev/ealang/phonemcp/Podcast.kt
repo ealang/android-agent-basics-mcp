@@ -8,7 +8,6 @@ import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.util.Log
-import android.view.KeyEvent
 
 /**
  * Drives Pocket Casts through its media session via
@@ -25,9 +24,6 @@ object Podcast {
 
     const val POCKET_CASTS_PACKAGE = "au.com.shiftyjelly.pocketcasts"
 
-    /** Matches the watch tools' launch-then-send delay. */
-    private const val LAUNCH_WAIT_MS = 2_500L
-
     /** How long to wait for the session to actually report STATE_PLAYING. */
     private const val CONFIRM_WAIT_MS = 6_000L
 
@@ -43,7 +39,7 @@ object Podcast {
     sealed interface Result {
         data object Played : Result
         data object AlreadyPlaying : Result
-        /** The press was sent but the session never reported STATE_PLAYING. */
+        /** Pocket Casts was asked to play but never reported STATE_PLAYING. */
         data object NotStarted : Result
         data class NowPlaying(
             val podcast: String?,
@@ -59,26 +55,23 @@ object Podcast {
         data object NoSession : Result
     }
 
+    /**
+     * Ask Pocket Casts to start playback itself, rather than pressing play at
+     * it. Its MainActivity reads `extra_accl_intent` as "an assistant opened us
+     * with no further instruction" and calls playQueue().
+     *
+     * This is strictly better than dispatching a media button. A press needs a
+     * session to already exist (Pocket Casts only mints one once playback is
+     * prepared — merely launching the app does not) and needs the app visibly
+     * on screen, which the keyguard prevents. Playback started by Pocket Casts
+     * from its own foreground is subject to neither: cold and locked both work.
+     */
     fun play(context: Context): Result {
         if (!installed(context)) return Result.NotInstalled
         val sessions = sessions(context) ?: return Result.NoAccess
-        val controller = sessions.firstOrNull { it.packageName == POCKET_CASTS_PACKAGE }
-            ?: return coldStart(context)
-        return warmPlay(context, controller)
-    }
+        val existing = sessions.firstOrNull { it.packageName == POCKET_CASTS_PACKAGE }
+        if (existing != null && isPlaying(existing)) return Result.AlreadyPlaying
 
-    /**
-     * No media session exists, so there is nothing to press play on — Pocket
-     * Casts only mints one once playback is prepared, and merely launching the
-     * app does not do that (opening it by hand appeared to, because the user
-     * then tapped play).
-     *
-     * Instead ask Pocket Casts to start playback itself. Its MainActivity
-     * treats `extra_accl_intent` as "the assistant opened us and the user
-     * presumably wants to play", and calls playQueue() — from its own
-     * foreground, so none of the background restrictions that block us apply.
-     */
-    private fun coldStart(context: Context): Result {
         val launch = context.packageManager.getLaunchIntentForPackage(POCKET_CASTS_PACKAGE)
             ?: return Result.NotInstalled
         context.startActivity(
@@ -86,6 +79,8 @@ object Podcast {
                 .putExtra(ASSISTANT_EXTRA, true),
         )
 
+        // A cold app has to start before it can publish a session, so allow for
+        // both that and the spin-up of playback itself.
         val deadline = System.currentTimeMillis() + SESSION_WAIT_MS + CONFIRM_WAIT_MS
         var appeared = false
         while (System.currentTimeMillis() < deadline) {
@@ -95,40 +90,8 @@ object Podcast {
             appeared = true
             if (isPlaying(controller)) return Result.Played
         }
-        Log.w(TAG, "Pocket Casts cold start: sessionAppeared=$appeared, never played")
+        Log.w(TAG, "Pocket Casts play: sessionAppeared=$appeared, never played")
         return if (appeared) Result.NotStarted else Result.NoSession
-    }
-
-    private fun warmPlay(context: Context, controller: MediaController): Result {
-        if (isPlaying(controller)) return Result.AlreadyPlaying
-
-        // Bring Pocket Casts to the foreground first — the same overlay
-        // exemption the watch tools use to open the clock app. A play command
-        // reaching a *backgrounded* Pocket Casts is accepted and then dies: One
-        // UI has frozen the process, and Android denies its foreground-service
-        // start (which also kills its media notification). With the app on
-        // screen the press is proven to work. Pocket Casts treats PLAY as a
-        // play/pause toggle, so it is only sent when paused — checked above.
-        val launch = context.packageManager.getLaunchIntentForPackage(POCKET_CASTS_PACKAGE)
-            ?: return Result.NotInstalled
-        context.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        Thread.sleep(LAUNCH_WAIT_MS)
-
-        controller.dispatchMediaButtonEvent(
-            KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PLAY),
-        )
-        controller.dispatchMediaButtonEvent(
-            KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PLAY),
-        )
-
-        // Their button handler debounces taps for a moment before acting, then
-        // playback has to spin up; poll instead of trusting the send.
-        val deadline = System.currentTimeMillis() + CONFIRM_WAIT_MS
-        while (System.currentTimeMillis() < deadline) {
-            Thread.sleep(500)
-            if (isPlaying(controller)) return Result.Played
-        }
-        return Result.NotStarted
     }
 
     private fun isPlaying(controller: MediaController): Boolean =
