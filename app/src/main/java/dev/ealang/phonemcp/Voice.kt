@@ -31,6 +31,9 @@ object Voice {
         /** The app answered, and said no — the message is theirs, and specific. */
         data class Refused(val message: String) : Result
         data class Status(
+            /** Presence of a session is decided by the id, never by the name:
+             *  the name is a lookup that can come back null. */
+            val activeConversationId: String?,
             val activeConversation: String?,
             val listening: Boolean,
             val paused: Boolean,
@@ -75,6 +78,7 @@ object Voice {
         return row.use { cursor ->
             if (!cursor.moveToFirst()) return Result.NotAvailable
             Result.Status(
+                activeConversationId = cursor.string("active_conversation_id"),
                 activeConversation = cursor.string("active_conversation_name"),
                 listening = cursor.int("listening") == 1,
                 paused = cursor.int("paused") == 1,

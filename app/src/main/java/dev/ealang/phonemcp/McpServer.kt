@@ -688,15 +688,17 @@ class McpServer(
     }
 
     private fun describe(status: Voice.Result.Status): String {
+        // The id decides whether a session exists; the name is only how we
+        // refer to it, and can be missing for a session that is very much live.
+        val name = status.activeConversation ?: status.activeConversationId
         val session = when {
-            status.activeConversation == null -> "No voice session is running."
-            status.paused -> "Paused mid-session with ${status.activeConversation}."
-            status.listening ->
-                "Listening to ${status.activeConversation} — the microphone is live."
+            status.activeConversationId == null -> "No voice session is running."
+            status.paused -> "Paused mid-session with $name."
+            status.listening -> "Listening to $name — the microphone is live."
             // A session exists but is neither listening nor paused: it is
             // between states, or Android took the microphone away.
             else ->
-                "A session with ${status.activeConversation} is up but not " +
+                "A session with $name is up but not " +
                     "listening (recording ${status.recordingState})."
         }
         val audio = if (status.queueDepth > 0) {
