@@ -75,8 +75,17 @@ object Podcast {
         val launch = context.packageManager.getLaunchIntentForPackage(POCKET_CASTS_PACKAGE)
             ?: return Result.NotInstalled
         context.startActivity(
-            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                .putExtra(ASSISTANT_EXTRA, true),
+            launch.addFlags(
+                // CLEAR_TOP|SINGLE_TOP is what makes this work when Pocket Casts
+                // is already running. Their MainActivity is singleTop, and a
+                // plain launcher intent aimed at an existing task is treated as
+                // "the user tapped the icon again": the task is resumed and the
+                // intent is never delivered, so onNewIntent — and our extra —
+                // are never seen. These flags force the delivery instead.
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP,
+            ).putExtra(ASSISTANT_EXTRA, true),
         )
 
         // A cold app has to start before it can publish a session, so allow for
