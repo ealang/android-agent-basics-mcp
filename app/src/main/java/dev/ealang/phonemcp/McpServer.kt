@@ -429,9 +429,65 @@ class McpServer(
                 JSONObject().put("type", "object").put("properties", JSONObject()),
             )
 
+        val startVoice = JSONObject()
+            .put("name", "start_voice_session")
+            .put(
+                "description",
+                "Open a live voice session with one of the user's Telegram " +
+                    "conversations, on their phone: their unread messages are read " +
+                    "aloud, and anything they say is transcribed and sent back. The " +
+                    "session runs until stopped. Returns as soon as the request is " +
+                    "accepted, which is not a promise that the microphone came up — " +
+                    "call voice_status to see whether it did.",
+            )
+            .put(
+                "inputSchema",
+                JSONObject()
+                    .put("type", "object")
+                    .put(
+                        "properties",
+                        JSONObject().put(
+                            "conversation",
+                            JSONObject().put("type", "string")
+                                .put(
+                                    "description",
+                                    "Who to talk to: a conversation name, or enough of " +
+                                        "one to be unambiguous. voice_status lists them.",
+                                ),
+                        ),
+                    )
+                    .put("required", JSONArray().put("conversation")),
+            )
+
+        val stopVoice = JSONObject()
+            .put("name", "stop_voice_session")
+            .put(
+                "description",
+                "End the live voice session, releasing the phone's microphone. " +
+                    "Messages already being transcribed still get sent.",
+            )
+            .put(
+                "inputSchema",
+                JSONObject().put("type", "object").put("properties", JSONObject()),
+            )
+
+        val voiceStatus = JSONObject()
+            .put("name", "voice_status")
+            .put(
+                "description",
+                "Whether a Telegram voice session is running on the phone and who " +
+                    "with, plus every conversation available to start one with and " +
+                    "how many unread messages each has.",
+            )
+            .put(
+                "inputSchema",
+                JSONObject().put("type", "object").put("properties", JSONObject()),
+            )
+
         return JSONArray().put(setTimer).put(cancelTimer).put(showTimers)
             .put(launchWatchApp).put(stopWatchApp).put(setWatchTimer).put(getLocation)
             .put(playPodcast).put(nowPlaying).put(findMyPhone).put(silencePhone)
+            .put(startVoice).put(stopVoice).put(voiceStatus)
     }
 
     /** Returns (text, isError). */
@@ -561,6 +617,36 @@ class McpServer(
             else -> podcastFailure(r)
         }
 
+        "start_voice_session" -> {
+            val conversation = args.optString("conversation")
+            if (conversation.isBlank()) {
+                "FAILED: conversation is required — call voice_status to see " +
+                    "which ones exist." to true
+            } else {
+                when (val r = Voice.start(context, conversation)) {
+                    is Voice.Result.Accepted ->
+                        "The phone accepted a voice session with " +
+                            "${r.conversation ?: conversation}. It takes a few " +
+                            "seconds to come up, and Android can still refuse the " +
+                            "microphone — call voice_status to confirm it is " +
+                            "listening before telling the user to talk." to false
+                    else -> voiceFailure(r)
+                }
+            }
+        }
+
+        "stop_voice_session" -> when (val r = Voice.stop(context)) {
+            is Voice.Result.Accepted ->
+                "The phone accepted the request to end the session with " +
+                    "${r.conversation ?: "the current conversation"}." to false
+            else -> voiceFailure(r)
+        }
+
+        "voice_status" -> when (val r = Voice.status(context)) {
+            is Voice.Result.Status -> describe(r) to false
+            else -> voiceFailure(r)
+        }
+
         "launch_watch_app" -> describe(Watch.launch(context, args.optString("app")), "opened")
 
         "stop_watch_app" -> describe(Watch.stop(context, args.optString("app")), "closed")
@@ -599,6 +685,43 @@ class McpServer(
         }
 
         else -> "No such tool: $name" to true
+    }
+
+    private fun describe(status: Voice.Result.Status): String {
+        val session = when {
+            status.activeConversation == null -> "No voice session is running."
+            status.paused -> "Paused mid-session with ${status.activeConversation}."
+            status.listening ->
+                "Listening to ${status.activeConversation} — the microphone is live."
+            // A session exists but is neither listening nor paused: it is
+            // between states, or Android took the microphone away.
+            else ->
+                "A session with ${status.activeConversation} is up but not " +
+                    "listening (recording ${status.recordingState})."
+        }
+        val audio = if (status.queueDepth > 0) {
+            " ${status.queueDepth} message(s) still to be read aloud."
+        } else {
+            ""
+        }
+        val conversations = if (status.conversations.isEmpty()) {
+            "No conversations are configured in the app."
+        } else {
+            "Conversations:\n" + status.conversations.joinToString("\n") {
+                val unread = if (it.unread > 0) " — ${it.unread} unread" else ""
+                "  ${it.name}$unread${if (it.active) " (active)" else ""}"
+            }
+        }
+        return "$session$audio\n\n$conversations"
+    }
+
+    private fun voiceFailure(result: Voice.Result): Pair<String, Boolean> = when (result) {
+        is Voice.Result.Refused -> "FAILED: ${result.message}" to true
+        Voice.Result.NotAvailable ->
+            "FAILED: the voice gateway app (${Voice.PACKAGE}) did not answer. It " +
+                "is either not installed, or was force stopped and has not been " +
+                "opened since." to true
+        else -> "FAILED: unexpected result $result." to true
     }
 
     private fun podcastFailure(result: Podcast.Result): Pair<String, Boolean> = when (result) {
