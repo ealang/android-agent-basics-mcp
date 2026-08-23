@@ -52,7 +52,13 @@
 
         <!-- specialUse: this is a long-lived local HTTP listener, which none of
              the standard foreground-service types describe. location is also
-             declared so get_location works while the app is in the background. -->
+             declared so get_location works while the app is in the background.
+
+             Declaring a type here only permits it; which ones are actually
+             claimed is decided per start in McpService.goForeground, because
+             location is while-in-use and is refused to a service started from
+             the background. Left implicit, that refusal took down the whole
+             service on every reboot and app update. -->
         <service
             android:name=".McpService"
             android:exported="false"

@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -39,6 +40,15 @@ class McpService : Service() {
 
         @Volatile
         var running: Boolean = false
+            private set
+
+        /**
+         * Running, but without the `location` foreground type — see
+         * [goForeground]. The server is fine; `get_location` may not be.
+         * Cleared by a retry made while the app is on screen.
+         */
+        @Volatile
+        var degraded: Boolean = false
             private set
 
         /**
@@ -100,19 +110,13 @@ class McpService : Service() {
 
         Config(this).enabled = true
 
-        try {
-            // Started before the first bind attempt: the five-second foreground
-            // deadline must be met even if binding waits on Tailscale.
-            startForeground(NOTIFICATION_ID, notification("Starting…"))
-        } catch (e: Exception) {
-            // Being refused foreground status is survivable; crashing here is
-            // not, because START_STICKY would bring us straight back to the
-            // same refusal — a loop the system eventually reports to the user
-            // as the app repeatedly stopping. Stop cleanly and stay stopped.
-            val reason = "${e::class.java.simpleName}: ${e.message ?: "no detail"}"
-            Log.w(TAG, "Refused foreground status; not retrying", e)
-            EventLog.record("foreground start refused ($reason)")
-            Config(this).lastStartFailure = "foreground start refused — $reason"
+        // Started before the first bind attempt: the five-second foreground
+        // deadline must be met even if binding waits on Tailscale.
+        if (!goForeground()) {
+            // Being refused foreground status is survivable; crashing is not,
+            // because START_STICKY would bring us straight back to the same
+            // refusal — the loop the system reports as the app repeatedly
+            // stopping. Stop cleanly and stay stopped.
             stopSelf()
             return START_NOT_STICKY
         }
@@ -123,6 +127,71 @@ class McpService : Service() {
 
         // START_STICKY: if Android reclaims us under memory pressure, come back.
         return START_STICKY
+    }
+
+    /**
+     * Takes foreground status, giving up `location` rather than the service.
+     *
+     * Left to itself, `startForeground` claims every type the manifest
+     * declares — and `location` is a *while-in-use* type: Android grants it
+     * only to an app in an eligible state, which an app being started by a
+     * background broadcast is not. So an update or a reboot, where
+     * [BootReceiver] is the caller, was refused outright and the whole server
+     * went down with it. The user saw the app repeatedly crashing.
+     *
+     * `specialUse` carries no such condition, so it is the fallback: the HTTP
+     * listener — the point of the service — has no use for `location` anyway.
+     * Only `get_location` does, and losing that is much better than losing
+     * everything. [degraded] records which we got, so it can be retried from
+     * the foreground later.
+     *
+     * Returns false only if even the bare start was refused.
+     */
+    private fun goForeground(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            // Types are not enforced before 34; asking for one is what breaks.
+            return try {
+                startForeground(NOTIFICATION_ID, notification("Starting…"))
+                degraded = false
+                true
+            } catch (e: Exception) {
+                recordForegroundRefusal(e)
+                false
+            }
+        }
+
+        val full = ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE or
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION or
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+        try {
+            startForeground(NOTIFICATION_ID, notification("Starting…"), full)
+            if (degraded) EventLog.record("location foreground type regained")
+            degraded = false
+            return true
+        } catch (e: Exception) {
+            Log.i(TAG, "Refused the full foreground type set; falling back", e)
+        }
+
+        return try {
+            startForeground(
+                NOTIFICATION_ID,
+                notification("Starting…"),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
+            )
+            degraded = true
+            EventLog.record("started without location type; get_location may be limited")
+            true
+        } catch (e: Exception) {
+            recordForegroundRefusal(e)
+            false
+        }
+    }
+
+    private fun recordForegroundRefusal(e: Exception) {
+        val reason = "${e::class.java.simpleName}: ${e.message ?: "no detail"}"
+        Log.w(TAG, "Refused foreground status; not retrying", e)
+        EventLog.record("foreground start refused ($reason)")
+        Config(this).lastStartFailure = "foreground start refused — $reason"
     }
 
     /**
@@ -190,6 +259,7 @@ class McpService : Service() {
         server?.stop()
         server = null
         running = false
+        degraded = false
         sendBroadcast(Intent(ACTION_STATE_CHANGED).setPackage(packageName))
         Log.i(TAG, "Stopped")
         super.onDestroy()

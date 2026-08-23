@@ -177,9 +177,31 @@ requirement of holding a socket open, not decoration. Android kills plain
 background services within minutes and the socket dies with them.
 
 The service restarts on `BOOT_COMPLETED` if it was running when the phone shut
-down. Two caveats: that broadcast only reaches an app the user has launched at
+down, and on `MY_PACKAGE_REPLACED` so an update does not leave the server off.
+Two caveats: `BOOT_COMPLETED` only reaches an app the user has launched at
 least once since install, and some OEM battery managers suppress it. The
 **Battery settings** button leads to the exemption screen.
+
+### Starting from the background
+
+Both of those broadcasts start the service from the background, and that is a
+weaker position than starting from the UI. `startForeground` claims every type
+the manifest declares unless told otherwise, and `location` is a *while-in-use*
+type — Android grants it only to an app it considers in use, which an app woken
+by a broadcast is not. The refusal arrives as a `SecurityException` thrown at
+the service, so it took the whole server down; `START_STICKY` then restarted it
+into the same refusal, which the system reports to the user as the app
+repeatedly crashing. Installing an update over a running server hit this every
+time.
+
+So the types claimed are now chosen per start rather than left implicit:
+`specialUse|location|mediaPlayback` first, falling back to `specialUse` alone,
+which carries no eligibility condition. The HTTP listener — the point of the
+service — needs none of the others. Only `get_location` wants `location`, and
+losing that is much better than losing everything, so the fallback is recorded
+(`McpService.degraded`) rather than treated as failure. Opening the app retries
+the full set, since being on screen is exactly the eligibility that was
+missing, and the status line says so meanwhile.
 
 ## Client config
 

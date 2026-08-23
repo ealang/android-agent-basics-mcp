@@ -239,6 +239,13 @@ class MainActivity : Activity() {
         }
         refresh()
         ticker.run()
+
+        // A service started by boot or by an app update cannot hold the
+        // location foreground type — that needs an app the system considers in
+        // use. Being on screen is exactly that, so this is the moment it can
+        // be claimed. Harmless when it isn't needed; the service treats a
+        // repeat start as a no-op once the socket is up.
+        if (McpService.running && McpService.degraded) McpService.start(this)
     }
 
     override fun onStop() {
@@ -322,10 +329,14 @@ class MainActivity : Activity() {
                 "dropped. Grant it below — Android needs it before a background " +
                 "app may open the clock."
         }
-        val location = if (Locator.hasPermission(this)) {
-            "Can report the phone's location."
-        } else {
+        val location = if (!Locator.hasPermission(this)) {
             "Location is not granted, so get_location will fail."
+        } else if (running && McpService.degraded) {
+            "Location may be limited: the server came up in the background " +
+                "(a reboot or an app update), where Android withholds the " +
+                "location foreground type. Press Stop then Start to reclaim it."
+        } else {
+            "Can report the phone's location."
         }
         val media = if (
             getSystemService(NotificationManager::class.java)
