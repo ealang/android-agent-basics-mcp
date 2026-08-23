@@ -594,8 +594,8 @@ class McpServer(
         "play_podcast" -> when (val r = Podcast.play(context)) {
             Podcast.Result.Played ->
                 "CONFIRMED - Pocket Casts reports it is now playing. It was " +
-                    "opened on screen to do it, so it is now the app in " +
-                    "front of the user." to false
+                    "opened to do it, so it is the app the user will find in " +
+                    "front of them when they next look at the phone." to false
             Podcast.Result.AlreadyPlaying ->
                 "Pocket Casts is already playing — nothing to do." to false
             Podcast.Result.NotStarted ->
@@ -737,11 +737,11 @@ class McpServer(
                 "enable \"Phone MCP\" under Settings > Notifications > " +
                 "Notification access (or Device & app notifications)." to true
         Podcast.Result.NoSession ->
-            "FAILED: Pocket Casts has no active media session — it has likely " +
-                "not been opened since the phone restarted, or was swiped " +
-                "away. play_podcast launches it to create one, so if that is " +
-                "what just failed, the phone is probably locked and the " +
-                "launch cannot get far enough to help." to true
+            "FAILED: Pocket Casts has no active media session, so there is " +
+                "nothing to report on. It publishes one only once playback " +
+                "has been prepared, and the system reclaims it when the app " +
+                "sits idle — so this is ordinary, not a fault. play_podcast " +
+                "does not need an existing session and will still work." to true
         else -> "FAILED: unexpected result $result." to true
     }
 
