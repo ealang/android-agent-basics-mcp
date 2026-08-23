@@ -32,6 +32,11 @@ nothing to push, so every exchange is ordinary request/response JSON.
   street address when the geocoder can supply one.
 - `find_my_phone(seconds?, volume?)` / `silence_phone()` — ring the phone to
   locate it.
+- `play_podcast()` / `podcast_now_playing()` — resume Pocket Casts where the
+  user left off, and read back what it is on. See `docs/pocket-casts.md`.
+- `start_voice_session(conversation)` / `stop_voice_session()` /
+  `voice_status()` — drive agent-voice-gateway, the user's own Telegram voice
+  client, through the automation ContentProvider it exports.
 
 ### Timers
 
