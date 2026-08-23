@@ -203,6 +203,18 @@ losing that is much better than losing everything, so the fallback is recorded
 the full set, since being on screen is exactly the eligibility that was
 missing, and the status line says so meanwhile.
 
+Location genuinely does not work in that degraded window — measured, not
+assumed: a fresh fix took 0.57 s with the type held, and timed out at the full
+20 s without it, in the same room minutes apart. Android withholds it
+*silently*, so `LocationManager` returns no fix and no cached position rather
+than throwing, which is indistinguishable from being indoors. `get_location`
+therefore checks `degraded` before blaming the weather, and says to open the
+app instead.
+
+The window is small — a background start that nothing follows, and opening the
+app closes it — but it is exactly the moment a remote caller wants location,
+so it is worth knowing about.
+
 ## Client config
 
 ```json
