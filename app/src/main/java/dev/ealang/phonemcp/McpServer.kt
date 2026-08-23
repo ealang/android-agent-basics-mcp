@@ -560,16 +560,17 @@ class McpServer(
                     "FAILED: location is switched off on the phone, so no provider can " +
                         "answer. Tell the user to turn it on." to true
                 // Degraded means the service never got the location foreground
-                // type, and Android then withholds fixes silently — which looks
-                // exactly like being indoors. Say which it is rather than
-                // sending the user to a window for a permissions problem.
+                // type, and without "all the time" Android then withholds fixes
+                // silently — which looks exactly like being indoors. Say which
+                // it is rather than sending the user to a window for a
+                // permissions problem.
                 Locator.Result.NoFix ->
-                    if (McpService.degraded) {
+                    if (McpService.degraded && !Locator.hasBackgroundPermission(context)) {
                         "FAILED: the phone is withholding location from this app. The " +
-                            "server was started in the background (a reboot or an app " +
-                            "update), where Android will not grant it location access. " +
-                            "Ask the user to open the Phone MCP app once — that is all " +
-                            "it takes, and location will work again immediately." to true
+                            "server started on its own (a reboot or an app update), and " +
+                            "location is only allowed while the app is in use. Ask the " +
+                            "user to open Phone MCP and set location to \"all the time\" " +
+                            "— that fixes it for good. Opening the app also works once." to true
                     } else {
                         "FAILED: location is on and permitted, but no fix came back in " +
                             "time and nothing was cached. This happens indoors. Ask the " +

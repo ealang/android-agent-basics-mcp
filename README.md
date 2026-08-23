@@ -102,6 +102,14 @@ The service declares `location` alongside `specialUse` so it can hold the
 permission while running in the background. Reverse geocoding is best effort —
 it needs the network, and the response says so by simply omitting the address.
 
+`ACCESS_BACKGROUND_LOCATION` ("Allow all the time") is also requested, because
+the ordinary while-in-use grant is withheld from a service the system does not
+consider in use — see *Starting from the background* below. Android will not
+prompt for it: since 11 the request returns denied without showing anything, so
+**Allow location all the time** explains the two taps and opens the app's
+permission screen. Without it `get_location` works normally and fails only in
+that one window; the status line and the tool's own error both say which.
+
 ### Finding the phone
 
 `find_my_phone` plays a looping tone with `USAGE_ALARM`. That usage is the whole
@@ -212,8 +220,10 @@ therefore checks `degraded` before blaming the weather, and says to open the
 app instead.
 
 The window is small — a background start that nothing follows, and opening the
-app closes it — but it is exactly the moment a remote caller wants location,
-so it is worth knowing about.
+app closes it — but it is exactly the moment a remote caller wants location, so
+`ACCESS_BACKGROUND_LOCATION` is requested to close it properly. Granting that
+makes the fallback harmless: location is answered whether or not the service
+holds the type.
 
 ## Client config
 

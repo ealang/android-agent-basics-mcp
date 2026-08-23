@@ -194,6 +194,13 @@ class MainActivity : Activity() {
 
         root.addView(
             Button(this).apply {
+                text = "Allow location all the time"
+                setOnClickListener { requestBackgroundLocation() }
+            },
+        )
+
+        root.addView(
+            Button(this).apply {
                 text = "Battery settings"
                 // Without an exemption, aggressive OEM power management can kill
                 // the service and with it the listening socket.
@@ -331,12 +338,12 @@ class MainActivity : Activity() {
         }
         val location = if (!Locator.hasPermission(this)) {
             "Location is not granted, so get_location will fail."
-        } else if (running && McpService.degraded) {
-            "Location may be limited: the server came up in the background " +
-                "(a reboot or an app update), where Android withholds the " +
-                "location foreground type. Press Stop then Start to reclaim it."
+        } else if (!Locator.hasBackgroundPermission(this)) {
+            "Can report location while the app is in use. Set it to \"all the " +
+                "time\" below, or the phone withholds location whenever the " +
+                "server started on its own — after a reboot or an update."
         } else {
-            "Can report the phone's location."
+            "Can report the phone's location, including after a reboot."
         }
         val media = if (
             getSystemService(NotificationManager::class.java)
@@ -368,6 +375,46 @@ class MainActivity : Activity() {
         } else {
             "Stopped."
         }
+    }
+
+    /**
+     * "Allow all the time" is not grantable from a dialog: since Android 11 the
+     * system refuses to prompt for it and the request returns denied without
+     * showing anything. The only route is the app's own permission screen, so
+     * this explains where to go and then goes there.
+     *
+     * It also cannot be asked for before the foreground pair is held — the
+     * setting is a widening of that grant and the option is absent without it —
+     * so that comes first when it is missing.
+     */
+    private fun requestBackgroundLocation() {
+        if (!Locator.hasPermission(this)) {
+            toast("Grant location first, then allow it all the time.")
+            requestPermissions(Locator.PERMISSIONS, 2)
+            return
+        }
+        if (Locator.hasBackgroundPermission(this)) {
+            toast("Already allowed all the time.")
+            return
+        }
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Allow location all the time")
+            .setMessage(
+                "Android only lets this be changed in Settings.\n\n" +
+                    "On the next screen: Permissions > Location > " +
+                    "\"Allow all the time\".\n\n" +
+                    "Without it the phone withholds location whenever the server " +
+                    "started on its own — after a reboot or an app update — and " +
+                    "get_location silently returns nothing.",
+            )
+            .setPositiveButton("Open settings") { _, _ ->
+                startActivity(
+                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                        .setData(Uri.parse("package:$packageName")),
+                )
+            }
+            .setNegativeButton("Not now", null)
+            .show()
     }
 
     private fun requestNotificationPermission() {
