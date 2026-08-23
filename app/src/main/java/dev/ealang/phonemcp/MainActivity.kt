@@ -59,6 +59,11 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         config = Config(this)
 
+        // A start that failed took the event log down with the process, so
+        // replay the surviving reason into it — otherwise the only symptom is
+        // a server that is silently not running.
+        config.lastStartFailure?.let { EventLog.record("earlier: $it") }
+
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(48, 48, 48, 48)

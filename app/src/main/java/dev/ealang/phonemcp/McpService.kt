@@ -41,12 +41,27 @@ class McpService : Service() {
         var running: Boolean = false
             private set
 
+        /**
+         * Asking for the service is allowed to fail. Since Android 12 a
+         * background app may be refused a foreground-service start outright,
+         * and the refusal is an exception thrown at the caller — so an
+         * unguarded call here takes down whatever was making it, which
+         * includes [BootReceiver] running on a broadcast the app cannot
+         * decline. The reason is kept where it can outlive the process.
+         */
         fun start(context: Context) {
             val intent = Intent(context, McpService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
+            } catch (e: Exception) {
+                val reason = "${e::class.java.simpleName}: ${e.message ?: "no detail"}"
+                Log.w(TAG, "Android refused to start the service", e)
+                EventLog.record("service start refused ($reason)")
+                Config(context).lastStartFailure = "start refused — $reason"
             }
         }
 
@@ -85,9 +100,24 @@ class McpService : Service() {
 
         Config(this).enabled = true
 
-        // Started before the first bind attempt: the five-second foreground
-        // deadline must be met even if binding waits on Tailscale.
-        startForeground(NOTIFICATION_ID, notification("Starting…"))
+        try {
+            // Started before the first bind attempt: the five-second foreground
+            // deadline must be met even if binding waits on Tailscale.
+            startForeground(NOTIFICATION_ID, notification("Starting…"))
+        } catch (e: Exception) {
+            // Being refused foreground status is survivable; crashing here is
+            // not, because START_STICKY would bring us straight back to the
+            // same refusal — a loop the system eventually reports to the user
+            // as the app repeatedly stopping. Stop cleanly and stay stopped.
+            val reason = "${e::class.java.simpleName}: ${e.message ?: "no detail"}"
+            Log.w(TAG, "Refused foreground status; not retrying", e)
+            EventLog.record("foreground start refused ($reason)")
+            Config(this).lastStartFailure = "foreground start refused — $reason"
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
+        Config(this).lastStartFailure = null
         retryDelayMs = INITIAL_RETRY_MS
         attemptStart()
 
