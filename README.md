@@ -225,6 +225,15 @@ app closes it — but it is exactly the moment a remote caller wants location, s
 makes the fallback harmless: location is answered whether or not the service
 holds the type.
 
+In practice it did more than that. With the permission granted, an update
+installed over a running server took the *full* type set on the background
+start — no fallback line in Server events — and `get_location` answered in
+0.90 s and 0.63 s where the same procedure had timed out at 20 s before. The
+permission appears to satisfy the eligibility condition for the `location` type
+itself, so the degraded state stops happening rather than merely stopping
+mattering. The fallback stays: it is what keeps a refusal from taking the server
+with it, whatever the reason for the refusal.
+
 ## Client config
 
 ```json
