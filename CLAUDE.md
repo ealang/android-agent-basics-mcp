@@ -46,3 +46,8 @@ integration was arrived at, including the approaches that failed and the
 conclusions later proved wrong. When behaviour changes on the device, update
 the relevant doc alongside the code; the wrong turns are kept on purpose,
 because they are what stops the same dead ends being retried.
+
+`docs/companion-apps.md` is written for agents working on the *other* side —
+a custom app that phone-mcp should be able to drive. Point them at it before
+they design an automation interface, and fold anything new we learn back into
+it.
