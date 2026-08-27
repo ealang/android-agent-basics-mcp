@@ -436,9 +436,8 @@ class McpServer(
                 "Open a live voice session with one of the user's Telegram " +
                     "conversations, on their phone: their unread messages are read " +
                     "aloud, and anything they say is transcribed and sent back. The " +
-                    "session runs until stopped. Returns as soon as the request is " +
-                    "accepted, which is not a promise that the microphone came up — " +
-                    "call voice_status to see whether it did.",
+                    "session runs until stopped. Waits up to ~15 seconds and says " +
+                    "whether the session was confirmed listening.",
             )
             .put(
                 "inputSchema",
@@ -641,12 +640,14 @@ class McpServer(
                     "which ones exist." to true
             } else {
                 when (val r = Voice.start(context, conversation)) {
+                    is Voice.Result.Confirmed ->
+                        "A voice session with ${r.conversation ?: conversation} " +
+                            "is up and listening — the user can talk now." to false
                     is Voice.Result.Accepted ->
-                        "The phone accepted a voice session with " +
-                            "${r.conversation ?: conversation}. It takes a few " +
-                            "seconds to come up, and Android can still refuse the " +
-                            "microphone — call voice_status to confirm it is " +
-                            "listening before telling the user to talk." to false
+                        "UNCERTAIN: the phone accepted the voice session with " +
+                            "${r.conversation ?: conversation} but never confirmed " +
+                            "it is listening. Ask the user whether the session " +
+                            "started on the phone." to false
                     else -> voiceFailure(r)
                 }
             }
@@ -711,7 +712,12 @@ class McpServer(
         val session = when {
             status.activeConversationId == null -> "No voice session is running."
             status.paused -> "Paused mid-session with $name."
-            status.listening -> "Listening to $name — the microphone is live."
+            status.listening && status.micSecured -> "Listening to $name — the microphone is live."
+            // The app claims a session but its microphone service never
+            // confirmed: a start still in flight, or one Android refused.
+            status.listening ->
+                "A session with $name is starting but the microphone is not " +
+                    "confirmed yet."
             // A session exists but is neither listening nor paused: it is
             // between states, or Android took the microphone away.
             else ->
