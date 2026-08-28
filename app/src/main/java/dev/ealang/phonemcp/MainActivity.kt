@@ -162,7 +162,7 @@ class MainActivity : Activity() {
 
         root.addView(
             Button(this).apply {
-                text = "Allow starting the clock app"
+                text = "Allow opening other apps"
                 // Confusingly named: we draw nothing over anything. It is just
                 // the one exemption that lets a background app start an activity.
                 setOnClickListener {
@@ -330,11 +330,11 @@ class MainActivity : Activity() {
         tokenView.text = config.token
 
         val overlay = if (Clock.canStartFromBackground(this)) {
-            "Can hand timers to the clock app."
+            "Can open other apps: timers, podcasts, voice sessions."
         } else {
-            "\"Display over other apps\" is off, so timer requests will be " +
-                "dropped. Grant it below — Android needs it before a background " +
-                "app may open the clock."
+            "\"Display over other apps\" is off, so timers, podcasts and voice " +
+                "sessions will be dropped in silence. Grant it below — Android " +
+                "needs it before a background app may open another one."
         }
         val location = if (!Locator.hasPermission(this)) {
             "Location is not granted, so get_location will fail."
