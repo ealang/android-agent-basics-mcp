@@ -1,5 +1,6 @@
 package dev.ealang.phonemcp
 
+import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -84,19 +85,15 @@ object Voice {
     fun start(context: Context, conversation: String): Result {
         if (!Clock.canStartFromBackground(context)) return Result.NeedsOverlayPermission
 
+        val locked = context.getSystemService(KeyguardManager::class.java)?.isKeyguardLocked == true
         return try {
             context.startActivity(
                 Intent()
                     .setClassName(PACKAGE, START_ACTIVITY)
                     .putExtra(EXTRA_CONVERSATION, conversation)
-                    // CLEAR_TASK for the same reason as Pocket Casts: with the
-                    // gateway already running, its activity would take the
-                    // intent through onNewIntent, which arrives on the resume
-                    // path the keyguard blocks. Clearing the task forces the
-                    // cold-start path, which is the one proven to work locked.
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK),
+                    .addFlags(launchFlags(locked)),
             )
-            Log.i(TAG, "Voice gateway: launched a session for \"$conversation\"")
+            Log.i(TAG, "Voice gateway: launched a session for \"$conversation\" (locked=$locked)")
             Result.Accepted(conversation)
         } catch (e: Exception) {
             // The component is missing or blocked — the app is not there in
@@ -105,6 +102,26 @@ object Voice {
             Result.NotAvailable
         }
     }
+
+    /**
+     * Locked: tear the gateway's task down, so its activity is rebuilt through
+     * `onCreate`. That is the only path the keyguard lets through — an intent
+     * to an activity that already exists arrives via `onNewIntent`, on the
+     * resume path, which the keyguard blocks (`docs/pocket-casts.md` §8).
+     *
+     * Unlocked: don't. There is no blocked resume to route around, and
+     * clearing the task costs twice over — the user loses whatever screen they
+     * had open, and the gateway loses the only evidence that a person was
+     * looking at it. It decides whether to close itself again from its
+     * activity's lifecycle state, so a destroyed activity reads as a start
+     * from the background and the app shuts itself in the user's face.
+     */
+    private fun launchFlags(locked: Boolean): Int =
+        if (locked) {
+            Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        } else {
+            Intent.FLAG_ACTIVITY_NEW_TASK
+        }
 
     fun stop(context: Context): Result {
         val reply = withProvider { context.contentResolver.call(AUTHORITY, "stop", null, null) }
