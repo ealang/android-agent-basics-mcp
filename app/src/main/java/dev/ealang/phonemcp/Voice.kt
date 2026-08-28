@@ -1,20 +1,22 @@
 package dev.ealang.phonemcp
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.os.SystemClock
 import android.util.Log
 
 /**
- * Drives agent-voice-gateway — the user's own Telegram voice client — through
- * the automation ContentProvider it exports for exactly this purpose.
+ * Drives agent-voice-gateway — the user's own Telegram voice client — over the
+ * standard companion-app interface (`docs/companion-apps.md`): a launch intent
+ * starts a session, the automation ContentProvider answers status and stops.
  *
- * Commands answer synchronously with what is knowable on arrival (does the
- * conversation resolve, is there a session to stop) and hand the actual work
- * to the app. Whether a session then comes up is asynchronous and can be
- * refused by Android without an error, so after an accepted [start] this
- * object polls status until the gateway itself says the microphone service
- * really started, and reports one outcome.
+ * [start] is fire-and-forget by design. We hold the background-launch
+ * privilege, the gateway does not, so opening its entry activity is our job —
+ * and an activity launch has no return path. The gateway resolves the
+ * conversation, shows itself over the keyguard to earn the microphone, and
+ * logs anything it refuses. Nothing is claimed here beyond "asked"; whether a
+ * session came up is read from [status] afterwards.
  *
  * Every provider access goes through [withProvider], which retries: the
  * gateway's process is routinely dead between sessions, and the first request
@@ -28,17 +30,15 @@ object Voice {
     const val PACKAGE = "com.agentvoicegateway.app"
     const val AUTHORITY = "com.agentvoicegateway.app.automation"
 
+    /** The gateway's exported trampoline, and the extra it reads. */
+    private const val START_ACTIVITY = "$PACKAGE.AutomationStartActivity"
+    private const val EXTRA_CONVERSATION = "conversation"
+
     // Cold-start retries. The gateway process is being started by our own
     // request, so the wait is short and the first retry usually succeeds —
     // measured at ~200 ms on a Pixel.
     private const val PROVIDER_ATTEMPTS = 4
     private const val PROVIDER_RETRY_INTERVAL_MS = 350L
-
-    // How long to wait for the gateway to confirm a live session: it brings
-    // its own screen up to earn the microphone, so this covers an app launch
-    // on a cold process plus the foreground-service grant.
-    private const val CONFIRM_TIMEOUT_MS = 15_000L
-    private const val CONFIRM_POLL_INTERVAL_MS = 1_000L
 
     private val STATUS: Uri = Uri.parse("content://$AUTHORITY/status")
     private val CONVERSATIONS: Uri = Uri.parse("content://$AUTHORITY/conversations")
@@ -46,10 +46,10 @@ object Voice {
     data class Conversation(val name: String, val unread: Int, val active: Boolean)
 
     sealed interface Result {
-        /** The gateway confirmed the session: microphone service running and listening. */
-        data class Confirmed(val conversation: String?) : Result
-        /** The app took the request, but never confirmed a live session. */
+        /** The request was handed over. Not a claim that it took effect. */
         data class Accepted(val conversation: String?) : Result
+        /** Starting an activity from the background needs the overlay grant. */
+        data object NeedsOverlayPermission : Result
         /** The app answered, and said no — the message is theirs, and specific. */
         data class Refused(val message: String) : Result
         data class Status(
@@ -73,22 +73,37 @@ object Voice {
     }
 
     /**
-     * Ask the gateway to start a session, then see it through: poll until the
-     * gateway confirms the microphone service actually started (or the
-     * timeout passes — [Result.Accepted] then honestly claims nothing beyond
-     * acceptance).
+     * Open the gateway on [conversation] — a name, an id, or a unique
+     * substring, resolved on their side against what the user actually says.
+     *
+     * The launch needs [Clock.canStartFromBackground]: without the overlay
+     * grant Android drops a background activity start in silence, which is
+     * worth naming rather than reporting as a session that never appeared.
+     * Everything past that point is theirs.
      */
     fun start(context: Context, conversation: String): Result {
-        // The authority overload, not the Uri one: the latter is API 29+.
-        val reply = withProvider { context.contentResolver.call(AUTHORITY, "start", conversation, null) }
-            ?: return Result.NotAvailable
+        if (!Clock.canStartFromBackground(context)) return Result.NeedsOverlayPermission
 
-        if (!reply.getBoolean("ok")) {
-            return Result.Refused(reply.getString("error") ?: "no reason given")
+        return try {
+            context.startActivity(
+                Intent()
+                    .setClassName(PACKAGE, START_ACTIVITY)
+                    .putExtra(EXTRA_CONVERSATION, conversation)
+                    // CLEAR_TASK for the same reason as Pocket Casts: with the
+                    // gateway already running, its activity would take the
+                    // intent through onNewIntent, which arrives on the resume
+                    // path the keyguard blocks. Clearing the task forces the
+                    // cold-start path, which is the one proven to work locked.
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK),
+            )
+            Log.i(TAG, "Voice gateway: launched a session for \"$conversation\"")
+            Result.Accepted(conversation)
+        } catch (e: Exception) {
+            // The component is missing or blocked — the app is not there in
+            // any usable sense, which is the one thing worth reporting.
+            Log.w(TAG, "Voice gateway: could not launch $START_ACTIVITY", e)
+            Result.NotAvailable
         }
-        val name = reply.getString("conversation_name")
-        Log.i(TAG, "Voice gateway accepted start for ${name ?: conversation}")
-        return if (awaitSessionUp(context)) Result.Confirmed(name) else Result.Accepted(name)
     }
 
     fun stop(context: Context): Result {
@@ -128,36 +143,6 @@ object Voice {
         }
         Log.w(TAG, "Voice gateway: no answer from $AUTHORITY after $PROVIDER_ATTEMPTS attempts")
         return null
-    }
-
-    /**
-     * True once the gateway reports both `listening` and `mic_secured`.
-     * `listening` alone is transiently true even for a start Android is about
-     * to refuse (the gateway flips it before the OS has ruled on the
-     * microphone service); `mic_secured` is the service's own
-     * startForeground-succeeded signal.
-     */
-    private fun awaitSessionUp(context: Context): Boolean {
-        val deadline = SystemClock.elapsedRealtime() + CONFIRM_TIMEOUT_MS
-        while (SystemClock.elapsedRealtime() < deadline) {
-            val row = try {
-                context.contentResolver.query(STATUS, null, null, null, null)
-            } catch (e: IllegalArgumentException) {
-                null
-            }
-            val up = row?.use { cursor ->
-                cursor.moveToFirst() &&
-                    cursor.int("listening") == 1 &&
-                    cursor.int("mic_secured") == 1
-            } ?: false
-            if (up) {
-                Log.i(TAG, "Voice gateway: session confirmed (listening + mic_secured)")
-                return true
-            }
-            SystemClock.sleep(CONFIRM_POLL_INTERVAL_MS)
-        }
-        Log.w(TAG, "Voice gateway: session not confirmed within ${CONFIRM_TIMEOUT_MS / 1000}s")
-        return false
     }
 
     fun status(context: Context): Result {

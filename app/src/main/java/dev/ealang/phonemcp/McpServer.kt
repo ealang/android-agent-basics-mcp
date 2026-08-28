@@ -639,14 +639,12 @@ class McpServer(
                     "which ones exist." to true
             } else {
                 when (val r = Voice.start(context, conversation)) {
-                    is Voice.Result.Confirmed ->
-                        "A voice session with ${r.conversation ?: conversation} " +
-                            "is up and listening — the user can talk now." to false
+                    // The launch has no return path, so this says what was
+                    // asked for and nothing more. voice_status is how the
+                    // session is confirmed, if it needs confirming.
                     is Voice.Result.Accepted ->
-                        "UNCERTAIN: the phone accepted the voice session with " +
-                            "${r.conversation ?: conversation} but never confirmed " +
-                            "it is listening. Ask the user whether the session " +
-                            "started on the phone." to false
+                        "Opened the voice gateway on ${r.conversation ?: conversation}. " +
+                            "Check voice_status if you need to know it is listening." to false
                     else -> voiceFailure(r)
                 }
             }
@@ -737,6 +735,11 @@ class McpServer(
 
     private fun voiceFailure(result: Voice.Result): Pair<String, Boolean> = when (result) {
         is Voice.Result.Refused -> "FAILED: ${result.message}" to true
+        Voice.Result.NeedsOverlayPermission ->
+            "FAILED: the phone is blocking this app from opening the voice gateway in " +
+                "the background. Tell the user to open Phone MCP and grant \"Display " +
+                "over other apps\" — Android allows a background app to start an " +
+                "activity only with that permission. No session was started." to true
         Voice.Result.NotAvailable ->
             "FAILED: the voice gateway app (${Voice.PACKAGE}) did not answer. It " +
                 "is either not installed, or was force stopped and has not been " +

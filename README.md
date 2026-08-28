@@ -36,8 +36,9 @@ nothing to push, so every exchange is ordinary request/response JSON.
   user left off, and read back what it is on. See `docs/pocket-casts.md`.
 - `start_voice_session(conversation)` / `stop_voice_session()` /
   `voice_status()` — drive agent-voice-gateway, the user's own Telegram voice
-  client, through the automation ContentProvider it exports. (Start migrates
-  to a launch intent under the v2 interface — see `docs/companion-apps.md`.)
+  client. Starting opens its entry activity with a launch intent; status and
+  stop go through the ContentProvider it exports. See
+  `docs/companion-apps.md`.
 
 ### Timers
 
