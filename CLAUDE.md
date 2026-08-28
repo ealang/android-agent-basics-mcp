@@ -39,6 +39,16 @@ observed, observe it before claiming it, and where it cannot, say so plainly —
 the UNCERTAIN wording exists so the agent asks the user instead of assuming.
 A tool that lies about success is worse than one that fails loudly.
 
+**Launching another app is fire-and-forget.** The standard pattern for driving
+companion apps is a launch intent from our background service — we hold the one
+`SYSTEM_ALERT_WINDOW` grant, the companion holds nothing — and there is no
+result channel, so none should be invented. A launch tool reports what it
+requested, not what happened; that satisfies the rule above by claiming
+nothing. Where confirmation matters, it is a separate status read, not a wait
+loop inside the tool: a failed hands-free launch is obvious to the user, and a
+capable agent checks status afterwards. `docs/companion-apps.md` is the full
+pattern, including the companion app's side.
+
 ## Docs
 
 `docs/` holds the empirical findings behind the awkward parts — how each

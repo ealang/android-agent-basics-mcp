@@ -36,7 +36,8 @@ nothing to push, so every exchange is ordinary request/response JSON.
   user left off, and read back what it is on. See `docs/pocket-casts.md`.
 - `start_voice_session(conversation)` / `stop_voice_session()` /
   `voice_status()` — drive agent-voice-gateway, the user's own Telegram voice
-  client, through the automation ContentProvider it exports.
+  client, through the automation ContentProvider it exports. (Start migrates
+  to a launch intent under the v2 interface — see `docs/companion-apps.md`.)
 
 ### Timers
 
@@ -64,6 +65,12 @@ Without it the intent is dropped in silence, which is the worst possible failure
 for a tool an agent is trusting, so `Clock.canStartFromBackground` checks first
 and the tools return a hard error naming the permission rather than reporting a
 timer that was never set.
+
+This one grant is also the hub's half of the standard pattern for driving other
+apps: it lets this app fire a launch intent at anything — the clock, Pocket
+Casts, a companion app's entry activity — from a locked phone with the screen
+off, so no companion app ever needs its own background-start exemption. The
+pattern is documented in `docs/companion-apps.md`.
 
 ### The watch
 
