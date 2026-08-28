@@ -436,8 +436,7 @@ class McpServer(
                 "Open a live voice session with one of the user's Telegram " +
                     "conversations, on their phone: their unread messages are read " +
                     "aloud, and anything they say is transcribed and sent back. The " +
-                    "session runs until stopped. Waits up to ~15 seconds and says " +
-                    "whether the session was confirmed listening.",
+                    "session runs until stopped.",
             )
             .put(
                 "inputSchema",
@@ -713,16 +712,12 @@ class McpServer(
             status.activeConversationId == null -> "No voice session is running."
             status.paused -> "Paused mid-session with $name."
             status.listening && status.micSecured -> "Listening to $name — the microphone is live."
-            // The app claims a session but its microphone service never
-            // confirmed: a start still in flight, or one Android refused.
-            status.listening ->
-                "A session with $name is starting but the microphone is not " +
-                    "confirmed yet."
-            // A session exists but is neither listening nor paused: it is
-            // between states, or Android took the microphone away.
-            else ->
-                "A session with $name is up but not " +
-                    "listening (recording ${status.recordingState})."
+            // Everything else is a session that exists but cannot hear the
+            // user: a start still in flight, one Android refused, or a
+            // microphone taken away mid-session. Which of those it is changes
+            // nothing the caller can do about it — the recording state is in
+            // the log for a human. Kept as one outcome on purpose.
+            else -> "A session with $name is not listening yet. Ask the user to check the phone."
         }
         val audio = if (status.queueDepth > 0) {
             " ${status.queueDepth} message(s) still to be read aloud."
@@ -746,7 +741,9 @@ class McpServer(
             "FAILED: the voice gateway app (${Voice.PACKAGE}) did not answer. It " +
                 "is either not installed, or was force stopped and has not been " +
                 "opened since." to true
-        else -> "FAILED: unexpected result $result." to true
+        // Not reachable — callers handle every success shape first — but it
+        // must not hand the agent a Kotlin toString it can do nothing with.
+        else -> "FAILED: the voice gateway did not give a usable answer." to true
     }
 
     private fun podcastFailure(result: Podcast.Result): Pair<String, Boolean> = when (result) {
@@ -758,7 +755,7 @@ class McpServer(
                 "is what authorizes reading media sessions. The user must " +
                 "enable \"Phone MCP\" under Settings > Notifications > " +
                 "Notification access (or Device & app notifications)." to true
-        else -> "FAILED: unexpected result $result." to true
+        else -> "FAILED: Pocket Casts did not give a usable answer." to true
     }
 
     private fun describe(result: Watch.Result, verb: String): Pair<String, Boolean> = when (result) {

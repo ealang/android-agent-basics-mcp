@@ -166,6 +166,19 @@ object Voice {
 
         return row.use { cursor ->
             if (!cursor.moveToFirst()) return Result.NotAvailable
+            // recording_state and playback_state are deliberately not in the
+            // answer the agent reads — they name internal states it cannot act
+            // on differently. They are the first thing a human wants when a
+            // session misbehaves, so they go here instead.
+            Log.i(
+                TAG,
+                "Voice gateway status: listening=${cursor.int("listening")} " +
+                    "mic_secured=${cursor.int("mic_secured")} " +
+                    "paused=${cursor.int("paused")} " +
+                    "recording=${cursor.string("recording_state")} " +
+                    "playback=${cursor.string("playback_state")} " +
+                    "queue=${cursor.int("queue_depth")}",
+            )
             Result.Status(
                 activeConversationId = cursor.string("active_conversation_id"),
                 activeConversation = cursor.string("active_conversation_name"),
