@@ -869,7 +869,9 @@ immediate: a timer set here rings on that phone, in their own clock app. Prefer
 them over anything that merely records an intention when the user asks for
 something to happen at a specific time.
 
-set_timer takes a duration in seconds, not a wall-clock time — convert first.
+Both timer tools take either a duration in seconds or a clock time in `at`. Pass
+the clock time the user said and let the phone work out the interval; it knows
+what time it is and you do not.
 
 Android offers no way to read back the clock app's timers, so there is nothing
 to list and no way to verify. Report what was requested, not what is running.
