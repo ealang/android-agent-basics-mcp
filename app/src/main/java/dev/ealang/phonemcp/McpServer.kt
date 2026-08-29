@@ -5,6 +5,7 @@ import android.util.Log
 import fi.iki.elonen.NanoHTTPD
 import org.json.JSONArray
 import org.json.JSONObject
+import java.time.ZonedDateTime
 
 /**
  * MCP over plain HTTP POST.
@@ -205,7 +206,20 @@ class McpServer(
                             .put(
                                 "seconds",
                                 JSONObject().put("type", "integer")
-                                    .put("description", "How long from now, in seconds."),
+                                    .put(
+                                        "description",
+                                        "How long from now, in seconds. Give this or at.",
+                                    ),
+                            )
+                            .put(
+                                "at",
+                                JSONObject().put("type", "string")
+                                    .put(
+                                        "description",
+                                        "Ring at a clock time instead: 15:30, 3pm, " +
+                                            "3:30pm, noon, or midnight. Means the next " +
+                                            "time that comes round.",
+                                    ),
                             )
                             .put(
                                 "label",
@@ -216,8 +230,7 @@ class McpServer(
                                             "the only way to cancel this specific timer later.",
                                     ),
                             ),
-                    )
-                    .put("required", JSONArray().put("seconds")),
+                    ),
             )
 
         val cancelTimer = JSONObject()
@@ -308,18 +321,29 @@ class McpServer(
                     .put("type", "object")
                     .put(
                         "properties",
-                        JSONObject().put(
-                            "seconds",
-                            JSONObject().put("type", "integer")
-                                .put(
-                                    "description",
-                                    "How long the countdown runs, in seconds. Between " +
-                                        "${Watch.TIMER_MIN_SECONDS} and " +
-                                        "${Watch.TIMER_MAX_SECONDS} (just under a day).",
-                                ),
-                        ),
-                    )
-                    .put("required", JSONArray().put("seconds")),
+                        JSONObject()
+                            .put(
+                                "seconds",
+                                JSONObject().put("type", "integer")
+                                    .put(
+                                        "description",
+                                        "How long the countdown runs, in seconds. Give " +
+                                            "this or at. Between " +
+                                            "${Watch.TIMER_MIN_SECONDS} and " +
+                                            "${Watch.TIMER_MAX_SECONDS} (just under a day).",
+                                    ),
+                            )
+                            .put(
+                                "at",
+                                JSONObject().put("type", "string")
+                                    .put(
+                                        "description",
+                                        "Finish at a clock time instead: 15:30, 3pm, " +
+                                            "3:30pm, noon, or midnight. Means the next " +
+                                            "time that comes round.",
+                                    ),
+                            ),
+                    ),
             )
 
         val getLocation = JSONObject()
@@ -491,11 +515,22 @@ class McpServer(
     /** Returns (text, isError). */
     private fun callTool(name: String, args: JSONObject): Pair<String, Boolean> = when (name) {
         "set_timer" -> {
-            val seconds = args.optLong("seconds", -1)
             val label = args.optString("label").ifBlank { "Timer" }
+            val at = args.optString("at").trim()
+            val now = ZonedDateTime.now()
+            // Clamped rather than rejected: a clock time can only ever land a
+            // little outside the range, and refusing "at 15:31" one second past
+            // 15:30 would be a failure the user cannot make sense of.
+            val untilClockTime = if (at.isEmpty()) null else {
+                TimeOfDay.secondsUntil(at, now)?.coerceIn(1L, Clock.MAX_SECONDS)
+            }
+            val seconds = untilClockTime ?: args.optLong("seconds", -1)
             when {
+                at.isNotEmpty() && untilClockTime == null ->
+                    "FAILED: \"$at\" is not a clock time. Use something like 15:30, " +
+                        "3pm, or noon." to true
                 seconds <= 0 ->
-                    "FAILED: seconds is required and must be greater than zero." to true
+                    "FAILED: give either seconds or at." to true
                 seconds > Clock.MAX_SECONDS ->
                     "FAILED: that is longer than 24 hours, which is the most a timer " +
                         "can be. Set an alarm or a calendar reminder instead." to true
@@ -504,7 +539,8 @@ class McpServer(
                     when (result) {
                         Clock.Result.Ok ->
                             "CONFIRMED - the phone's clock app is now running a " +
-                                "${Clock.humanize(seconds)} timer labelled \"$label\". It will " +
+                                "${Clock.humanize(seconds)} timer labelled \"$label\"" +
+                                ringingAt(untilClockTime, now) + ". It will " +
                                 "ring even if this connection closes." to false
                         else -> describe(result)
                     }
@@ -667,18 +703,30 @@ class McpServer(
         "stop_watch_app" -> describe(Watch.stop(context, args.optString("app")), "closed")
 
         "set_watch_timer" -> {
-            val seconds = args.optLong("seconds", -1)
+            val at = args.optString("at").trim()
+            val now = ZonedDateTime.now()
+            val untilClockTime = if (at.isEmpty()) null else {
+                TimeOfDay.secondsUntil(at, now)
+                    ?.coerceIn(Watch.TIMER_MIN_SECONDS, Watch.TIMER_MAX_SECONDS)
+            }
+            val seconds = untilClockTime ?: args.optLong("seconds", -1)
             when {
+                at.isNotEmpty() && untilClockTime == null ->
+                    "FAILED: \"$at\" is not a clock time. Use something like 15:30, " +
+                        "3pm, or noon." to true
+                seconds <= 0 ->
+                    "FAILED: give either seconds or at." to true
                 seconds < Watch.TIMER_MIN_SECONDS ->
-                    "FAILED: seconds is required, and the watch's timer app will not " +
-                        "accept anything under ${Watch.TIMER_MIN_SECONDS} seconds." to true
+                    "FAILED: the watch's timer app will not accept anything under " +
+                        "${Watch.TIMER_MIN_SECONDS} seconds." to true
                 seconds > Watch.TIMER_MAX_SECONDS ->
                     "FAILED: the watch's timer app tops out just under 24 hours. Set " +
                         "an alarm or a calendar reminder instead." to true
                 else -> when (Watch.setTimer(context, seconds)) {
                     Watch.TimerResult.Confirmed ->
                         "CONFIRMED - the watch is now counting down " +
-                            "${Clock.humanize(seconds)} and will buzz when it finishes. " +
+                            "${Clock.humanize(seconds)} and will buzz when it " +
+                            "finishes" + ringingAt(untilClockTime, now) + ". " +
                             "The timer app is on screen on their wrist." to false
                     Watch.TimerResult.NoCompanionApp ->
                         "FAILED: the Pebble companion app (${Watch.COREAPP_PACKAGE}) is " +
@@ -701,6 +749,17 @@ class McpServer(
 
         else -> "No such tool: $name" to true
     }
+
+    /**
+     * ", due at 15:30" when the caller asked for a clock time, empty otherwise.
+     *
+     * Echoing the resolved time is the only way an am/pm guess that went the
+     * wrong way becomes visible before the timer rings.
+     */
+    private fun ringingAt(seconds: Long?, now: ZonedDateTime): String =
+        if (seconds == null) "" else {
+            ", due at " + TimeOfDay.format(now.plusSeconds(seconds).toLocalTime())
+        }
 
     private fun describe(status: Voice.Result.Status): String {
         // The id decides whether a session exists; the name is only how we

@@ -55,4 +55,9 @@ android {
 dependencies {
     // The only third-party piece. org.json is in the Android framework already.
     implementation("org.nanohttpd:nanohttpd:2.3.1")
+
+    // Unit tests only cover logic that needs no device — the time parser being
+    // the case where a quiet mistake produces a timer at the wrong hour rather
+    // than a visible failure.
+    testImplementation("junit:junit:4.13.2")
 }
