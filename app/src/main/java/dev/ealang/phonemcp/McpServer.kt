@@ -518,15 +518,14 @@ class McpServer(
             val label = args.optString("label").ifBlank { "Timer" }
             val at = args.optString("at").trim()
             val now = ZonedDateTime.now()
+            val clockTime = if (at.isEmpty()) null else TimeOfDay.resolve(at, now)
             // Clamped rather than rejected: a clock time can only ever land a
             // little outside the range, and refusing "at 15:31" one second past
             // 15:30 would be a failure the user cannot make sense of.
-            val untilClockTime = if (at.isEmpty()) null else {
-                TimeOfDay.secondsUntil(at, now)?.coerceIn(1L, Clock.MAX_SECONDS)
-            }
-            val seconds = untilClockTime ?: args.optLong("seconds", -1)
+            val seconds = clockTime?.seconds?.coerceIn(1L, Clock.MAX_SECONDS)
+                ?: args.optLong("seconds", -1)
             when {
-                at.isNotEmpty() && untilClockTime == null ->
+                at.isNotEmpty() && clockTime == null ->
                     "FAILED: \"$at\" is not a clock time. Use something like 15:30, " +
                         "3pm, or noon." to true
                 seconds <= 0 ->
@@ -540,7 +539,7 @@ class McpServer(
                         Clock.Result.Ok ->
                             "CONFIRMED - the phone's clock app is now running a " +
                                 "${Clock.humanize(seconds)} timer labelled \"$label\"" +
-                                ringingAt(untilClockTime, now) + ". It will " +
+                                dueAt(clockTime) + ". It will " +
                                 "ring even if this connection closes." to false
                         else -> describe(result)
                     }
@@ -705,13 +704,12 @@ class McpServer(
         "set_watch_timer" -> {
             val at = args.optString("at").trim()
             val now = ZonedDateTime.now()
-            val untilClockTime = if (at.isEmpty()) null else {
-                TimeOfDay.secondsUntil(at, now)
-                    ?.coerceIn(Watch.TIMER_MIN_SECONDS, Watch.TIMER_MAX_SECONDS)
-            }
-            val seconds = untilClockTime ?: args.optLong("seconds", -1)
+            val clockTime = if (at.isEmpty()) null else TimeOfDay.resolve(at, now)
+            val seconds = clockTime?.seconds
+                ?.coerceIn(Watch.TIMER_MIN_SECONDS, Watch.TIMER_MAX_SECONDS)
+                ?: args.optLong("seconds", -1)
             when {
-                at.isNotEmpty() && untilClockTime == null ->
+                at.isNotEmpty() && clockTime == null ->
                     "FAILED: \"$at\" is not a clock time. Use something like 15:30, " +
                         "3pm, or noon." to true
                 seconds <= 0 ->
@@ -726,7 +724,7 @@ class McpServer(
                     Watch.TimerResult.Confirmed ->
                         "CONFIRMED - the watch is now counting down " +
                             "${Clock.humanize(seconds)} and will buzz when it " +
-                            "finishes" + ringingAt(untilClockTime, now) + ". " +
+                            "finishes" + dueAt(clockTime) + ". " +
                             "The timer app is on screen on their wrist." to false
                     Watch.TimerResult.NoCompanionApp ->
                         "FAILED: the Pebble companion app (${Watch.COREAPP_PACKAGE}) is " +
@@ -754,12 +752,12 @@ class McpServer(
      * ", due at 15:30" when the caller asked for a clock time, empty otherwise.
      *
      * Echoing the resolved time is the only way an am/pm guess that went the
-     * wrong way becomes visible before the timer rings.
+     * wrong way becomes visible before the timer rings. It reports the time
+     * that was asked for rather than one worked back from the interval, so a
+     * clamp cannot make it disagree with the request.
      */
-    private fun ringingAt(seconds: Long?, now: ZonedDateTime): String =
-        if (seconds == null) "" else {
-            ", due at " + TimeOfDay.format(now.plusSeconds(seconds).toLocalTime())
-        }
+    private fun dueAt(clockTime: TimeOfDay.Resolved?): String =
+        if (clockTime == null) "" else ", due at " + TimeOfDay.format(clockTime.time)
 
     private fun describe(status: Voice.Result.Status): String {
         // The id decides whether a session exists; the name is only how we

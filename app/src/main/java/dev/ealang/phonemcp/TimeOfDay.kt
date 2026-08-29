@@ -65,20 +65,26 @@ object TimeOfDay {
     }
 
     /**
-     * Seconds from [now] until the next occurrence of [text], or null if it is
-     * not a time.
+     * A clock time settled against the current moment: how far off it is, and
+     * which reading of it that turned out to be.
+     */
+    data class Resolved(val seconds: Long, val time: LocalTime)
+
+    /**
+     * When [text] next comes round, counted from [now], or null if it is not a
+     * time.
      *
      * For an ambiguous hour both readings are considered and the sooner wins,
      * so "at 7" means 7am when asked at 6am and 7pm when asked at 6pm.
      */
-    fun secondsUntil(text: String, now: ZonedDateTime): Long? {
+    fun resolve(text: String, now: ZonedDateTime): Resolved? {
         val parsed = parse(text) ?: return null
         val candidates = if (parsed.ambiguous) {
             listOf(parsed.time, parsed.time.plusHours(12))
         } else {
             listOf(parsed.time)
         }
-        return candidates.minOf { secondsTo(it, now) }
+        return candidates.map { Resolved(secondsTo(it, now), it) }.minBy { it.seconds }
     }
 
     /** Seconds from [now] to the next moment the clock reads [target]. */
@@ -87,7 +93,10 @@ object TimeOfDay {
         // in between does not shift the hour it fires at.
         var at = now.with(target)
         if (!at.isAfter(now)) at = now.toLocalDate().plusDays(1).atTime(target).atZone(now.zone)
-        return Duration.between(now, at).seconds
+        // Rounded up, because now is almost never on a whole second and
+        // truncating would land the timer just before the minute it was asked
+        // for — visible as a confirmation reading a minute early.
+        return (Duration.between(now, at).toMillis() + 999) / 1000
     }
 
     /** How the resolved time reads back to the user, as 24-hour hh:mm. */

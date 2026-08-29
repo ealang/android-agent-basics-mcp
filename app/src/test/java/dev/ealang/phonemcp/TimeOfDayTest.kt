@@ -18,7 +18,7 @@ class TimeOfDayTest {
         ZonedDateTime.of(LocalDateTime.parse(text), london)
 
     private fun until(clock: String, from: String): Long? =
-        TimeOfDay.secondsUntil(clock, at(from))
+        TimeOfDay.resolve(clock, at(from))?.seconds
 
     // ------------------------------- parsing -------------------------------
 
@@ -125,6 +125,23 @@ class TimeOfDayTest {
     fun `autumn back keeps the hour the user asked for`() {
         // 2026-10-25 repeats an hour, so the same span stretches to 24.
         assertEquals(24L * 3600, until("09:00", "2026-10-24T10:00:00"))
+    }
+
+    @Test
+    fun `a fraction of a second does not pull the timer back a minute`() {
+        // Nobody calls this on a whole second. 17:00 is 1225.488s from here,
+        // and truncating would fire at 16:59:59 — which the confirmation then
+        // reports as 16:59 for a timer the user asked to ring at five.
+        val now = ZonedDateTime.of(LocalDateTime.parse("2026-08-29T16:39:34.512"), london)
+        val resolved = TimeOfDay.resolve("5pm", now)!!
+        assertEquals(1226L, resolved.seconds)
+        assertEquals(0, now.plusSeconds(resolved.seconds).toLocalTime().minute)
+    }
+
+    @Test
+    fun `the resolved time is the one that will be reported back`() {
+        assertEquals("17:00", TimeOfDay.format(TimeOfDay.resolve("5", at("2026-08-29T16:39:00"))!!.time))
+        assertEquals("07:00", TimeOfDay.format(TimeOfDay.resolve("7", at("2026-08-29T23:00:00"))!!.time))
     }
 
     @Test
