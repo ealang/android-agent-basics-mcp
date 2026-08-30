@@ -147,11 +147,8 @@ edit away from silently doing something, ten times per request.
 
 - *Something came back* ⇒ the app is running. CoreApp registers the SEND
   receiver per running watchapp, so a closed app has no receiver and cannot
-  reply. This is the load-bearing fact and it holds regardless of watchapp code.
-  **Verified on the device**, not just read out of CoreApp — with the launch
-  removed and the watchapp closed, ten pings over eleven seconds drew no reply;
-  with the app open, the same build set a timer in a second. See
-  `docs/watch-timer-retry.md` §"The no-ACK assumption, tested directly".
+  reply. This is the load-bearing fact, it holds regardless of watchapp code,
+  and it has been tested on the device rather than only read out of CoreApp.
 - *ACK not NACK* ⇒ the watch's own answer, relayed. Not synthesised on the phone.
 - It does **not** prove the app's handler ran, let alone that it did anything.
   It is a delivery acknowledgement from the firmware's AppMessage layer. If you
@@ -170,8 +167,10 @@ change; nothing else can see inside the app.
 
 `docs/watch-messaging.md` has the transport and the CoreApp routing rules —
 including the three ways a watchapp quietly becomes unreachable, one of which is
-being a system app, which is why we fork. `docs/watch-timer-retry.md` has the
-reasoning and the on-device measurements.
+being a system app, which is why we fork. It also keeps the experiment log, and
+marks which claims here are measured and which are still only read out of
+CoreApp's source; check it before relying on one. `docs/watch-timer-retry.md`
+has the reasoning behind this design and the alternatives left unbuilt.
 
 ## Docs
 
