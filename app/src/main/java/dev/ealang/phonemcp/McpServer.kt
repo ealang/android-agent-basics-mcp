@@ -238,9 +238,9 @@ class McpServer(
             .put(
                 "description",
                 "Cancel a running timer. Give the label it was set with; with no " +
-                    "label, cancels whichever timer is due to ring next. There is no " +
-                    "way to read back the phone's timers, so this cannot be checked " +
-                    "first — say what was cancelled and let the user confirm.",
+                    "label, cancels whichever timer is due to ring next. The phone's " +
+                    "timers cannot be listed, so a label that matches nothing cancels " +
+                    "nothing.",
             )
             .put(
                 "inputSchema",
@@ -312,8 +312,10 @@ class McpServer(
                     "the phone is elsewhere. Prefer set_timer when they are with " +
                     "their phone and want the usual alarm sound; use this when " +
                     "they say watch, wrist, or Pebble, or are away from the phone. " +
-                    "The timer app is brought to the front of the watch, so this " +
-                    "interrupts whatever is on screen.",
+                    "The watch holds several timers at once, so call this again to " +
+                    "add another rather than moving it to the phone. The timer app " +
+                    "is brought to the front of the watch, so this interrupts " +
+                    "whatever is on screen.",
             )
             .put(
                 "inputSchema",
@@ -514,7 +516,7 @@ class McpServer(
 
     /** Returns (text, isError). */
     private fun callTool(name: String, args: JSONObject): Pair<String, Boolean> = when (name) {
-        "set_timer" -> {
+        "set_timer" -> blocked(Preflight.clock(context)) ?: run {
             val label = args.optString("label").ifBlank { "Timer" }
             val at = args.optString("at").trim()
             val now = ZonedDateTime.now()
@@ -533,39 +535,33 @@ class McpServer(
                 seconds > Clock.MAX_SECONDS ->
                     "FAILED: that is longer than 24 hours, which is the most a timer " +
                         "can be. Set an alarm or a calendar reminder instead." to true
-                else -> Clock.setTimer(context, seconds, label).let { result ->
-                    Log.i(TAG, "set_timer ${Clock.humanize(seconds)} \"$label\" -> $result")
-                    when (result) {
-                        Clock.Result.Ok ->
-                            "CONFIRMED - the phone's clock app is now running a " +
-                                "${Clock.humanize(seconds)} timer labelled \"$label\"" +
-                                dueAt(clockTime) + ". It will " +
-                                "ring even if this connection closes." to false
-                        else -> describe(result)
-                    }
+                !Clock.setTimer(context, seconds, label) -> clockRefused()
+                else -> {
+                    Log.i(TAG, "set_timer ${Clock.humanize(seconds)} \"$label\"")
+                    "The phone's clock app is now running a ${Clock.humanize(seconds)} " +
+                        "timer labelled \"$label\"" + dueAt(clockTime) + ". It will ring " +
+                        "even if this connection closes." to false
                 }
             }
         }
 
-        "cancel_timer" -> {
+        "cancel_timer" -> blocked(Preflight.clock(context)) ?: run {
             val label = args.optString("label").ifBlank { null }
-            when (val result = Clock.dismissTimer(context, label)) {
-                Clock.Result.Ok ->
-                    if (label == null) {
-                        "Asked the clock app to cancel the next timer due to ring." to false
-                    } else {
-                        "Asked the clock app to cancel the timer labelled \"$label\"." to false
-                    }
-                else -> describe(result)
+            when {
+                !Clock.dismissTimer(context, label) -> clockRefused()
+                label == null -> "Cancelled the timer that was due to ring next." to false
+                else -> "Cancelled the timer labelled \"$label\"." to false
             }
         }
 
-        "show_timers" -> when (val result = Clock.showTimers(context)) {
-            Clock.Result.Ok -> "Opened the timer screen on the phone." to false
-            else -> describe(result)
-        }
+        "show_timers" -> blocked(Preflight.clock(context))
+            ?: if (Clock.showTimers(context)) {
+                "Opened the timer screen on the phone." to false
+            } else {
+                clockRefused()
+            }
 
-        "get_location" -> {
+        "get_location" -> blocked(Preflight.location(context)) ?: run {
             val maxAge = args.optLong("max_age_seconds", 120).coerceAtLeast(0)
             when (val result = Locator.locate(context, maxAge)) {
                 is Locator.Result.Fix -> {
@@ -586,12 +582,6 @@ class McpServer(
                         }
                     } to false
                 }
-                Locator.Result.NoPermission ->
-                    "FAILED: the user has not granted this app location access. Tell " +
-                        "them to open Phone MCP and grant location." to true
-                Locator.Result.Disabled ->
-                    "FAILED: location is switched off on the phone, so no provider can " +
-                        "answer. Tell the user to turn it on." to true
                 // Degraded means the service never got the location foreground
                 // type, and without "all the time" Android then withholds fixes
                 // silently — which looks exactly like being indoors. Say which
@@ -637,19 +627,15 @@ class McpServer(
                 "The phone was not ringing." to false
             }
 
-        "play_podcast" -> when (val r = Podcast.play(context)) {
-            Podcast.Result.Played ->
-                "CONFIRMED - the podcast is playing." to false
+        "play_podcast" -> blocked(Preflight.podcastPlayback(context)) ?: when (Podcast.play(context)) {
             Podcast.Result.AlreadyPlaying ->
                 "It was already playing — nothing to do." to false
-            Podcast.Result.NotStarted ->
-                "UNCERTAIN: Pocket Casts was asked to play but never reported " +
-                    "that it started. Ask the user whether audio is running — " +
-                    "do not assume it worked." to true
-            else -> podcastFailure(r)
+            Podcast.Result.NotInstalled ->
+                "FAILED: Pocket Casts is not installed on the phone." to true
+            else -> "Pocket Casts is playing." to false
         }
 
-        "podcast_now_playing" -> when (val r = Podcast.nowPlaying(context)) {
+        "podcast_now_playing" -> blocked(Preflight.podcastState(context)) ?: when (val r = Podcast.nowPlaying(context)) {
             // Idle is a normal answer to "what's playing?", not a failure —
             // reporting it as an error makes callers apologise for the phone.
             Podcast.Result.NoSession ->
@@ -664,24 +650,22 @@ class McpServer(
                 "$state: \"${r.episode ?: "unknown episode"}\" from " +
                     "\"${r.podcast ?: "unknown podcast"}\"$position." to false
             }
-            else -> podcastFailure(r)
+            else -> "FAILED: Pocket Casts did not give a usable answer." to true
         }
 
         "start_voice_session" -> {
-            val conversation = args.optString("conversation")
-            if (conversation.isBlank()) {
-                "FAILED: conversation is required — call voice_status to see " +
-                    "which ones exist." to true
-            } else {
-                when (val r = Voice.start(context, conversation)) {
-                    // The launch has no return path, so this says what was
-                    // asked for and nothing more. voice_status is how the
-                    // session is confirmed, if it needs confirming.
-                    is Voice.Result.Accepted ->
-                        "Opened the voice gateway on ${r.conversation ?: conversation}. " +
-                            "Check voice_status if you need to know it is listening." to false
-                    else -> voiceFailure(r)
-                }
+            val conversation = args.optString("conversation").trim()
+            when {
+                conversation.isBlank() ->
+                    "FAILED: say who to talk to." to true
+                else -> blocked(Preflight.voice(context))
+                    ?: blocked(Preflight.voiceConversation(context, conversation))
+                    ?: when (val r = Voice.start(context, conversation)) {
+                        is Voice.Result.Accepted ->
+                            "The voice session with ${r.conversation ?: conversation} is " +
+                                "open on the phone." to false
+                        else -> voiceFailure(r)
+                    }
             }
         }
 
@@ -697,11 +681,13 @@ class McpServer(
             else -> voiceFailure(r)
         }
 
-        "launch_watch_app" -> describe(Watch.launch(context, args.optString("app")), "opened")
+        "launch_watch_app" -> blocked(Preflight.watch(context))
+            ?: describe(Watch.launch(context, args.optString("app")), "opened")
 
-        "stop_watch_app" -> describe(Watch.stop(context, args.optString("app")), "closed")
+        "stop_watch_app" -> blocked(Preflight.watch(context))
+            ?: describe(Watch.stop(context, args.optString("app")), "closed")
 
-        "set_watch_timer" -> {
+        "set_watch_timer" -> blocked(Preflight.watch(context)) ?: run {
             val at = args.optString("at").trim()
             val now = ZonedDateTime.now()
             val clockTime = if (at.isEmpty()) null else TimeOfDay.resolve(at, now)
@@ -722,22 +708,13 @@ class McpServer(
                         "an alarm or a calendar reminder instead." to true
                 else -> when (Watch.setTimer(context, seconds)) {
                     Watch.TimerResult.Confirmed ->
-                        "CONFIRMED - the watch is now counting down " +
-                            "${Clock.humanize(seconds)} and will buzz when it " +
-                            "finishes" + dueAt(clockTime) + ". " +
-                            "The timer app is on screen on their wrist." to false
-                    Watch.TimerResult.NoCompanionApp ->
-                        "FAILED: the Pebble companion app (${Watch.COREAPP_PACKAGE}) is " +
-                            "not installed on the phone. Nothing was sent." to true
-                    Watch.TimerResult.NoWatchConnected ->
-                        "FAILED: the companion app reports no watch connected. Tell the " +
-                            "user to check the watch is paired and in range. Nothing " +
-                            "was sent." to true
+                        "The watch is now counting down ${Clock.humanize(seconds)} and " +
+                            "will buzz when it finishes" + dueAt(clockTime) + ". The " +
+                            "timer app is on screen on their wrist." to false
                     Watch.TimerResult.NoAcknowledgement ->
-                        "UNCERTAIN: the timer app was opened on the watch and sent the " +
-                            "duration, but never confirmed it. It may have been too slow " +
-                            "to start. Ask the user whether the watch is counting down, " +
-                            "and offer to try again — do not assume it worked." to true
+                        "FAILED: the watch did not answer in time, so nothing is " +
+                            "counting down. Ask the user to check the watch is in " +
+                            "range, then try again." to true
                     Watch.TimerResult.Rejected ->
                         "FAILED: the watch received the request and refused it. Nothing " +
                             "is counting down." to true
@@ -747,6 +724,24 @@ class McpServer(
 
         else -> "No such tool: $name" to true
     }
+
+    /**
+     * A preflight reason turned into a tool failure, or null to carry on.
+     *
+     * Written as `blocked(...) ?: run { ... }` at the top of a handler, so the
+     * check and the work it guards read in the order they happen and no handler
+     * can quietly skip one.
+     */
+    private fun blocked(reason: String?): Pair<String, Boolean>? =
+        reason?.let { "FAILED: $it" to true }
+
+    /**
+     * The clock app refusing an intent that preflight said it handles. Rare
+     * enough to have one wording for all three timer tools.
+     */
+    private fun clockRefused(): Pair<String, Boolean> =
+        "FAILED: the phone's clock app would not take the request. Nothing was " +
+            "changed. Ask the user to check their timers by hand." to true
 
     /**
      * ", due at 15:30" when the caller asked for a clock time, empty otherwise.
@@ -792,58 +787,20 @@ class McpServer(
 
     private fun voiceFailure(result: Voice.Result): Pair<String, Boolean> = when (result) {
         is Voice.Result.Refused -> "FAILED: ${result.message}" to true
-        Voice.Result.NeedsOverlayPermission ->
-            "FAILED: the phone is blocking this app from opening the voice gateway in " +
-                "the background. Tell the user to open Phone MCP and grant \"Display " +
-                "over other apps\" — Android allows a background app to start an " +
-                "activity only with that permission. No session was started." to true
         Voice.Result.NotAvailable ->
-            "FAILED: the voice gateway app (${Voice.PACKAGE}) did not answer. It " +
-                "is either not installed, or was force stopped and has not been " +
-                "opened since." to true
+            "FAILED: the voice gateway app did not answer. Ask the user to open it " +
+                "once on the phone." to true
         // Not reachable — callers handle every success shape first — but it
         // must not hand the agent a Kotlin toString it can do nothing with.
         else -> "FAILED: the voice gateway did not give a usable answer." to true
     }
 
-    private fun podcastFailure(result: Podcast.Result): Pair<String, Boolean> = when (result) {
-        Podcast.Result.NotInstalled ->
-            "FAILED: Pocket Casts (${Podcast.POCKET_CASTS_PACKAGE}) is not " +
-                "installed on the phone." to true
-        Podcast.Result.NoAccess ->
-            "FAILED: this app has not been granted notification access, which " +
-                "is what authorizes reading media sessions. The user must " +
-                "enable \"Phone MCP\" under Settings > Notifications > " +
-                "Notification access (or Device & app notifications)." to true
-        else -> "FAILED: Pocket Casts did not give a usable answer." to true
-    }
-
     private fun describe(result: Watch.Result, verb: String): Pair<String, Boolean> = when (result) {
-        Watch.Result.Sent ->
-            "Asked the watch to have the app $verb. The watch does not report back, " +
-                "so this cannot be confirmed — ask the user what they see." to false
-        Watch.Result.NoCompanionApp ->
-            "FAILED: the Pebble companion app (${Watch.COREAPP_PACKAGE}) is not " +
-                "installed on the phone. Nothing was sent." to true
-        Watch.Result.NoWatchConnected ->
-            "FAILED: the companion app reports no watch connected. Tell the user to " +
-                "check the watch is paired and in range. Nothing was sent." to true
+        Watch.Result.Sent -> "The app is $verb on the watch." to false
         is Watch.Result.UnknownApp ->
             "FAILED: \"${result.given}\" is not a UUID and not a known app name. " +
                 "Known names: ${Watch.KNOWN_APPS.keys.joinToString(", ")}. Nothing " +
                 "was sent." to true
-    }
-
-    private fun describe(result: Clock.Result): Pair<String, Boolean> = when (result) {
-        Clock.Result.NeedsOverlayPermission ->
-            "FAILED: the phone is blocking this app from opening the clock app in the " +
-                "background. Tell the user to open Phone MCP and grant \"Display over " +
-                "other apps\" — Android allows a background app to start an activity " +
-                "only with that permission. Nothing was scheduled." to true
-        Clock.Result.NoClockApp ->
-            "FAILED: no app on the phone handles timer intents. Nothing was " +
-                "scheduled." to true
-        Clock.Result.Ok -> "OK" to false
     }
 
     // ------------------------------- helpers -------------------------------
@@ -873,8 +830,13 @@ Both timer tools take either a duration in seconds or a clock time in `at`. Pass
 the clock time the user said and let the phone work out the interval; it knows
 what time it is and you do not.
 
-Android offers no way to read back the clock app's timers, so there is nothing
-to list and no way to verify. Report what was requested, not what is running.
+Every tool checks what it needs before it acts, and either does the job or
+answers FAILED with the reason. There is no separate confirmation step: if a
+tool did not say FAILED, tell the user it is done. When it does say FAILED, pass
+on the reason — it names what the user has to fix.
+
+The phone's timers cannot be listed, so show_timers puts them on screen for the
+user rather than answering with them.
 
 The watch tools reach a Pebble paired to that phone, by way of its companion
 app. Launching a watchapp cannot parameterise it — it opens in its default

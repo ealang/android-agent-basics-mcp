@@ -26,13 +26,6 @@ object Clock {
     /** Clock apps reject anything outside this; documented on EXTRA_LENGTH. */
     const val MAX_SECONDS = 86_400L
 
-    sealed interface Result {
-        data object Ok : Result
-        /** Android would silently drop the activity start; say so instead. */
-        data object NeedsOverlayPermission : Result
-        data object NoClockApp : Result
-    }
-
     /**
      * True when this app may start an activity from the background.
      *
@@ -43,7 +36,7 @@ object Clock {
     fun canStartFromBackground(context: Context): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || Settings.canDrawOverlays(context)
 
-    fun setTimer(context: Context, seconds: Long, label: String): Result =
+    fun setTimer(context: Context, seconds: Long, label: String): Boolean =
         launch(
             context,
             Intent(AlarmClock.ACTION_SET_TIMER)
@@ -56,7 +49,7 @@ object Clock {
         )
 
     /** Cancels the timer with this label, or the next one to fire if null. */
-    fun dismissTimer(context: Context, label: String?): Result {
+    fun dismissTimer(context: Context, label: String?): Boolean {
         val intent = Intent(AlarmClock.ACTION_DISMISS_TIMER)
         if (label == null) {
             intent.putExtra(AlarmClock.EXTRA_ALARM_SEARCH_MODE, AlarmClock.ALARM_SEARCH_MODE_NEXT)
@@ -68,19 +61,22 @@ object Clock {
     }
 
     /** Brings up the clock app's timer screen, so the user can see the state. */
-    fun showTimers(context: Context): Result =
-        launch(context, Intent(AlarmClock.ACTION_SHOW_TIMERS), skipUiCheck = true)
+    fun showTimers(context: Context): Boolean =
+        launch(context, Intent(AlarmClock.ACTION_SHOW_TIMERS))
 
-    private fun launch(context: Context, intent: Intent, skipUiCheck: Boolean = false): Result {
-        if (!canStartFromBackground(context)) return Result.NeedsOverlayPermission
-
+    /**
+     * True once the clock app has taken the intent. Both reasons it might not —
+     * no overlay grant, no app that handles timers — are caught by [Preflight]
+     * before this runs, so a false here is the rare leftover.
+     */
+    private fun launch(context: Context, intent: Intent): Boolean {
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         return try {
             context.startActivity(intent)
-            Result.Ok
+            true
         } catch (e: Exception) {
             Log.w(TAG, "No handler for ${intent.action}", e)
-            Result.NoClockApp
+            false
         }
     }
 

@@ -25,25 +25,14 @@ object Podcast {
     const val POCKET_CASTS_PACKAGE = "au.com.shiftyjelly.pocketcasts"
 
     /**
-     * How long to wait for Pocket Casts to report STATE_PLAYING, covering both
-     * a cold app starting up and playback spinning up. Every observed success
-     * lands inside 1.3 s, so this is generous; it only costs anything when
-     * something is actually wrong, and then the caller is waiting for a "we
-     * don't know" it cannot act on anyway.
-     */
-    private const val PLAY_TIMEOUT_MS = 10_000L
-
-    /**
      * Pocket Casts reads this as "an assistant opened us with no other
      * instruction", which it takes to mean the user wants to play.
      */
     private const val ASSISTANT_EXTRA = "extra_accl_intent"
 
     sealed interface Result {
-        data object Played : Result
+        data object Started : Result
         data object AlreadyPlaying : Result
-        /** Pocket Casts was asked to play but never reported STATE_PLAYING. */
-        data object NotStarted : Result
         data class NowPlaying(
             val podcast: String?,
             val episode: String?,
@@ -51,9 +40,8 @@ object Podcast {
             val durationMs: Long,
             val playing: Boolean,
         ) : Result
+        /** The package went missing between the preflight and the launch. */
         data object NotInstalled : Result
-        /** Notification access has not been granted to MediaListenerService. */
-        data object NoAccess : Result
         /**
          * No media session is active. Only [nowPlaying] reports this — it is
          * the ordinary idle state, not a fault: Pocket Casts publishes a
@@ -73,13 +61,22 @@ object Podcast {
      * prepared — merely launching the app does not) and needs the app visibly
      * on screen, which the keyguard prevents. Playback started by Pocket Casts
      * from its own foreground is subject to neither: cold and locked both work.
+     *
+     * Nothing is waited for afterwards. Playback starting is something the user
+     * hears within a second or two, so a poll here would buy the caller a
+     * confirmation of something already obvious, at the cost of every failed
+     * call blocking for the length of the timeout.
      */
     fun play(context: Context): Result {
-        if (!installed(context)) return Result.NotInstalled
-        val sessions = sessions(context) ?: return Result.NoAccess
-        val existing = sessions.firstOrNull { it.packageName == POCKET_CASTS_PACKAGE }
+        // A best-effort peek, not a precondition: without notification access
+        // there is no session to read, and relaunching an app that is already
+        // playing is harmless enough not to demand the grant for it.
+        val existing = sessions(context)?.firstOrNull { it.packageName == POCKET_CASTS_PACKAGE }
         if (existing != null && isPlaying(existing)) return Result.AlreadyPlaying
 
+        // Preflight has already found the package, so this is only ever null if
+        // it went away in between. Guarded rather than forced, because the
+        // alternative to a null here is the server thread dying.
         val launch = context.packageManager.getLaunchIntentForPackage(POCKET_CASTS_PACKAGE)
             ?: return Result.NotInstalled
         context.startActivity(
@@ -95,20 +92,8 @@ object Podcast {
             ).putExtra(ASSISTANT_EXTRA, true),
         )
 
-        val deadline = System.currentTimeMillis() + PLAY_TIMEOUT_MS
-        var appeared = false
-        while (System.currentTimeMillis() < deadline) {
-            Thread.sleep(500)
-            val controller = sessions(context)
-                ?.firstOrNull { it.packageName == POCKET_CASTS_PACKAGE } ?: continue
-            appeared = true
-            if (isPlaying(controller)) return Result.Played
-        }
-        // Whether a session ever appeared tells us something (did the app start
-        // at all?) but tells the caller nothing it could act on differently, so
-        // it goes to the log and both cases answer the same way.
-        Log.w(TAG, "Pocket Casts play: sessionAppeared=$appeared, never played")
-        return Result.NotStarted
+        Log.i(TAG, "Pocket Casts: asked to play")
+        return Result.Started
     }
 
     private fun isPlaying(controller: MediaController): Boolean =
@@ -131,8 +116,9 @@ object Podcast {
         context: Context,
         block: (MediaController) -> Result,
     ): Result {
-        if (!installed(context)) return Result.NotInstalled
-        val sessions = sessions(context) ?: return Result.NoAccess
+        // Preflight has already established both the app and the grant, so an
+        // empty list here means nothing is playing rather than nothing is set up.
+        val sessions = sessions(context) ?: emptyList()
         val controller = sessions.firstOrNull { it.packageName == POCKET_CASTS_PACKAGE }
             ?: run {
                 Log.w(
@@ -157,10 +143,6 @@ object Podcast {
         }
     }
 
-    private fun installed(context: Context): Boolean = try {
-        context.packageManager.getPackageInfo(POCKET_CASTS_PACKAGE, 0)
-        true
-    } catch (e: PackageManager.NameNotFoundException) {
-        false
-    }
+    /** Whether notification access is in place, which is what exposes sessions. */
+    fun hasSessionAccess(context: Context): Boolean = sessions(context) != null
 }

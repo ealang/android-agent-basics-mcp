@@ -41,8 +41,6 @@ object Locator {
 
     sealed interface Result {
         data class Fix(val location: Location, val address: String?) : Result
-        data object NoPermission : Result
-        data object Disabled : Result
         /** Permission and radios are fine, but nothing produced a fix in time. */
         data object NoFix : Result
     }
@@ -50,6 +48,11 @@ object Locator {
     fun hasPermission(context: Context): Boolean = PERMISSIONS.any {
         context.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED
     }
+
+    /** Whether any provider is switched on, so a fix is possible at all. */
+    fun servicesEnabled(context: Context): Boolean =
+        context.getSystemService(LocationManager::class.java)
+            ?.getProviders(true)?.isNotEmpty() == true
 
     /** Only meaningful once [hasPermission] is true; it is a widening of it. */
     fun hasBackgroundPermission(context: Context): Boolean =
@@ -63,13 +66,10 @@ object Locator {
      * being told nothing, and the caller is given the age to judge with.
      */
     fun locate(context: Context, maxAgeSeconds: Long): Result {
-        if (!hasPermission(context)) return Result.NoPermission
-
         val manager = context.getSystemService(LocationManager::class.java)
-            ?: return Result.Disabled
-
+            ?: return Result.NoFix
         val providers = manager.getProviders(true)
-        if (providers.isEmpty()) return Result.Disabled
+        if (providers.isEmpty()) return Result.NoFix
 
         val cached = bestCached(manager, providers)
         if (cached != null && ageSeconds(cached) <= maxAgeSeconds) {

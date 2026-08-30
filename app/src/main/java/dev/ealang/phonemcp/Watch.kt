@@ -68,16 +68,12 @@ object Watch {
     sealed interface Result {
         /** The broadcast was sent. The watch does not report back. */
         data object Sent : Result
-        data object NoCompanionApp : Result
-        data object NoWatchConnected : Result
         data class UnknownApp(val given: String) : Result
     }
 
     sealed interface TimerResult {
         /** The watchapp acknowledged the message, so the timer is running. */
         data object Confirmed : TimerResult
-        data object NoCompanionApp : TimerResult
-        data object NoWatchConnected : TimerResult
         /** Launched and sent to, but nothing came back. */
         data object NoAcknowledgement : TimerResult
         /** The watchapp was reached and refused the message. */
@@ -100,9 +96,6 @@ object Watch {
      * user with two timers.
      */
     fun setTimer(context: Context, seconds: Long): TimerResult {
-        if (!companionInstalled(context)) return TimerResult.NoCompanionApp
-        if (!watchConnected(context)) return TimerResult.NoWatchConnected
-
         val transaction = transactions.getAndIncrement() and 0xff
         val acknowledged = AtomicBoolean(false)
         val replied = CountDownLatch(1)
@@ -170,9 +163,6 @@ object Watch {
 
     private fun send(context: Context, action: String, app: String): Result {
         val uuid = resolve(app) ?: return Result.UnknownApp(app)
-        if (!companionInstalled(context)) return Result.NoCompanionApp
-        if (!watchConnected(context)) return Result.NoWatchConnected
-
         // Addressed to CoreApp rather than broadcast at large: nothing else
         // should see it, and an implicit broadcast is easier to lose.
         context.sendBroadcast(intentTo(action).putExtra(EXTRA_UUID, uuid))
@@ -186,18 +176,11 @@ object Watch {
         return KNOWN_APPS[trimmed.lowercase()]
     }
 
-    private fun companionInstalled(context: Context): Boolean = try {
-        context.packageManager.getPackageInfo(COREAPP_PACKAGE, 0)
-        true
-    } catch (e: Exception) {
-        false
-    }
-
     /**
      * Column 0 of the single row is a connected flag. Absent provider or empty
      * cursor means CoreApp has not finished starting, which is also "no watch".
      */
-    private fun watchConnected(context: Context): Boolean = try {
+    fun connected(context: Context): Boolean = try {
         context.contentResolver.query(STATE_URI, null, null, null, null)?.use { cursor ->
             cursor.moveToFirst() && cursor.getInt(0) != 0
         } ?: false

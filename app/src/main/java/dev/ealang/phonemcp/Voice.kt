@@ -49,8 +49,6 @@ object Voice {
     sealed interface Result {
         /** The request was handed over. Not a claim that it took effect. */
         data class Accepted(val conversation: String?) : Result
-        /** Starting an activity from the background needs the overlay grant. */
-        data object NeedsOverlayPermission : Result
         /** The app answered, and said no — the message is theirs, and specific. */
         data class Refused(val message: String) : Result
         data class Status(
@@ -77,14 +75,10 @@ object Voice {
      * Open the gateway on [conversation] — a name, an id, or a unique
      * substring, resolved on their side against what the user actually says.
      *
-     * The launch needs [Clock.canStartFromBackground]: without the overlay
-     * grant Android drops a background activity start in silence, which is
-     * worth naming rather than reporting as a session that never appeared.
-     * Everything past that point is theirs.
+     * The overlay grant and the conversation name are checked by [Preflight]
+     * before this is called. Everything past that point is theirs.
      */
     fun start(context: Context, conversation: String): Result {
-        if (!Clock.canStartFromBackground(context)) return Result.NeedsOverlayPermission
-
         val locked = context.getSystemService(KeyguardManager::class.java)?.isKeyguardLocked == true
         return try {
             context.startActivity(
@@ -194,6 +188,10 @@ object Voice {
             )
         }
     }
+
+    /** Just the names, for checking one the caller gave. Empty if it did not answer. */
+    fun conversationNames(context: Context): List<String> =
+        conversations(context).map { it.name }
 
     private fun conversations(context: Context): List<Conversation> {
         val cursor = try {
