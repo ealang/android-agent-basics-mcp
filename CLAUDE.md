@@ -55,6 +55,15 @@ failure the user can actually do something about. `Preflight` holds these, one
 function per subsystem, each returning either null or the sentence to show;
 every handler starts with one. Nothing there may block or wait.
 
+**Preflight our side of the boundary, not theirs.** Everything checked is one
+of four things: a grant *we* hold, whether the target app exists, device or
+system state, or something the target app says about itself when asked. Never
+another app's permissions. A permission missing there surfaces whenever that app
+happens to need it — which can be long after launch — so it is not a
+precondition in the first place; and the alternative is re-deriving every grant
+every automated app needs, in this codebase, kept in sync by hand. Apps we drive
+are assumed to have been installed, configured and run once by their owner.
+
 **Confirm only where the platform offers a read-back, and only where silent
 failure is expensive.** The watch acknowledges an AppMessage, so
 `set_watch_timer` waits for it. The clock app exposes nothing at all, so
