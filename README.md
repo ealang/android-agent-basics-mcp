@@ -25,7 +25,6 @@ nothing to push, so every exchange is ordinary request/response JSON.
 
 - `set_timer(seconds, label?)` — rejects ≤ 0 and > 24h.
 - `cancel_timer(label?)` — by label, or the next one to ring.
-- `show_timers()` — opens the clock app's timer screen.
 - `launch_watch_app(app)` / `stop_watch_app(app)` — a Pebble watchapp, by UUID
   or by a name from `Watch.KNOWN_APPS`.
 - `get_location(max_age_seconds?)` — coordinates, accuracy, fix age, and a

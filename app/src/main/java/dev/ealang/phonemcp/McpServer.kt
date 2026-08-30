@@ -256,18 +256,6 @@ class McpServer(
                     ),
             )
 
-        val showTimers = JSONObject()
-            .put("name", "show_timers")
-            .put(
-                "description",
-                "Open the clock app's timer screen on the phone, so the user can " +
-                    "see what is running. Returns nothing about the timers themselves.",
-            )
-            .put(
-                "inputSchema",
-                JSONObject().put("type", "object").put("properties", JSONObject()),
-            )
-
         val appArgument = JSONObject()
             .put("type", "object")
             .put(
@@ -508,7 +496,7 @@ class McpServer(
                 JSONObject().put("type", "object").put("properties", JSONObject()),
             )
 
-        return JSONArray().put(setTimer).put(cancelTimer).put(showTimers)
+        return JSONArray().put(setTimer).put(cancelTimer)
             .put(launchWatchApp).put(stopWatchApp).put(setWatchTimer).put(getLocation)
             .put(playPodcast).put(nowPlaying).put(findMyPhone).put(silencePhone)
             .put(startVoice).put(stopVoice).put(voiceStatus)
@@ -553,13 +541,6 @@ class McpServer(
                 else -> "Cancelled the timer labelled \"$label\"." to false
             }
         }
-
-        "show_timers" -> blocked(Preflight.clock(context))
-            ?: if (Clock.showTimers(context)) {
-                "Opened the timer screen on the phone." to false
-            } else {
-                clockRefused()
-            }
 
         "get_location" -> blocked(Preflight.location(context)) ?: run {
             val maxAge = args.optLong("max_age_seconds", 120).coerceAtLeast(0)
@@ -632,7 +613,7 @@ class McpServer(
                 "It was already playing — nothing to do." to false
             Podcast.Result.NotInstalled ->
                 "FAILED: Pocket Casts is not installed on the phone." to true
-            else -> "Pocket Casts is playing." to false
+            else -> "Told Pocket Casts to play." to false
         }
 
         "podcast_now_playing" -> blocked(Preflight.podcastState(context)) ?: when (val r = Podcast.nowPlaying(context)) {
@@ -835,8 +816,8 @@ answers FAILED with the reason. There is no separate confirmation step: if a
 tool did not say FAILED, tell the user it is done. When it does say FAILED, pass
 on the reason — it names what the user has to fix.
 
-The phone's timers cannot be listed, so show_timers puts them on screen for the
-user rather than answering with them.
+The phone's timers cannot be listed. If the user asks what is running, say so
+and suggest they look at the clock app.
 
 The watch tools reach a Pebble paired to that phone, by way of its companion
 app. Launching a watchapp cannot parameterise it — it opens in its default

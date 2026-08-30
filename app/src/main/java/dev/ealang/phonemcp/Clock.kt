@@ -60,10 +60,6 @@ object Clock {
         return launch(context, intent)
     }
 
-    /** Brings up the clock app's timer screen, so the user can see the state. */
-    fun showTimers(context: Context): Boolean =
-        launch(context, Intent(AlarmClock.ACTION_SHOW_TIMERS))
-
     /**
      * True once the clock app has taken the intent. Both reasons it might not —
      * no overlay grant, no app that handles timers — are caught by [Preflight]
