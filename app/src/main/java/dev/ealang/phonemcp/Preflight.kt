@@ -73,6 +73,22 @@ object Preflight {
             "what is playing. Ask the user to enable Phone MCP under Settings > " +
             "Notifications > Notification access."
 
+    private const val NO_RECORDER =
+        "the voice recorder app is not installed on the phone."
+
+    /** Starting a recording is an activity launch, so the overlay grant counts. */
+    fun recorderStart(context: Context): String? = when {
+        !Clock.canStartFromBackground(context) -> NO_BACKGROUND_LAUNCH
+        !installed(context, Recorder.PACKAGE) -> NO_RECORDER
+        else -> null
+    }
+
+    /** Stopping is a broadcast, which needs no grant of ours. */
+    fun recorderStop(context: Context): String? = when {
+        !installed(context, Recorder.PACKAGE) -> NO_RECORDER
+        else -> null
+    }
+
     fun location(context: Context): String? = when {
         !Locator.hasPermission(context) ->
             "this app does not have location access. Ask the user to open Phone MCP " +

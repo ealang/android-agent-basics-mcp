@@ -496,10 +496,35 @@ class McpServer(
                 JSONObject().put("type", "object").put("properties", JSONObject()),
             )
 
+        val startRecording = JSONObject()
+            .put("name", "start_recording")
+            .put(
+                "description",
+                "Record audio on the user's phone, saving it to their notes. Picks " +
+                    "up the car's microphone when they are driving. Recording runs " +
+                    "until stopped.",
+            )
+            .put(
+                "inputSchema",
+                JSONObject().put("type", "object").put("properties", JSONObject()),
+            )
+
+        val stopRecording = JSONObject()
+            .put("name", "stop_recording")
+            .put(
+                "description",
+                "Stop recording audio on the phone and save the file.",
+            )
+            .put(
+                "inputSchema",
+                JSONObject().put("type", "object").put("properties", JSONObject()),
+            )
+
         return JSONArray().put(setTimer).put(cancelTimer)
             .put(launchWatchApp).put(stopWatchApp).put(setWatchTimer).put(getLocation)
             .put(playPodcast).put(nowPlaying).put(findMyPhone).put(silencePhone)
             .put(startVoice).put(stopVoice).put(voiceStatus)
+            .put(startRecording).put(stopRecording)
     }
 
     /** Returns (text, isError). */
@@ -662,6 +687,18 @@ class McpServer(
             else -> voiceFailure(r)
         }
 
+        "start_recording" -> blocked(Preflight.recorderStart(context))
+            ?: when (Recorder.start(context)) {
+                Recorder.Result.Accepted -> "The phone is recording." to false
+                Recorder.Result.NotAvailable -> RECORDER_UNAVAILABLE to true
+            }
+
+        "stop_recording" -> blocked(Preflight.recorderStop(context))
+            ?: when (Recorder.stop(context)) {
+                Recorder.Result.Accepted -> "The recording is saved." to false
+                Recorder.Result.NotAvailable -> RECORDER_UNAVAILABLE to true
+            }
+
         "launch_watch_app" -> blocked(Preflight.watch(context))
             ?: describe(Watch.launch(context, args.optString("app")), "opened")
 
@@ -715,6 +752,14 @@ class McpServer(
      */
     private fun blocked(reason: String?): Pair<String, Boolean>? =
         reason?.let { "FAILED: $it" to true }
+
+    /**
+     * The recorder is installed — preflight has just said so — but would not
+     * take the request. Nothing the user can do beyond opening it once.
+     */
+    private val RECORDER_UNAVAILABLE =
+        "FAILED: the voice recorder app did not take the request. Ask the user to " +
+            "open it once on the phone."
 
     /**
      * The clock app refusing an intent that preflight said it handles. Rare

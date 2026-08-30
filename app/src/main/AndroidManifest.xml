@@ -41,6 +41,7 @@
              explicit component launch, not a provider call. -->
         <package android:name="com.agentvoicegateway.app" />
         <provider android:authorities="com.agentvoicegateway.app.automation" />
+        <package android:name="dev.ealang.voicerecorder" />
     </queries>
 
     <application
