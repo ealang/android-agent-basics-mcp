@@ -66,9 +66,9 @@ object Watch {
     const val TIMER_MIN_SECONDS = 5L
     const val TIMER_MAX_SECONDS = 86_399L
 
-    /** How long to keep asking whether the watchapp has come up, and how often. */
+    /** How long to keep trying to get the watchapp up, and how long each go gets. */
     private const val APP_LAUNCH_TIMEOUT_MS = 10_000L
-    private const val PING_INTERVAL_MS = 750L
+    private const val LAUNCH_ATTEMPT_MS = 1_000L
     private const val ACK_TIMEOUT_MS = 5_000L
 
     private val UUID_FORMAT = Regex("[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}")
@@ -108,6 +108,10 @@ object Watch {
      * race a slow acknowledgement and leave the user with two timers, and by
      * this point there is nothing left to retry for — the app is known to be
      * listening before the first byte of it goes out.
+     *
+     * Whether a watch is connected at all is settled by `Preflight.watch` before
+     * this is called, and is not revisited here: if it drops mid-sequence there
+     * is nothing to do about it that failing does not already do.
      */
     fun setTimer(context: Context, seconds: Long): TimerResult {
         val replies = Replies()
@@ -125,7 +129,6 @@ object Watch {
         }
 
         return try {
-            context.sendBroadcast(intentTo(ACTION_START).putExtra(EXTRA_UUID, TIMER_UUID))
             if (!awaitWatchapp(context, replies)) return TimerResult.NoAcknowledgement
 
             val transaction = nextTransaction()
@@ -154,31 +157,31 @@ object Watch {
     }
 
     /**
-     * Waits for the timer watchapp to be running, by asking it until it answers.
+     * Gets the timer watchapp running, by launching it and asking whether it is
+     * there until it answers.
      *
      * An acknowledgement is the only evidence available that the app is up, and
-     * it is good evidence: CoreApp forwards a message solely to a running
-     * watchapp, and the acknowledgement comes back from that app's own
-     * AppMessage layer. What it does not prove is that the message meant
-     * anything — which is the point here, because [KEY_PING] means nothing at
-     * all, so this can be repeated as often as needed with no effect on the
-     * watch.
+     * it is good evidence: CoreApp registers the `SEND` receiver per *running*
+     * watchapp, so with the app closed there is no receiver, the broadcast lands
+     * nowhere and nothing at all comes back. What an acknowledgement does not
+     * prove is that the message meant anything — which is the point here,
+     * because [KEY_PING] means nothing at all, so this can be repeated as often
+     * as needed with no effect on the watch.
      *
-     * Returns false if the app never answers, or if the watch drops off the
-     * link while waiting; either way nothing has been asked of the watch yet.
+     * The launch is retried alongside the ping rather than sent once up front:
+     * it is fire-and-forget, so a lost one is otherwise indistinguishable from a
+     * slow one, and CoreApp documents it as idempotent.
      */
     private fun awaitWatchapp(context: Context, replies: Replies): Boolean {
         val deadline = SystemClock.elapsedRealtime() + APP_LAUNCH_TIMEOUT_MS
         while (true) {
+            context.sendBroadcast(intentTo(ACTION_START).putExtra(EXTRA_UUID, TIMER_UUID))
+
             val transaction = nextTransaction()
             replies.expectPing(transaction)
             context.sendBroadcast(message(transaction, int32Payload(KEY_PING, 0)))
 
-            if (replies.watchappUp.await(PING_INTERVAL_MS, TimeUnit.MILLISECONDS)) return true
-            if (!connected(context)) {
-                Log.w(TAG, "The watch went away while waiting for the timer app to come up")
-                return false
-            }
+            if (replies.watchappUp.await(LAUNCH_ATTEMPT_MS, TimeUnit.MILLISECONDS)) return true
             if (SystemClock.elapsedRealtime() >= deadline) {
                 Log.w(TAG, "The timer app did not come up within $APP_LAUNCH_TIMEOUT_MS ms")
                 return false
@@ -192,7 +195,7 @@ object Watch {
      *
      * Pings are pooled rather than tracked one by one: a late acknowledgement of
      * an earlier ping proves exactly what a prompt one does, so a round trip
-     * slower than [PING_INTERVAL_MS] costs a few spare pings instead of the
+     * slower than [LAUNCH_ATTEMPT_MS] costs a few spare pings instead of the
      * whole wait.
      */
     private class Replies : BroadcastReceiver() {
