@@ -103,6 +103,72 @@ it: preflight the launch so the failures worth naming are named, and where the
 companion can offer a read-back, ask it for one. `docs/companion-apps.md` is
 the full pattern, including the companion app's side.
 
+## Driving a Pebble watchapp
+
+The pattern below is the standard shape for any watchapp we automate. It exists
+because the watch has none of the affordances §"Validation" assumes on the
+phone: no ContentProvider to read, no way to ask what app is running, and a
+message to a watchapp that is not running is **discarded in silence**.
+
+**Preflight the link, once, before anything is sent.** `Preflight.watch` answers
+"is CoreApp installed" and "is a watch connected" instantly, from CoreApp's
+state provider. That is the whole class of failure the user can act on — the
+watch is off, out of range, unpaired. Everything after it is a race we can only
+wait out, so this is the one place fail-fast is available and it should stay
+cheap and unconditional.
+
+**Do not re-check the link inside the loop.** A watch that leaves mid-sequence
+and a watchapp that never comes up are the same outcome and the same message.
+The distinction costs a provider query per iteration and nobody acts on it.
+
+**Launch and confirm in one retried step; send the payload exactly once.** The
+launch broadcast is fire-and-forget, so a lost one is indistinguishable from a
+slow one — retry it rather than waiting it out. CoreApp's own source calls it
+idempotent. Then:
+
+```
+loop, ~1 s apart, ≤ 10 s total:
+    broadcast START
+    send PING
+    if ACKed: break
+send the real message — once, never repeated
+```
+
+**A watchapp we automate should implement a ping.** A message key it recognises
+and deliberately does nothing with, whose only purpose is that ACKing it proves
+the app is up. Reserve it **in the C**, with a comment saying why — declaring it
+in `package.json` is a build-time name table and buys nothing at runtime. Key 1
+is the ping in the timer app; keep it consistent in new ones.
+
+Do not use a key the app merely *happens* not to handle. It works, and it is one
+edit away from silently doing something, ten times per request.
+
+**Know exactly what the ACK proves**, because it is less than it looks:
+
+- *Something came back* ⇒ the app is running. CoreApp registers the SEND
+  receiver per running watchapp, so a closed app has no receiver and cannot
+  reply. This is the load-bearing fact and it holds regardless of watchapp code.
+- *ACK not NACK* ⇒ the watch's own answer, relayed. Not synthesised on the phone.
+- It does **not** prove the app's handler ran, let alone that it did anything.
+  It is a delivery acknowledgement from the firmware's AppMessage layer. If you
+  need proof the app acted, the app has to send something back — Option B in
+  `docs/watch-timer-retry.md`, deferred, not foreclosed.
+
+**Never retry the payload.** A missing ACK is ambiguous — it may have arrived
+and the ACK been lost — so a resend is how the user gets two timers. Retrying is
+safe only for the ping, which cannot do anything. An idempotency key would make
+the payload retryable too; that is Option C, and it is unnecessary while the
+ping already proves the app is listening before we send.
+
+**`pebble logs --phone <ip>`** over CoreApp's developer connection is the only
+channel that reports what the watchapp's C actually did. Use it when verifying a
+change; nothing else can see inside the app.
+
+`docs/watch-messaging.md` has the transport and the CoreApp routing rules —
+including the three ways a watchapp quietly becomes unreachable, one of which is
+being a system app, which is why we fork. `docs/watch-timer-retry.md` has the
+reasoning and the on-device measurements.
+
 ## Docs
 
 `docs/` holds the empirical findings behind the awkward parts — how each
