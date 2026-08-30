@@ -6,9 +6,11 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.net.Uri
 import android.os.Build
+import android.os.SystemClock
 import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.Collections
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -52,12 +54,21 @@ object Watch {
     /** AppMessage key the timer watchapp reads a duration from; matches its package.json. */
     private const val KEY_START_TIMER = 20
 
+    /**
+     * A key the timer watchapp does not read. Its inbox handler looks for
+     * KEY_START_TIMER and discards the whole message when that is absent, so
+     * one carrying only this key cannot do anything — which is what makes it
+     * safe to send over and over. Must stay unassigned in the watchapp.
+     */
+    private const val KEY_PING = 1
+
     /** What the watchapp's own setting screen can express, so what it will accept. */
     const val TIMER_MIN_SECONDS = 5L
     const val TIMER_MAX_SECONDS = 86_399L
 
-    /** Long enough for CoreApp to get the watchapp running over BLE. */
-    private const val APP_LAUNCH_MS = 2_500L
+    /** How long to keep asking whether the watchapp has come up, and how often. */
+    private const val APP_LAUNCH_TIMEOUT_MS = 10_000L
+    private const val PING_INTERVAL_MS = 750L
     private const val ACK_TIMEOUT_MS = 5_000L
 
     private val UUID_FORMAT = Regex("[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}")
@@ -88,25 +99,18 @@ object Watch {
      * Starts a countdown of [seconds] in the timer watchapp, bringing it to the
      * front of the watch on the way.
      *
-     * CoreApp only forwards a message to a watchapp that is already running,
-     * and drops it silently otherwise, so the app has to be launched and given
-     * time to come up first. There is deliberately no retry: the failure being
-     * guarded against is "not up yet", which waiting fixes and re-sending does
-     * not, and a second send that raced a slow acknowledgement would leave the
-     * user with two timers.
+     * CoreApp only forwards a message to a watchapp that is already running and
+     * drops it silently otherwise, so the app has to be launched first and the
+     * launch is fire-and-forget — nothing reports when it finishes. Rather than
+     * guess at a duration, wait for the app to say so itself: see [awaitWatchapp].
+     *
+     * The duration is then sent exactly once and never repeated. A repeat could
+     * race a slow acknowledgement and leave the user with two timers, and by
+     * this point there is nothing left to retry for — the app is known to be
+     * listening before the first byte of it goes out.
      */
     fun setTimer(context: Context, seconds: Long): TimerResult {
-        val transaction = transactions.getAndIncrement() and 0xff
-        val acknowledged = AtomicBoolean(false)
-        val replied = CountDownLatch(1)
-
-        val receiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context, intent: Intent) {
-                if (intent.getIntExtra(EXTRA_TRANSACTION_ID, -1) != transaction) return
-                acknowledged.set(intent.action == ACTION_RECEIVE_ACK)
-                replied.countDown()
-            }
-        }
+        val replies = Replies()
         val filter = IntentFilter().apply {
             addAction(ACTION_RECEIVE_ACK)
             addAction(ACTION_RECEIVE_NACK)
@@ -114,29 +118,28 @@ object Watch {
         // CoreApp broadcasts the reply to everyone rather than back to us, so
         // this has to be listening for an external sender.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            context.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
+            context.registerReceiver(replies, filter, Context.RECEIVER_EXPORTED)
         } else {
             @Suppress("UnspecifiedRegisterReceiverFlag")
-            context.registerReceiver(receiver, filter)
+            context.registerReceiver(replies, filter)
         }
 
         return try {
             context.sendBroadcast(intentTo(ACTION_START).putExtra(EXTRA_UUID, TIMER_UUID))
-            Thread.sleep(APP_LAUNCH_MS)
+            if (!awaitWatchapp(context, replies)) return TimerResult.NoAcknowledgement
 
+            val transaction = nextTransaction()
+            replies.expectTimer(transaction)
             context.sendBroadcast(
-                intentTo(ACTION_SEND)
-                    .putExtra(EXTRA_UUID, TIMER_UUID)
-                    .putExtra(EXTRA_TRANSACTION_ID, transaction)
-                    .putExtra(EXTRA_MSG_DATA, int32Payload(KEY_START_TIMER, seconds.toInt())),
+                message(transaction, int32Payload(KEY_START_TIMER, seconds.toInt())),
             )
 
             when {
-                !replied.await(ACK_TIMEOUT_MS, TimeUnit.MILLISECONDS) -> {
+                !replies.timerReplied.await(ACK_TIMEOUT_MS, TimeUnit.MILLISECONDS) -> {
                     Log.w(TAG, "set_watch_timer $seconds s: no reply to transaction $transaction")
                     TimerResult.NoAcknowledgement
                 }
-                acknowledged.get() -> {
+                replies.timerAcknowledged.get() -> {
                     Log.i(TAG, "set_watch_timer $seconds s: acknowledged")
                     TimerResult.Confirmed
                 }
@@ -146,9 +149,87 @@ object Watch {
                 }
             }
         } finally {
-            context.unregisterReceiver(receiver)
+            context.unregisterReceiver(replies)
         }
     }
+
+    /**
+     * Waits for the timer watchapp to be running, by asking it until it answers.
+     *
+     * An acknowledgement is the only evidence available that the app is up, and
+     * it is good evidence: CoreApp forwards a message solely to a running
+     * watchapp, and the acknowledgement comes back from that app's own
+     * AppMessage layer. What it does not prove is that the message meant
+     * anything — which is the point here, because [KEY_PING] means nothing at
+     * all, so this can be repeated as often as needed with no effect on the
+     * watch.
+     *
+     * Returns false if the app never answers, or if the watch drops off the
+     * link while waiting; either way nothing has been asked of the watch yet.
+     */
+    private fun awaitWatchapp(context: Context, replies: Replies): Boolean {
+        val deadline = SystemClock.elapsedRealtime() + APP_LAUNCH_TIMEOUT_MS
+        while (true) {
+            val transaction = nextTransaction()
+            replies.expectPing(transaction)
+            context.sendBroadcast(message(transaction, int32Payload(KEY_PING, 0)))
+
+            if (replies.watchappUp.await(PING_INTERVAL_MS, TimeUnit.MILLISECONDS)) return true
+            if (!connected(context)) {
+                Log.w(TAG, "The watch went away while waiting for the timer app to come up")
+                return false
+            }
+            if (SystemClock.elapsedRealtime() >= deadline) {
+                Log.w(TAG, "The timer app did not come up within $APP_LAUNCH_TIMEOUT_MS ms")
+                return false
+            }
+        }
+    }
+
+    /**
+     * CoreApp's replies for one [setTimer] call, matched back to what was sent
+     * by the transaction id it echoes.
+     *
+     * Pings are pooled rather than tracked one by one: a late acknowledgement of
+     * an earlier ping proves exactly what a prompt one does, so a round trip
+     * slower than [PING_INTERVAL_MS] costs a few spare pings instead of the
+     * whole wait.
+     */
+    private class Replies : BroadcastReceiver() {
+
+        private val pings = Collections.synchronizedSet(mutableSetOf<Int>())
+        val watchappUp = CountDownLatch(1)
+
+        @Volatile private var timerTransaction = -1
+        val timerReplied = CountDownLatch(1)
+        val timerAcknowledged = AtomicBoolean(false)
+
+        fun expectPing(transaction: Int) = pings.add(transaction)
+
+        fun expectTimer(transaction: Int) {
+            timerTransaction = transaction
+        }
+
+        override fun onReceive(context: Context, intent: Intent) {
+            val transaction = intent.getIntExtra(EXTRA_TRANSACTION_ID, -1)
+            if (transaction < 0) return
+            val acknowledged = intent.action == ACTION_RECEIVE_ACK
+            when {
+                transaction == timerTransaction -> {
+                    timerAcknowledged.set(acknowledged)
+                    timerReplied.countDown()
+                }
+                acknowledged && pings.contains(transaction) -> watchappUp.countDown()
+            }
+        }
+    }
+
+    private fun nextTransaction(): Int = transactions.getAndIncrement() and 0xff
+
+    private fun message(transaction: Int, payload: String): Intent = intentTo(ACTION_SEND)
+        .putExtra(EXTRA_UUID, TIMER_UUID)
+        .putExtra(EXTRA_TRANSACTION_ID, transaction)
+        .putExtra(EXTRA_MSG_DATA, payload)
 
     /** The wire form PebbleKit Classic expects: one tuple, as a 4-byte signed int. */
     private fun int32Payload(key: Int, value: Int): String = JSONArray().put(
