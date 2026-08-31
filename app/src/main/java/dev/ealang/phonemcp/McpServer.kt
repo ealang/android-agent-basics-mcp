@@ -464,11 +464,11 @@ class McpServer(
                                 .put(
                                     "description",
                                     "Who to talk to: a conversation name, or enough of " +
-                                        "one to be unambiguous. voice_status lists them.",
+                                        "one to be unambiguous. voice_status lists them. " +
+                                        "Omit it to resume the most recent conversation.",
                                 ),
                         ),
-                    )
-                    .put("required", JSONArray().put("conversation")),
+                    ),
             )
 
         val stopVoice = JSONObject()
@@ -660,19 +660,18 @@ class McpServer(
         }
 
         "start_voice_session" -> {
-            val conversation = args.optString("conversation").trim()
-            when {
-                conversation.isBlank() ->
-                    "FAILED: say who to talk to." to true
-                else -> blocked(Preflight.voice(context))
-                    ?: blocked(Preflight.voiceConversation(context, conversation))
-                    ?: when (val r = Voice.start(context, conversation)) {
-                        is Voice.Result.Accepted ->
-                            "The voice session with ${r.conversation ?: conversation} is " +
-                                "open on the phone." to false
-                        else -> voiceFailure(r)
-                    }
-            }
+            // Absent means "resume the most recent conversation" — the gateway
+            // reads a missing extra that way, so the blank is passed through as
+            // null rather than refused.
+            val conversation = args.optString("conversation").trim().ifBlank { null }
+            blocked(Preflight.voice(context))
+                ?: conversation?.let { blocked(Preflight.voiceConversation(context, it)) }
+                ?: when (val r = Voice.start(context, conversation)) {
+                    is Voice.Result.Accepted ->
+                        "The voice session with ${r.conversation ?: "the most recent " +
+                            "conversation"} is open on the phone." to false
+                    else -> voiceFailure(r)
+                }
         }
 
         "stop_voice_session" -> when (val r = Voice.stop(context)) {

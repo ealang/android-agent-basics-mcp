@@ -74,20 +74,26 @@ object Voice {
     /**
      * Open the gateway on [conversation] — a name, an id, or a unique
      * substring, resolved on their side against what the user actually says.
+     * Null resumes the conversation the last session was for; the gateway
+     * reads an absent extra as "most recently played".
      *
      * The overlay grant and the conversation name are checked by [Preflight]
      * before this is called. Everything past that point is theirs.
      */
-    fun start(context: Context, conversation: String): Result {
+    fun start(context: Context, conversation: String?): Result {
         val locked = context.getSystemService(KeyguardManager::class.java)?.isKeyguardLocked == true
         return try {
             context.startActivity(
                 Intent()
                     .setClassName(PACKAGE, START_ACTIVITY)
-                    .putExtra(EXTRA_CONVERSATION, conversation)
+                    .apply { conversation?.let { putExtra(EXTRA_CONVERSATION, it) } }
                     .addFlags(launchFlags(locked)),
             )
-            Log.i(TAG, "Voice gateway: launched a session for \"$conversation\" (locked=$locked)")
+            Log.i(
+                TAG,
+                "Voice gateway: launched a session for " +
+                    "${conversation?.let { "\"$it\"" } ?: "the last conversation"} (locked=$locked)",
+            )
             Result.Accepted(conversation)
         } catch (e: Exception) {
             // The component is missing or blocked — the app is not there in
