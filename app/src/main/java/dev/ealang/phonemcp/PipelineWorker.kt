@@ -141,7 +141,17 @@ class PipelineWorker(
 
         val recordedAt = item.meta.recordedAtMs.takeIf { it > 0 } ?: item.meta.receivedAtMs
 
-        return when (WebhookConfig.destinationFor(item.meta.trigger)) {
+        val destination = WebhookConfig.destinationFor(item.meta.trigger)
+        // Where the text came from and where it is going — the log line that
+        // answers "why does this note say what it says".
+        val source = when {
+            item.transcript() != null -> "OpenAI transcript"
+            item.meta.pebbleTranscript != null -> "Pebble transcript"
+            else -> "?"
+        }
+        log.record(item.name, "delivering", "$source, ${text.length} chars → ${destination.name.lowercase()}")
+
+        return when (destination) {
             Destination.NOTE -> noteWriter.write(text, recordedAt)
             Destination.TELEGRAM -> telegramSender.send(item, text)
         }

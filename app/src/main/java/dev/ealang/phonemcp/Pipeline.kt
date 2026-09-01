@@ -63,8 +63,8 @@ data class Meta(
             trigger = runCatching { Trigger.valueOf(json.getString("trigger")) }
                 .getOrDefault(Trigger.UNKNOWN),
             recordedAtMs = json.optLong("recorded_at_ms"),
-            client = json.optString("client").ifBlank { null },
-            pebbleTranscript = json.optString("pebble_transcript").ifBlank { null },
+            client = json.stringOrNull("client"),
+            pebbleTranscript = json.stringOrNull("pebble_transcript"),
             receivedAtMs = json.optLong("received_at_ms"),
         )
     }
@@ -117,3 +117,14 @@ object WebhookConfig {
     /** Reject request bodies past this; the watch sends ~100 KB. */
     const val MAX_BODY_BYTES = 25L * 1024 * 1024
 }
+
+/**
+ * Read a string field that may be an explicit JSON null. Android's org.json
+ * differs from the desktop library here: `optString` on `JSONObject.NULL`
+ * returns the *string* "null" on the device (desktop returns ""), which is
+ * how audio-only recordings briefly produced notes whose whole body was the
+ * word "null" — the round-tripped null transcript read back as real text.
+ * `isNull` first is the only read that behaves the same on both.
+ */
+internal fun JSONObject.stringOrNull(name: String): String? =
+    if (isNull(name)) null else optString(name).ifBlank { null }

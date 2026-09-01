@@ -178,7 +178,12 @@ class McpServer(
 
         val meta = Meta(
             trigger = Trigger.fromHeader(session.headers["x-index-trigger"]),
-            recordedAtMs = session.parameters["recordedAt"]?.firstOrNull()?.toLongOrNull() ?: 0,
+            // CoreApp sends an ISO-8601 instant ("2026-08-31T22:14:03Z");
+            // epoch milliseconds are accepted too for hand-rolled senders.
+            recordedAtMs = session.parameters["recordedAt"]?.firstOrNull()?.trim()?.let { raw ->
+                raw.toLongOrNull()
+                    ?: runCatching { java.time.Instant.parse(raw).toEpochMilli() }.getOrNull()
+            } ?: 0,
             client = session.parameters["client"]?.firstOrNull(),
             pebbleTranscript = transcription?.ifBlank { null },
             receivedAtMs = System.currentTimeMillis(),

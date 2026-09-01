@@ -39,6 +39,12 @@ class PipelineLog(root: File) {
         }
     }
 
+    /** Both generations gone; the next record starts a fresh file. */
+    fun clear() = synchronized(this) {
+        file.delete()
+        File(file.parentFile, file.name + ".1").delete()
+    }
+
     /** The most recent [limit] lines, newest first, rendered for the UI. */
     fun tail(limit: Int): List<String> = synchronized(this) {
         try {
@@ -46,8 +52,8 @@ class PipelineLog(root: File) {
             file.readLines().takeLast(limit).asReversed().map { line ->
                 runCatching {
                     val json = JSONObject(line)
-                    val item = json.optString("item").ifBlank { null }
-                    val detail = json.optString("detail").ifBlank { null }
+                    val item = json.stringOrNull("item")
+                    val detail = json.stringOrNull("detail")
                     buildString {
                         append(json.optString("ts"))
                         append("  ")

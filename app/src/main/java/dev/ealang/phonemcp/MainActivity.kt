@@ -176,7 +176,11 @@ class MainActivity : Activity() {
             Button(this).apply {
                 text = "View pipeline log"
                 setOnClickListener {
-                    showLog("Pipeline log", pipelineLog.tail(LOG_DIALOG_LINES))
+                    showLog(
+                        "Pipeline log",
+                        pipelineLog.tail(LOG_DIALOG_LINES),
+                        onClear = { pipelineLog.clear() },
+                    )
                 }
             },
         )
@@ -368,7 +372,7 @@ class MainActivity : Activity() {
     }
 
     /** The full ring buffer in a dialog of its own, so it can scroll freely. */
-    private fun showLog(title: String, lines: List<String>) {
+    private fun showLog(title: String, lines: List<String>, onClear: (() -> Unit)? = null) {
         val content = TextView(this).apply {
             textSize = 12f
             typeface = android.graphics.Typeface.MONOSPACE
@@ -376,11 +380,17 @@ class MainActivity : Activity() {
             setPadding(32, 16, 32, 16)
             text = if (lines.isEmpty()) "(nothing yet)" else lines.joinToString("\n")
         }
-        android.app.AlertDialog.Builder(this)
+        val dialog = android.app.AlertDialog.Builder(this)
             .setTitle(title)
             .setView(ScrollView(this).apply { addView(content) })
             .setPositiveButton("Close", null)
-            .show()
+        onClear?.let { clear ->
+            dialog.setNegativeButton("Clear") { _, _ ->
+                clear()
+                toast("Log cleared")
+            }
+        }
+        dialog.show()
     }
 
     private fun refresh() {
