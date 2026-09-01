@@ -15,6 +15,7 @@ class PipelineWorker(
     private val store: RecordingStore,
     private val log: PipelineLog,
     private val noteWriter: NoteWriter,
+    private val transcriber: Transcriber,
     /** Stage 4 replaces the stub; the contract is fixed now. */
     private val telegramSender: TelegramSender,
     private val onDrainFinished: (DrainReport) -> Unit,
@@ -24,6 +25,12 @@ class PipelineWorker(
     interface TelegramSender {
         /** Hand one item's text to Telegram. Success means *handed off*, not delivered. */
         fun send(item: RecordingStore.Item, text: String): StepResult
+    }
+
+    /** The transcription step, behind an interface so tests need no network. */
+    interface Transcriber {
+        /** Blocking. May take minutes; the worker's thread is for exactly this. */
+        fun transcribe(audio: java.io.File): TranscribeResult
     }
 
     private val thread = HandlerThread("webhook-pipeline")
@@ -108,12 +115,23 @@ class PipelineWorker(
      * redirects queued items (§3).
      */
     private fun process(item: RecordingStore.Item): StepResult {
-        // Stage 2 inserts the transcription step here. Until then the text
-        // is Pebble's transcript or nothing.
-        val text = item.transcript() ?: item.meta.pebbleTranscript
-            ?: return StepResult.Transient(
-                "audio-only recording; transcription arrives in stage 2",
-            )
+        // Text, in order of preference: already transcribed (the marker file
+        // makes this step idempotent), Pebble's own transcript, or OpenAI on
+        // the audio. Only then is the destination consulted.
+        val text = item.transcript() ?: item.meta.pebbleTranscript ?: run {
+            val audio = item.audio()
+                ?: return StepResult.Permanent("no audio and no transcript")
+            when (val result = transcriber.transcribe(audio)) {
+                is TranscribeResult.Text -> {
+                    // Written before use: a crash between transcription and
+                    // delivery must not buy the same audio twice.
+                    store.writeTranscript(item, result.text)
+                    log.record(item.name, "transcribed", "${result.text.length} chars")
+                    result.text
+                }
+                is TranscribeResult.Failed -> return result.result
+            }
+        }
 
         if (text.isBlank()) {
             // skip_empty: a pocket press or silence. Completing it quietly

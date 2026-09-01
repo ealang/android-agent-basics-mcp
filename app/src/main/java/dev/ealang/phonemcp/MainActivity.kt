@@ -45,6 +45,7 @@ class MainActivity : Activity() {
     private lateinit var webhookStatus: TextView
     private lateinit var failedContainer: LinearLayout
     private lateinit var pipelineLog: PipelineLog
+    private lateinit var openAiField: EditText
 
     /** Keeps the request log current while the screen is open, and only then. */
     private val ticker = object : Runnable {
@@ -173,6 +174,27 @@ class MainActivity : Activity() {
                 }
             },
         )
+        root.addView(label("OpenAI key for transcription (stored encrypted)"))
+        openAiField = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            hint = "sk-…"
+        }
+        root.addView(openAiField)
+        root.addView(
+            Button(this).apply {
+                text = "Save key"
+                setOnClickListener {
+                    config.openAiKey = openAiField.text.toString()
+                    openAiField.setText("")
+                    // Recordings queued behind a missing key are waiting on
+                    // exactly this; let the worker try again now.
+                    McpService.wakePipeline()
+                    toast(if (config.openAiKey != null) "Key saved" else "Key cleared")
+                    refresh()
+                }
+            },
+        )
+
         root.addView(
             Button(this).apply {
                 text = "Allow all files access"
@@ -428,7 +450,14 @@ class MainActivity : Activity() {
             "All files access is not granted, so note recordings will fail. " +
                 "Grant it below."
         }
-        webhookStatus.text = "Queued: $pending   Failed: ${failed.size}\n\n$notes"
+        val transcription = if (config.openAiKey != null) {
+            "OpenAI key is set; audio-only recordings will be transcribed."
+        } else {
+            "No OpenAI key, so audio-only recordings will wait in the queue " +
+                "until one is saved below."
+        }
+        webhookStatus.text =
+            "Queued: $pending   Failed: ${failed.size}\n\n$notes\n\n$transcription"
 
         failedContainer.removeAllViews()
         for (item in failed) {

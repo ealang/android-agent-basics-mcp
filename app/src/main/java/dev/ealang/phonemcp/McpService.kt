@@ -91,6 +91,11 @@ class McpService : Service() {
         @Volatile
         private var activeStore: RecordingStore? = null
 
+        /** Nudge the worker — e.g. after the OpenAI key is pasted. */
+        fun wakePipeline() {
+            activeWorker?.wake()
+        }
+
         /** Queue depth and failed items for the UI, or null when stopped. */
         fun pipelineSnapshot(): Pair<Int, List<RecordingStore.Item>>? {
             val store = activeStore ?: return null
@@ -182,6 +187,9 @@ class McpService : Service() {
             store = store,
             log = log,
             noteWriter = writer,
+            // The key is re-read per call, so pasting it in the activity
+            // un-blocks a waiting queue at the next wake, no restart needed.
+            transcriber = OpenAiTranscriber { Config(this).openAiKey },
             telegramSender = StubTelegramSender(),
             onDrainFinished = { report -> main.post { onDrainFinished(report) } },
         ).also {

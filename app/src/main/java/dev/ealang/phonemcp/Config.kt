@@ -14,6 +14,8 @@ class Config(context: Context) {
     private val prefs = context.applicationContext
         .getSharedPreferences("phone-mcp", Context.MODE_PRIVATE)
 
+    private val secrets = SecretStore(context)
+
     var port: Int
         get() = prefs.getInt(KEY_PORT, DEFAULT_PORT)
         set(value) = prefs.edit().putInt(KEY_PORT, value).apply()
@@ -32,12 +34,24 @@ class Config(context: Context) {
 
     var token: String
         get() {
-            prefs.getString(KEY_TOKEN, null)?.let { return it }
+            secrets.get(KEY_TOKEN)?.let { return it }
+            // Installed before the SecretStore existed: lift the plaintext
+            // token into it, once, so the client keeps working unchanged.
+            prefs.getString(KEY_TOKEN, null)?.let {
+                secrets.put(KEY_TOKEN, it)
+                prefs.edit().remove(KEY_TOKEN).apply()
+                return it
+            }
             val fresh = generateToken()
-            prefs.edit().putString(KEY_TOKEN, fresh).apply()
+            secrets.put(KEY_TOKEN, fresh)
             return fresh
         }
-        set(value) = prefs.edit().putString(KEY_TOKEN, value).apply()
+        set(value) = secrets.put(KEY_TOKEN, value)
+
+    /** The OpenAI API key for transcription, or null while unset. */
+    var openAiKey: String?
+        get() = secrets.get(KEY_OPENAI)
+        set(value) = secrets.put(KEY_OPENAI, value?.trim()?.ifBlank { null })
 
     /** Whether the user wants the server up — also what the boot receiver checks. */
     var enabled: Boolean
@@ -71,5 +85,6 @@ class Config(context: Context) {
         private const val KEY_TOKEN = "token"
         private const val KEY_ENABLED = "enabled"
         private const val KEY_START_FAILURE = "last_start_failure"
+        private const val KEY_OPENAI = "openai_key"
     }
 }
