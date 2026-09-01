@@ -63,6 +63,12 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         config = Config(this)
 
+        // First contact with the Keystore can take seconds (it generates the
+        // wrapping key on the very first launch), so it goes to a worker
+        // thread now; until then refresh() shows placeholders for the secrets
+        // and the callback repaints them.
+        SecretStore.warm(this) { refresh() }
+
         // A start that failed took the event log down with the process, so
         // replay the surviving reason into it — otherwise the only symptom is
         // a server that is silently not running.
@@ -380,7 +386,10 @@ class MainActivity : Activity() {
     private fun refresh() {
         val running = McpService.running
         toggle.text = if (running) "Stop server" else "Start server"
-        tokenView.text = config.token
+        // Secrets are only read once the Keystore warm-up is done — a read
+        // before that would do the slow first contact right here on the UI
+        // thread, which is the lock-up this dance exists to prevent.
+        tokenView.text = if (SecretStore.ready) config.token else "unlocking…"
 
         val overlay = if (Clock.canStartFromBackground(this)) {
             "Can open other apps: timers, podcasts, voice sessions."
@@ -450,7 +459,9 @@ class MainActivity : Activity() {
             "All files access is not granted, so note recordings will fail. " +
                 "Grant it below."
         }
-        val transcription = if (config.openAiKey != null) {
+        val transcription = if (!SecretStore.ready) {
+            "Checking for an OpenAI key…"
+        } else if (config.openAiKey != null) {
             "OpenAI key is set; audio-only recordings will be transcribed."
         } else {
             "No OpenAI key, so audio-only recordings will wait in the queue " +

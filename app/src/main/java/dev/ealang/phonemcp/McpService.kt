@@ -256,7 +256,12 @@ class McpService : Service() {
         Config(this).lastStartFailure = null
         retryDelayMs = INITIAL_RETRY_MS
         startPipeline()
-        attemptStart()
+        // The bind needs the bearer token, and reading a secret before the
+        // Keystore is warm does its slow first contact right here on the main
+        // thread. warm() runs that on a worker and calls back (immediately,
+        // once it has happened once); attemptStart is idempotent, so a repeat
+        // start queuing another callback is harmless.
+        SecretStore.warm(this) { attemptStart() }
 
         // START_STICKY: if Android reclaims us under memory pressure, come back.
         return START_STICKY

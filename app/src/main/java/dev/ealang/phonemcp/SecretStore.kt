@@ -1,11 +1,15 @@
 package dev.ealang.phonemcp
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import android.util.Log
 import java.security.KeyStore
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -35,7 +39,38 @@ class SecretStore(context: Context) {
     private val prefs = context.applicationContext
         .getSharedPreferences("phone-mcp-secrets", Context.MODE_PRIVATE)
 
+    /**
+     * Cache-first. After [warm] has run (or the first read of a name), this
+     * never touches the Keystore again for the process's lifetime, so it is
+     * safe to call from the UI thread's refresh path.
+     */
     fun get(name: String): String? {
+        cache[name]?.let { return it.takeIf { v -> v !== NONE } as String? }
+        return load(name).also { cache[name] = it ?: NONE }
+    }
+
+    /**
+     * Returns immediately: the cache is updated now (a get on any thread
+     * sees the new value), the Keystore work happens on the store's own
+     * thread. What the button press cost is what this exists to fix — the
+     * first-ever write also *generates* the wrapping key, and the Keystore
+     * daemon can take seconds over that; on the UI thread that read as the
+     * app locking up.
+     */
+    fun put(name: String, value: String?) {
+        cache[name] = value ?: NONE
+        executor.execute {
+            try {
+                persist(name, value)
+            } catch (e: Exception) {
+                // The value is still live in the cache, so the app keeps
+                // working; it just won't survive the process.
+                Log.e(TAG, "Could not persist '$name'", e)
+            }
+        }
+    }
+
+    private fun load(name: String): String? {
         val stored = prefs.getString(name, null) ?: return null
         return try {
             val blob = Base64.decode(stored, Base64.NO_WRAP)
@@ -53,7 +88,7 @@ class SecretStore(context: Context) {
         }
     }
 
-    fun put(name: String, value: String?) {
+    private fun persist(name: String, value: String?) {
         if (value == null) {
             prefs.edit().remove(name).apply()
             return
@@ -87,6 +122,47 @@ class SecretStore(context: Context) {
     }
 
     companion object {
+        /**
+         * One cache and one worker for the process, because Config makes a
+         * fresh SecretStore per use — per-instance state would cache nothing.
+         * The NONE sentinel is how "known to be unset" is told apart from
+         * "never looked".
+         */
+        private val cache = ConcurrentHashMap<String, Any>()
+        private val NONE = Any()
+        private val executor = Executors.newSingleThreadExecutor { r ->
+            Thread(r, "secret-store")
+        }
+
+        @Volatile
+        var ready: Boolean = false
+            private set
+
+        /**
+         * Force the expensive first contact with the Keystore — daemon
+         * round-trip, and on the very first launch the key generation — off
+         * the UI thread. Call it early (activity and service onCreate);
+         * [onReady], posted to the main thread, is the moment reads are
+         * jank-free.
+         */
+        fun warm(context: Context, onReady: () -> Unit = {}) {
+            if (ready) {
+                onReady()
+                return
+            }
+            val main = Handler(Looper.getMainLooper())
+            val store = SecretStore(context)
+            executor.execute {
+                try {
+                    store.key()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Keystore warm-up failed", e)
+                }
+                ready = true
+                main.post(onReady)
+            }
+        }
+
         private const val TAG = "phone-mcp"
         private const val KEYSTORE = "AndroidKeyStore"
         private const val ALIAS = "phone-mcp-secrets"
