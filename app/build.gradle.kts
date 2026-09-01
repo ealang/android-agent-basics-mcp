@@ -23,6 +23,10 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1"
+
+        // TDLib ships as a prebuilt arm64 .so (lifted from agent-voice-gateway);
+        // limiting the ABI set keeps the build from producing splits that lack it.
+        ndk { abiFilters += "arm64-v8a" }
     }
 
     localProps["DEBUG_KEYSTORE"]?.toString()?.let { path ->
@@ -59,8 +63,12 @@ android {
 }
 
 dependencies {
-    // The only third-party piece. org.json is in the Android framework already.
+    // org.json is in the Android framework already.
     implementation("org.nanohttpd:nanohttpd:2.3.1")
+    // TdApi.java (generated, lifted from agent-voice-gateway) annotates its
+    // constants with androidx IntDef/Nullable; this is compile-time metadata
+    // only, no runtime library comes with it.
+    implementation("androidx.annotation:annotation:1.8.2")
 
     // Unit tests only cover logic that needs no device — the time parser being
     // the case where a quiet mistake produces a timer at the wrong hour rather
