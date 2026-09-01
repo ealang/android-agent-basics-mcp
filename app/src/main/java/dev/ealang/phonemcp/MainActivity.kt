@@ -25,6 +25,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import dev.ealang.phonemcp.telegram.TelegramEngine
 
 /**
  * One screen: is it running, where, and with what token.
@@ -46,6 +47,11 @@ class MainActivity : Activity() {
     private lateinit var failedContainer: LinearLayout
     private lateinit var pipelineLog: PipelineLog
     private lateinit var openAiField: EditText
+    private lateinit var telegramStatus: TextView
+    private lateinit var tgApiIdField: EditText
+    private lateinit var tgApiHashField: EditText
+    private lateinit var tgLoginField: EditText
+    private lateinit var tgChatField: EditText
 
     /** Keeps the request log current while the screen is open, and only then. */
     private val ticker = object : Runnable {
@@ -67,7 +73,12 @@ class MainActivity : Activity() {
         // wrapping key on the very first launch), so it goes to a worker
         // thread now; until then refresh() shows placeholders for the secrets
         // and the callback repaints them.
-        SecretStore.warm(this) { refresh() }
+        SecretStore.warm(this) {
+            // The engine reads the db encryption key from the SecretStore, so
+            // it can only come up after the warm — same reason refresh() waits.
+            TelegramEngine.ensureStarted(this)
+            refresh()
+        }
 
         // A start that failed took the event log down with the process, so
         // replay the surviving reason into it — otherwise the only symptom is
@@ -205,6 +216,100 @@ class MainActivity : Activity() {
             },
         )
 
+        root.addView(label("Telegram"))
+        telegramStatus = TextView(this).apply { textSize = 13f }
+        root.addView(telegramStatus)
+
+        root.addView(label("API ID and hash, from my.telegram.org"))
+        tgApiIdField = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER
+            hint = "API ID"
+            setText(config.telegramApiId?.toString() ?: "")
+        }
+        root.addView(tgApiIdField)
+        tgApiHashField = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_TEXT
+            hint = "API hash"
+            setText(config.telegramApiHash ?: "")
+        }
+        root.addView(tgApiHashField)
+        root.addView(
+            Button(this).apply {
+                text = "Save Telegram credentials"
+                setOnClickListener {
+                    val id = tgApiIdField.text.toString().trim().toIntOrNull()
+                    if (id == null || id <= 0) {
+                        toast("API ID must be a positive number")
+                        return@setOnClickListener
+                    }
+                    config.telegramApiId = id
+                    config.telegramApiHash = tgApiHashField.text.toString()
+                    if (config.telegramApiHash == null) {
+                        toast("API hash is empty")
+                        return@setOnClickListener
+                    }
+                    // Takes effect now on first save; after that TDLib holds
+                    // its parameters until the process restarts.
+                    TelegramEngine.ensureStarted(this@MainActivity)
+                    toast("Saved")
+                    refresh()
+                }
+            },
+        )
+
+        root.addView(label("Login (the field follows the step shown above)"))
+        tgLoginField = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_TEXT
+        }
+        root.addView(tgLoginField)
+        root.addView(
+            Button(this).apply {
+                text = "Submit"
+                setOnClickListener {
+                    TelegramEngine.submitAuthInput(tgLoginField.text.toString())
+                    tgLoginField.setText("")
+                }
+            },
+        )
+
+        root.addView(label("Destination chat (numeric id)"))
+        tgChatField = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_SIGNED
+            hint = "e.g. -1001234567890"
+            setText(config.telegramChatId?.toString() ?: "")
+        }
+        root.addView(tgChatField)
+        val chatButtons = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        chatButtons.addView(
+            Button(this).apply {
+                text = "Save chat"
+                setOnClickListener {
+                    val id = tgChatField.text.toString().trim().toLongOrNull()
+                    if (id == null || id == 0L) {
+                        toast("Chat id must be a non-zero number")
+                        return@setOnClickListener
+                    }
+                    config.telegramChatId = id
+                    toast("Saved")
+                }
+            },
+        )
+        chatButtons.addView(
+            Button(this).apply {
+                text = "Test"
+                setOnClickListener {
+                    val id = tgChatField.text.toString().trim().toLongOrNull()
+                    if (id == null || id == 0L) {
+                        toast("Enter a chat id first")
+                        return@setOnClickListener
+                    }
+                    toast("Checking…")
+                    TelegramEngine.checkChat(id) { toast(it) }
+                }
+            },
+        )
+        root.addView(chatButtons)
+
         root.addView(
             Button(this).apply {
                 text = "Allow all files access"
@@ -307,6 +412,7 @@ class MainActivity : Activity() {
         } else {
             registerReceiver(stateChanged, filter)
         }
+        TelegramEngine.onChanged = { refresh() }
         refresh()
         ticker.run()
 
@@ -319,6 +425,7 @@ class MainActivity : Activity() {
     }
 
     override fun onStop() {
+        TelegramEngine.onChanged = {}
         requestsView.removeCallbacks(ticker)
         unregisterReceiver(stateChanged)
         super.onStop()
@@ -432,6 +539,7 @@ class MainActivity : Activity() {
         overlayStatus.text = "$overlay\n\n$location\n\n$media"
 
         refreshWebhook()
+        refreshTelegram()
 
         status.text = if (running) {
             val bind = config.bindAddress
@@ -448,6 +556,23 @@ class MainActivity : Activity() {
             }
         } else {
             "Stopped."
+        }
+    }
+
+    /** Status line from the engine, and a login hint matching its stage. */
+    private fun refreshTelegram() {
+        telegramStatus.text = TelegramEngine.statusLine()
+        tgLoginField.hint = when (TelegramEngine.stage) {
+            TelegramEngine.Stage.PHONE -> "+1…"
+            TelegramEngine.Stage.CODE -> "login code"
+            TelegramEngine.Stage.PASSWORD -> "two-step password"
+            else -> "(no input needed right now)"
+        }
+        // The code and password should not echo; the phone number is fine.
+        tgLoginField.inputType = when (TelegramEngine.stage) {
+            TelegramEngine.Stage.PASSWORD ->
+                InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            else -> InputType.TYPE_CLASS_TEXT
         }
     }
 

@@ -261,7 +261,14 @@ class McpService : Service() {
         // thread. warm() runs that on a worker and calls back (immediately,
         // once it has happened once); attemptStart is idempotent, so a repeat
         // start queuing another callback is harmless.
-        SecretStore.warm(this) { attemptStart() }
+        SecretStore.warm(this) {
+            // Telegram rides the same warm-up: its db encryption key is in the
+            // SecretStore too. Starting it here (not only in the activity)
+            // keeps the connection alive when the service came up on its own —
+            // after a reboot, with no screen ever opened.
+            dev.ealang.phonemcp.telegram.TelegramEngine.ensureStarted(this)
+            attemptStart()
+        }
 
         // START_STICKY: if Android reclaims us under memory pressure, come back.
         return START_STICKY

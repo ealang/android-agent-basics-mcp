@@ -53,6 +53,46 @@ class Config(context: Context) {
         get() = secrets.get(KEY_OPENAI)
         set(value) = secrets.put(KEY_OPENAI, value?.trim()?.ifBlank { null })
 
+    /**
+     * Telegram application credentials, from my.telegram.org. These identify
+     * the *application*, not the user — every install of a distributed
+     * Telegram client ships the same pair compiled into the binary, and the
+     * official clients' values are public. So: plain prefs, not SecretStore.
+     * Editable for now so a dev pair can be pasted in; a distributed build
+     * would bake a default in and hide the fields.
+     */
+    var telegramApiId: Int?
+        get() = prefs.getInt(KEY_TG_API_ID, 0).takeIf { it > 0 }
+        set(value) = prefs.edit().putInt(KEY_TG_API_ID, value ?: 0).apply()
+
+    var telegramApiHash: String?
+        get() = prefs.getString(KEY_TG_API_HASH, null)?.ifBlank { null }
+        set(value) = prefs.edit().putString(KEY_TG_API_HASH, value?.trim() ?: "").apply()
+
+    /** The destination chat, entered manually as a numeric id (stage-4 scope). */
+    var telegramChatId: Long?
+        get() = prefs.getLong(KEY_TG_CHAT, 0L).takeIf { it != 0L }
+        set(value) = prefs.edit().putLong(KEY_TG_CHAT, value ?: 0L).apply()
+
+    /**
+     * TDLib's local-database encryption key, random per install. Unlike the
+     * api id this one *is* a secret — the database holds the account's
+     * session keys — hence SecretStore, for the same allowBackup reason as
+     * the bearer token.
+     */
+    val telegramDbKey: ByteArray
+        get() {
+            secrets.get(KEY_TG_DB_KEY)?.let {
+                return android.util.Base64.decode(it, android.util.Base64.NO_WRAP)
+            }
+            val fresh = ByteArray(32).also { SecureRandom().nextBytes(it) }
+            secrets.put(
+                KEY_TG_DB_KEY,
+                android.util.Base64.encodeToString(fresh, android.util.Base64.NO_WRAP),
+            )
+            return fresh
+        }
+
     /** Whether the user wants the server up — also what the boot receiver checks. */
     var enabled: Boolean
         get() = prefs.getBoolean(KEY_ENABLED, false)
@@ -86,5 +126,9 @@ class Config(context: Context) {
         private const val KEY_ENABLED = "enabled"
         private const val KEY_START_FAILURE = "last_start_failure"
         private const val KEY_OPENAI = "openai_key"
+        private const val KEY_TG_API_ID = "telegram_api_id"
+        private const val KEY_TG_API_HASH = "telegram_api_hash"
+        private const val KEY_TG_CHAT = "telegram_chat_id"
+        private const val KEY_TG_DB_KEY = "telegram_db_key"
     }
 }
