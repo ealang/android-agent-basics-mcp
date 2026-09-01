@@ -146,11 +146,16 @@ class SecretStore(context: Context) {
          * jank-free.
          */
         fun warm(context: Context, onReady: () -> Unit = {}) {
+            val main = Handler(Looper.getMainLooper())
             if (ready) {
-                onReady()
+                // Posted, never called inline: the callers invoke warm() at
+                // the top of onCreate with callbacks that touch views built
+                // further down. An already-warm store — the service warmed it
+                // when an update restarted the process — made that callback
+                // synchronous and crashed the activity on launch.
+                main.post(onReady)
                 return
             }
-            val main = Handler(Looper.getMainLooper())
             val store = SecretStore(context)
             executor.execute {
                 try {
