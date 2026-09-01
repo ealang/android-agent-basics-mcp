@@ -79,6 +79,48 @@ class McpService : Service() {
             context.startService(Intent(context, McpService::class.java).setAction(ACTION_STOP))
         }
 
+        /**
+         * The running service's pipeline, for MainActivity's Retry/Discard
+         * buttons. Set on the main thread by [startPipeline]/[stopPipeline];
+         * read from the UI, which is the same thread. Routing UI actions
+         * through the worker keeps `failed/` single-writer (§10).
+         */
+        @Volatile
+        private var activeWorker: PipelineWorker? = null
+
+        @Volatile
+        private var activeStore: RecordingStore? = null
+
+        /** Queue depth and failed items for the UI, or null when stopped. */
+        fun pipelineSnapshot(): Pair<Int, List<RecordingStore.Item>>? {
+            val store = activeStore ?: return null
+            return store.pending().size to store.failed()
+        }
+
+        fun retryFailed(context: Context, name: String) {
+            onPipeline(context) { store -> store.failed().find { it.name == name }?.let(store::retry) }
+        }
+
+        fun discardFailed(context: Context, name: String) {
+            onPipeline(context) { store -> store.failed().find { it.name == name }?.let(store::discard) }
+        }
+
+        /**
+         * Runs the action on the worker thread when the service is up, else
+         * directly on a fresh store — safe, because no worker means no other
+         * writer exists.
+         */
+        private fun onPipeline(context: Context, action: (RecordingStore) -> Unit) {
+            val worker = activeWorker
+            val store = activeStore
+            if (worker != null && store != null) {
+                worker.post { action(store) }
+                worker.wake()
+            } else {
+                action(RecordingStore(context.filesDir))
+            }
+        }
+
         /** The phone's address on the LAN/tailnet, or null if it isn't on a network. */
         fun localAddresses(): List<String> = try {
             NetworkInterface.getNetworkInterfaces().toList()
@@ -97,6 +139,88 @@ class McpService : Service() {
     private val main = Handler(Looper.getMainLooper())
     private val retry = Runnable { attemptStart() }
     private var retryDelayMs = INITIAL_RETRY_MS
+
+    // ------------------------- webhook pipeline -------------------------
+    // The service is the orchestrator (docs/webhook-pipeline.md §10): it
+    // builds the components and owns every edge between them; none of them
+    // holds a reference to another. All of this state is main-thread
+    // confined except where noted.
+
+    private var store: RecordingStore? = null
+    private var pipelineLog: PipelineLog? = null
+    private var worker: PipelineWorker? = null
+    private var gate: RetryGate? = null
+
+    /** What the notification says apart from failures, e.g. "Listening on …". */
+    private var baseText = "Starting…"
+
+    private val connectivity = object : android.net.ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: android.net.Network) {
+            // Connectivity is the real retry signal; the gate's timer is the
+            // fallback. Safe from this binder thread: wake() is thread-safe.
+            worker?.wake()
+        }
+    }
+
+    private fun startPipeline() {
+        if (worker != null) return
+
+        val store = RecordingStore(filesDir).also { store = it }
+        val log = PipelineLog(filesDir).also { pipelineLog = it }
+        gate = RetryGate(main) { worker?.wake() }
+
+        val writer = NoteWriter(
+            root = android.os.Environment.getExternalStorageDirectory(),
+            onWritten = { file ->
+                android.media.MediaScannerConnection.scanFile(
+                    this, arrayOf(file.absolutePath), null, null,
+                )
+            },
+        )
+
+        worker = PipelineWorker(
+            store = store,
+            log = log,
+            noteWriter = writer,
+            telegramSender = StubTelegramSender(),
+            onDrainFinished = { report -> main.post { onDrainFinished(report) } },
+        ).also {
+            it.start()
+            it.wake() // drain anything left from before the restart
+        }
+
+        getSystemService(android.net.ConnectivityManager::class.java)
+            .registerDefaultNetworkCallback(connectivity)
+
+        activeStore = store
+        activeWorker = worker
+    }
+
+    private fun onDrainFinished(report: DrainReport) {
+        if (report.completed > 0) gate?.reset()
+        if (report.blockedOn != null) gate?.arm()
+        // Success is silent; the notification only ever gains a failure
+        // notice, and re-rendering also clears one whose failed/ emptied.
+        notify(baseText)
+        sendBroadcast(Intent(ACTION_STATE_CHANGED).setPackage(packageName))
+    }
+
+    private fun stopPipeline() {
+        try {
+            getSystemService(android.net.ConnectivityManager::class.java)
+                .unregisterNetworkCallback(connectivity)
+        } catch (e: Exception) {
+            // Never registered; nothing to do.
+        }
+        gate?.cancel()
+        worker?.quit()
+        activeWorker = null
+        activeStore = null
+        worker = null
+        gate = null
+        store = null
+        pipelineLog = null
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -123,6 +247,7 @@ class McpService : Service() {
 
         Config(this).lastStartFailure = null
         retryDelayMs = INITIAL_RETRY_MS
+        startPipeline()
         attemptStart()
 
         // START_STICKY: if Android reclaims us under memory pressure, come back.
@@ -213,6 +338,15 @@ class McpService : Service() {
             config.port,
             config.token,
             onDied = ::onServerDied,
+            // Runs on NanoHTTPD's request thread. enqueue is thread-safe (it
+            // only ever creates), wake is thread-safe by design; a throw here
+            // becomes the 500 that makes the watch retry.
+            webhookEnqueue = { audio, meta ->
+                val item = store?.enqueue(audio, meta)
+                    ?: throw IllegalStateException("pipeline not started")
+                pipelineLog?.record(item.name, "received", meta.trigger.name)
+                worker?.wake()
+            },
         )
         try {
             // daemon=false: the socket should outlive the thread that made it.
@@ -221,7 +355,8 @@ class McpService : Service() {
             running = true
             retryDelayMs = INITIAL_RETRY_MS
             EventLog.record("listening on $listeningOn:${config.port}")
-            notify("Listening on $listeningOn:${config.port}")
+            baseText = "Listening on $listeningOn:${config.port}"
+            notify(baseText)
             Log.i(TAG, "Listening on $listeningOn port ${config.port}")
         } catch (e: Exception) {
             Log.w(TAG, "Could not bind $listeningOn port ${config.port}; will retry", e)
@@ -229,7 +364,8 @@ class McpService : Service() {
                 "bind $listeningOn:${config.port} failed " +
                     "(${e.message ?: e::class.java.simpleName}); retry in ${retryDelayMs / 1000}s",
             )
-            notify("Waiting to bind $listeningOn:${config.port}")
+            baseText = "Waiting to bind $listeningOn:${config.port}"
+            notify(baseText)
             main.postDelayed(retry, retryDelayMs)
             retryDelayMs = (retryDelayMs * 2).coerceAtMost(MAX_RETRY_MS)
         }
@@ -253,6 +389,7 @@ class McpService : Service() {
 
     override fun onDestroy() {
         main.removeCallbacks(retry)
+        stopPipeline()
         // Nothing would be left able to answer silence_phone, so a ring that
         // outlived the server would have to be waited out.
         Sound.stop()
@@ -266,8 +403,13 @@ class McpService : Service() {
     }
 
     private fun notify(text: String) {
+        // The one place a pipeline failure is announced (§7): a suffix on the
+        // notification the service must show anyway. Never a separate,
+        // buzzing notification.
+        val failed = store?.failed()?.size ?: 0
+        val full = if (failed > 0) "$text — $failed failed, open to review" else text
         getSystemService(NotificationManager::class.java)
-            .notify(NOTIFICATION_ID, notification(text))
+            .notify(NOTIFICATION_ID, notification(full))
     }
 
     private fun notification(text: String): Notification {

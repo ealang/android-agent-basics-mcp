@@ -50,6 +50,12 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+
+    testOptions {
+        // The queue classes call android.util.Log; let those calls no-op on
+        // the JVM instead of throwing "not mocked".
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 dependencies {
@@ -60,4 +66,7 @@ dependencies {
     // the case where a quiet mistake produces a timer at the wrong hour rather
     // than a visible failure.
     testImplementation("junit:junit:4.13.2")
+    // meta.json round-trips through org.json, whose android.jar entry is a
+    // stub on the JVM; the real library shadows it on the test classpath.
+    testImplementation("org.json:json:20240303")
 }

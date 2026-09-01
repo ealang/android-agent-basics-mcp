@@ -5,6 +5,7 @@ import android.util.Log
 import fi.iki.elonen.NanoHTTPD
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.time.ZonedDateTime
 
 /**
@@ -21,6 +22,13 @@ class McpServer(
     port: Int,
     private val token: String,
     onDied: () -> Unit,
+    /**
+     * Durably admit one webhook recording — the orchestrator's
+     * `store.enqueue` + `worker.wake()`, handed in as a lambda so the server
+     * knows nothing about the pipeline. Throwing means "could not queue",
+     * answered with a 500 so the watch retries. Null disables the route.
+     */
+    private val webhookEnqueue: ((audio: File?, meta: Meta) -> Unit)? = null,
     // A null hostname makes NanoHTTPD bind the wildcard address; anything else
     // binds that one address, which is how the server is kept off the LAN.
 ) : NanoHTTPD(bindAddress.ifBlank { null }, port) {
@@ -29,6 +37,7 @@ class McpServer(
         private const val TAG = "PhoneMcpServer"
         private const val FALLBACK_PROTOCOL = "2025-11-25"
         const val MCP_PATH = "/mcp"
+        const val WEBHOOK_PATH = "/webhook"
     }
 
     init {
@@ -62,13 +71,17 @@ class McpServer(
             return json(Response.Status.OK, JSONObject().put("ok", true).put("service", "phone-mcp"))
         }
 
-        if (uri != MCP_PATH) {
+        if (uri != MCP_PATH && !(uri == WEBHOOK_PATH && webhookEnqueue != null)) {
             return json(Response.Status.NOT_FOUND, JSONObject().put("error", "Not found: $uri"))
         }
 
         if (!authorized(session)) {
             Log.w(TAG, "Rejected an unauthorized request from ${session.remoteIpAddress}")
             return json(Response.Status.UNAUTHORIZED, JSONObject().put("error", "Unauthorized"))
+        }
+
+        if (uri == WEBHOOK_PATH) {
+            return webhook(session)
         }
 
         if (session.method != Method.POST) {
@@ -115,6 +128,72 @@ class McpServer(
             diff = diff or (x[i].toInt() xor y[i].toInt())
         }
         return diff == 0
+    }
+
+    /**
+     * The Pebble Index webhook — see `docs/webhook-pipeline.md` §2. The only
+     * job here is to get the recording onto flash and answer fast: 200 means
+     * "durably queued", never "delivered". Parsing failures are 400 (the
+     * watch's payload won't improve on retry); a queue failure is 500 (ours,
+     * and retrying may well fix it).
+     */
+    private fun webhook(session: IHTTPSession): Response {
+        detail.set("webhook ${session.headers["x-index-trigger"] ?: "no-trigger"}")
+
+        if (session.method != Method.POST) {
+            return json(
+                Response.Status.METHOD_NOT_ALLOWED,
+                JSONObject().put("error", "POST only"),
+            )
+        }
+
+        val length = session.headers["content-length"]?.toLongOrNull() ?: 0
+        if (length > WebhookConfig.MAX_BODY_BYTES) {
+            return json(
+                Response.Status.PAYLOAD_TOO_LARGE,
+                JSONObject().put("error", "body too large"),
+            )
+        }
+
+        // For multipart, parseBody spills file parts to NanoHTTPD temp files
+        // (deleted when this request ends — the enqueue must copy or rename)
+        // and leaves text fields in session.parameters.
+        val files = HashMap<String, String>()
+        try {
+            session.parseBody(files)
+        } catch (e: Exception) {
+            Log.w(TAG, "Unreadable webhook body", e)
+            return json(Response.Status.BAD_REQUEST, JSONObject().put("error", "unreadable body"))
+        }
+
+        val transcription = session.parameters["transcription"]?.firstOrNull()?.trim()
+        val audio = files["audio"]?.let { File(it) }?.takeIf { it.exists() && it.length() > 0 }
+
+        if (transcription.isNullOrBlank() && audio == null) {
+            return json(
+                Response.Status.BAD_REQUEST,
+                JSONObject().put("error", "neither transcription nor audio present"),
+            )
+        }
+
+        val meta = Meta(
+            trigger = Trigger.fromHeader(session.headers["x-index-trigger"]),
+            recordedAtMs = session.parameters["recordedAt"]?.firstOrNull()?.toLongOrNull() ?: 0,
+            client = session.parameters["client"]?.firstOrNull(),
+            pebbleTranscript = transcription?.ifBlank { null },
+            receivedAtMs = System.currentTimeMillis(),
+        )
+
+        return try {
+            webhookEnqueue!!.invoke(audio, meta)
+            json(Response.Status.OK, JSONObject().put("status", "queued"))
+        } catch (e: Exception) {
+            Log.e(TAG, "Could not enqueue a webhook recording", e)
+            json(
+                Response.Status.INTERNAL_ERROR,
+                JSONObject().put("error", "could not queue the recording"),
+            )
+        }
     }
 
     private fun readBody(session: IHTTPSession): String? = try {

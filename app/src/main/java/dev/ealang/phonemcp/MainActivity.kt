@@ -42,6 +42,9 @@ class MainActivity : Activity() {
     private lateinit var toggle: Button
     private lateinit var overlayStatus: TextView
     private lateinit var requestsView: TextView
+    private lateinit var webhookStatus: TextView
+    private lateinit var failedContainer: LinearLayout
+    private lateinit var pipelineLog: PipelineLog
 
     /** Keeps the request log current while the screen is open, and only then. */
     private val ticker = object : Runnable {
@@ -153,6 +156,34 @@ class MainActivity : Activity() {
             Button(this).apply {
                 text = "View server events"
                 setOnClickListener { showLog("Server events", EventLog.tail(LOG_DIALOG_LINES)) }
+            },
+        )
+
+        root.addView(label("Webhook pipeline"))
+        pipelineLog = PipelineLog(filesDir)
+        webhookStatus = TextView(this).apply { textSize = 13f }
+        root.addView(webhookStatus)
+        failedContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        root.addView(failedContainer)
+        root.addView(
+            Button(this).apply {
+                text = "View pipeline log"
+                setOnClickListener {
+                    showLog("Pipeline log", pipelineLog.tail(LOG_DIALOG_LINES))
+                }
+            },
+        )
+        root.addView(
+            Button(this).apply {
+                text = "Allow all files access"
+                // For writing notes into a top-level folder, which scoped
+                // storage cannot address. Settings-screen grant, like overlay.
+                setOnClickListener {
+                    startActivity(
+                        Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                            .setData(Uri.parse("package:$packageName")),
+                    )
+                }
             },
         )
 
@@ -359,6 +390,8 @@ class MainActivity : Activity() {
         }
         overlayStatus.text = "$overlay\n\n$location\n\n$media"
 
+        refreshWebhook()
+
         status.text = if (running) {
             val bind = config.bindAddress
             if (bind.isNotEmpty()) {
@@ -374,6 +407,58 @@ class MainActivity : Activity() {
             }
         } else {
             "Stopped."
+        }
+    }
+
+    /**
+     * Queue depth, note-permission state, and one Retry/Discard row per
+     * failed item. Reads the queue directly when the service is down — safe,
+     * because a stopped service means no worker is writing.
+     */
+    private fun refreshWebhook() {
+        val (pending, failed) = McpService.pipelineSnapshot()
+            ?: RecordingStore(filesDir).let { it.pending().size to it.failed() }
+
+        val notes = if (
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.R ||
+            android.os.Environment.isExternalStorageManager()
+        ) {
+            "Can write notes to ${WebhookConfig.NOTES_DIR}."
+        } else {
+            "All files access is not granted, so note recordings will fail. " +
+                "Grant it below."
+        }
+        webhookStatus.text = "Queued: $pending   Failed: ${failed.size}\n\n$notes"
+
+        failedContainer.removeAllViews()
+        for (item in failed) {
+            failedContainer.addView(
+                TextView(this).apply {
+                    textSize = 13f
+                    setPadding(0, 16, 0, 0)
+                    text = "${item.name}\n${item.failureReason() ?: "(no reason recorded)"}"
+                },
+            )
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            row.addView(
+                Button(this).apply {
+                    text = "Retry"
+                    setOnClickListener {
+                        McpService.retryFailed(this@MainActivity, item.name)
+                        webhookStatus.postDelayed({ refresh() }, 400)
+                    }
+                },
+            )
+            row.addView(
+                Button(this).apply {
+                    text = "Discard"
+                    setOnClickListener {
+                        McpService.discardFailed(this@MainActivity, item.name)
+                        webhookStatus.postDelayed({ refresh() }, 400)
+                    }
+                },
+            )
+            failedContainer.addView(row)
         }
     }
 
