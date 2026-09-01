@@ -183,6 +183,8 @@ class McpService : Service() {
             },
         )
 
+        val delivery = TelegramDelivery(this, store, log)
+
         worker = PipelineWorker(
             store = store,
             log = log,
@@ -190,11 +192,22 @@ class McpService : Service() {
             // The key is re-read per call, so pasting it in the activity
             // un-blocks a waiting queue at the next wake, no restart needed.
             transcriber = OpenAiTranscriber { Config(this).openAiKey },
-            telegramSender = StubTelegramSender(),
+            telegramSender = delivery,
             onDrainFinished = { report -> main.post { onDrainFinished(report) } },
         ).also {
             it.start()
             it.wake() // drain anything left from before the restart
+        }
+
+        // TDLib's delivery confirmations route to the worker thread — the
+        // queue's single writer — where the confirmed item is deleted. Also a
+        // wake: an item blocked on "not connected" should not have to wait
+        // out the gate's backoff when the engine is demonstrably alive.
+        dev.ealang.phonemcp.telegram.TelegramEngine.onSendSucceeded = { oldId ->
+            worker?.let {
+                it.post { delivery.confirm(oldId) }
+                it.wake()
+            }
         }
 
         getSystemService(android.net.ConnectivityManager::class.java)
@@ -220,6 +233,7 @@ class McpService : Service() {
         } catch (e: Exception) {
             // Never registered; nothing to do.
         }
+        dev.ealang.phonemcp.telegram.TelegramEngine.onSendSucceeded = {}
         gate?.cancel()
         worker?.quit()
         activeWorker = null

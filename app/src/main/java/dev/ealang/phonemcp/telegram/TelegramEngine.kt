@@ -49,6 +49,15 @@ object TelegramEngine {
     /** Repaint hook for whoever is on screen; always invoked on main. */
     var onChanged: () -> Unit = {}
 
+    /**
+     * TDLib confirmed a send: the message reached the server. The service
+     * points this at the queue so the confirmed item can be deleted — until
+     * then the item is the visible record that confirmation is owed
+     * (docs/webhook-pipeline.md §7). Invoked on main with the *temporary*
+     * message id, the one recorded at handoff.
+     */
+    var onSendSucceeded: (oldMessageId: Long) -> Unit = {}
+
     val stage: Stage
         get() = when (authState) {
             null -> if (client == null) Stage.OFF else Stage.STARTING
@@ -151,6 +160,33 @@ object TelegramEngine {
         }
     }
 
+    /**
+     * Hand one message to TDLib. Unlike the rest of this object it may be
+     * called from any thread — the pipeline worker is the caller — so it hops
+     * to main itself. The outcome reported is TDLib's *synchronous* answer:
+     * a message id means accepted into TDLib's own persistent outbox (which
+     * survives process death and retries internally), not delivered.
+     * Delivery is announced later through [onSendSucceeded]. The callback
+     * runs on an arbitrary thread.
+     */
+    fun sendText(chatId: Long, text: String, onOutcome: (messageId: Long?, problem: String?) -> Unit) {
+        main.post {
+            val tdClient = client
+            if (tdClient == null || stage != Stage.READY) {
+                onOutcome(null, "Telegram is not connected")
+                return@post
+            }
+            val content = TdApi.InputMessageText(TdApi.FormattedText(text, null), null, true)
+            tdClient.send(TdApi.SendMessage(chatId, null, null, null, null, content)) { result ->
+                when (result) {
+                    is TdApi.Message -> onOutcome(result.id, null)
+                    is TdApi.Error -> onOutcome(null, result.message)
+                    else -> onOutcome(null, "unexpected TDLib response")
+                }
+            }
+        }
+    }
+
     /** One line for the UI, composed from auth stage, connection, and account. */
     fun statusLine(): String {
         val problem = lastProblem?.let { "\nProblem: $it" } ?: ""
@@ -174,6 +210,7 @@ object TelegramEngine {
     private fun handleUpdate(update: TdApi.Object) {
         when (update) {
             is TdApi.UpdateAuthorizationState -> handleAuth(update.authorizationState)
+            is TdApi.UpdateMessageSendSucceeded -> onSendSucceeded(update.oldMessageId)
             is TdApi.UpdateConnectionState -> {
                 connectionLabel = when (update.state) {
                     is TdApi.ConnectionStateReady -> "connected"

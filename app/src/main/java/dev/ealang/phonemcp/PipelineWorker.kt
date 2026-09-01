@@ -16,12 +16,11 @@ class PipelineWorker(
     private val log: PipelineLog,
     private val noteWriter: NoteWriter,
     private val transcriber: Transcriber,
-    /** Stage 4 replaces the stub; the contract is fixed now. */
     private val telegramSender: TelegramSender,
     private val onDrainFinished: (DrainReport) -> Unit,
 ) {
 
-    /** The Telegram destination, behind an interface so stage 1 can stub it. */
+    /** The Telegram destination, behind an interface so tests can fake it. */
     interface TelegramSender {
         /** Hand one item's text to Telegram. Success means *handed off*, not delivered. */
         fun send(item: RecordingStore.Item, text: String): StepResult
@@ -86,9 +85,16 @@ class PipelineWorker(
 
             when (result) {
                 is StepResult.Success -> {
-                    completed++
-                    log.record(item.name, "completed")
-                    store.complete(item)
+                    if (item.processorState(PROCESSOR_TELEGRAM) != null) {
+                        // Handed off, not done: the item stays as the record
+                        // that TDLib owes a confirmation, and stops blocking
+                        // the queue (the skip at the top of this loop).
+                        // Deletion is the confirmation's job.
+                    } else {
+                        completed++
+                        log.record(item.name, "completed")
+                        store.complete(item)
+                    }
                 }
                 is StepResult.Permanent -> {
                     newlyFailed++
@@ -161,16 +167,4 @@ class PipelineWorker(
         private const val TAG = "phone-mcp"
         const val PROCESSOR_TELEGRAM = "telegram"
     }
-}
-
-/**
- * Telegram until stage 4. Permanent, not Transient — Transient blocks the
- * queue head, and "not built yet" does not resolve on a timer, so one
- * single-click would dam every note behind it with no way to intervene
- * (Discard only reaches `failed/`). Parked as failed, the items are
- * visible, keepable, and one Retry away from delivery once stage 4 lands.
- */
-class StubTelegramSender : PipelineWorker.TelegramSender {
-    override fun send(item: RecordingStore.Item, text: String): StepResult =
-        StepResult.Permanent("Telegram delivery is not built yet — kept here until it is")
 }
