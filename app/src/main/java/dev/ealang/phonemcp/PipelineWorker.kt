@@ -153,8 +153,14 @@ class PipelineWorker(
     }
 }
 
-/** Stage 1's Telegram: honestly not configured yet. Items wait, correctly. */
+/**
+ * Telegram until stage 4. Permanent, not Transient — Transient blocks the
+ * queue head, and "not built yet" does not resolve on a timer, so one
+ * single-click would dam every note behind it with no way to intervene
+ * (Discard only reaches `failed/`). Parked as failed, the items are
+ * visible, keepable, and one Retry away from delivery once stage 4 lands.
+ */
 class StubTelegramSender : PipelineWorker.TelegramSender {
     override fun send(item: RecordingStore.Item, text: String): StepResult =
-        StepResult.Transient("Telegram delivery is not built yet")
+        StepResult.Permanent("Telegram delivery is not built yet — kept here until it is")
 }
