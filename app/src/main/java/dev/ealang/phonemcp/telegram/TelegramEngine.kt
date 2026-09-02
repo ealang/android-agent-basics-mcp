@@ -50,13 +50,31 @@ object TelegramEngine {
     var onChanged: () -> Unit = {}
 
     /**
-     * TDLib confirmed a send: the message reached the server. The service
-     * points this at the queue so the confirmed item can be deleted — until
-     * then the item is the visible record that confirmation is owed
-     * (docs/webhook-pipeline.md §7). Invoked on main with the *temporary*
-     * message id, the one recorded at handoff.
+     * "Something about delivery changed" — a send succeeded or failed, or the
+     * connection came back. Deliberately parameter-free: the service maps it
+     * to worker.wake(), and the drain *discovers* what changed by reconciling
+     * the handed-off items. Carrying details here would just build a second,
+     * racier channel for facts the reconcile already reads from TDLib.
+     * Invoked on main.
      */
-    var onSendSucceeded: (oldMessageId: Long) -> Unit = {}
+    var onDeliveryEvent: () -> Unit = {}
+
+    /** What [checkSend] found out about a handed-off message. */
+    sealed interface SendState {
+        /** The recorded id no longer answers, or answers with no sending
+         * state: the send completed and TDLib reassigned the id. */
+        data object Delivered : SendState
+
+        /** Still in TDLib's outbox; nothing to do. */
+        data object Pending : SendState
+
+        /** TDLib gave up on it. [canRetry] is TDLib's own verdict on whether
+         * ResendMessages would be accepted. */
+        data class Failed(val reason: String, val canRetry: Boolean) : SendState
+
+        /** Not connected, or an answer that fits no case: act on nothing. */
+        data object Unknown : SendState
+    }
 
     val stage: Stage
         get() = when (authState) {
@@ -87,6 +105,7 @@ object TelegramEngine {
         }
         configureLogging(context)
         client = Client.create({ update -> main.post { handleUpdate(update) } }, null, null)
+        registerNetworkKick(context.applicationContext)
         changed()
     }
 
@@ -187,6 +206,64 @@ object TelegramEngine {
         }
     }
 
+    /**
+     * Ask TDLib what became of a handed-off send, by the message id recorded
+     * at handoff. Reads the local message database (why useMessageDatabase is
+     * on), so it answers offline and across restarts. The id semantics do the
+     * heavy lifting: on success TDLib *reassigns* the id, so "not found" is
+     * the delivered case — it is exactly what a confirmation we slept through
+     * leaves behind. Any-thread, like [sendText]; callback on an arbitrary
+     * thread.
+     */
+    fun checkSend(chatId: Long, messageId: Long, onOutcome: (SendState) -> Unit) {
+        main.post {
+            val tdClient = client
+            if (tdClient == null || stage != Stage.READY) {
+                onOutcome(SendState.Unknown)
+                return@post
+            }
+            tdClient.send(TdApi.GetMessage(chatId, messageId)) { result ->
+                onOutcome(
+                    when {
+                        result is TdApi.Message -> when (val s = result.sendingState) {
+                            null -> SendState.Delivered
+                            is TdApi.MessageSendingStatePending -> SendState.Pending
+                            is TdApi.MessageSendingStateFailed ->
+                                SendState.Failed(s.error.message, s.canRetry)
+                            else -> SendState.Unknown
+                        }
+                        result is TdApi.Error && result.code == 404 -> SendState.Delivered
+                        else -> SendState.Unknown
+                    },
+                )
+            }
+        }
+    }
+
+    /**
+     * Ask TDLib to retry a failed send from its own outbox. Preferred over
+     * composing a fresh SendMessage because TDLib retries the *same* message —
+     * it cannot duplicate. Reports the replacement message id (resending
+     * assigns a new one) for the caller to re-record.
+     */
+    fun resend(chatId: Long, messageId: Long, onOutcome: (newMessageId: Long?, problem: String?) -> Unit) {
+        main.post {
+            val tdClient = client
+            if (tdClient == null || stage != Stage.READY) {
+                onOutcome(null, "Telegram is not connected")
+                return@post
+            }
+            tdClient.send(TdApi.ResendMessages(chatId, longArrayOf(messageId), null, 0)) { result ->
+                when {
+                    result is TdApi.Messages && result.messages.isNotEmpty() ->
+                        onOutcome(result.messages.first().id, null)
+                    result is TdApi.Error -> onOutcome(null, result.message)
+                    else -> onOutcome(null, "unexpected TDLib response")
+                }
+            }
+        }
+    }
+
     /** One line for the UI, composed from auth stage, connection, and account. */
     fun statusLine(): String {
         val problem = lastProblem?.let { "\nProblem: $it" } ?: ""
@@ -210,7 +287,8 @@ object TelegramEngine {
     private fun handleUpdate(update: TdApi.Object) {
         when (update) {
             is TdApi.UpdateAuthorizationState -> handleAuth(update.authorizationState)
-            is TdApi.UpdateMessageSendSucceeded -> onSendSucceeded(update.oldMessageId)
+            is TdApi.UpdateMessageSendSucceeded -> onDeliveryEvent()
+            is TdApi.UpdateMessageSendFailed -> onDeliveryEvent()
             is TdApi.UpdateConnectionState -> {
                 connectionLabel = when (update.state) {
                     is TdApi.ConnectionStateReady -> "connected"
@@ -220,6 +298,10 @@ object TelegramEngine {
                     is TdApi.ConnectionStateWaitingForNetwork -> "waiting for network"
                     else -> "unknown"
                 }
+                // The connection coming back is the moment blocked work can
+                // move — items waiting on "not connected" should not sit out
+                // the retry gate's backoff.
+                if (update.state is TdApi.ConnectionStateReady) onDeliveryEvent()
                 changed()
             }
         }
@@ -295,6 +377,49 @@ object TelegramEngine {
     private fun changed() = onChanged()
 
     /**
+     * Tell TDLib about every network transition. Left to itself TDLib sits on
+     * a dead socket for minutes after a Wi-Fi→LTE switch; SetNetworkType is
+     * the documented kick that makes it drop and redial immediately. The
+     * single hardest-won lesson from agent-voice-gateway's "not always the
+     * best at staying online" era. Once per process; deduped by type so the
+     * chatty onCapabilitiesChanged doesn't spam TDLib.
+     */
+    private fun registerNetworkKick(context: Context) {
+        if (!networkKickRegistered.compareAndSet(false, true)) return
+        val cm = context.getSystemService(android.net.ConnectivityManager::class.java)
+        cm.registerDefaultNetworkCallback(object : android.net.ConnectivityManager.NetworkCallback() {
+            override fun onCapabilitiesChanged(
+                network: android.net.Network,
+                caps: android.net.NetworkCapabilities,
+            ) {
+                val type: TdApi.NetworkType = when {
+                    caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) ->
+                        TdApi.NetworkTypeWiFi()
+                    caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) ->
+                        TdApi.NetworkTypeMobile()
+                    else -> TdApi.NetworkTypeOther()
+                }
+                main.post { pushNetworkType(type) }
+            }
+
+            override fun onLost(network: android.net.Network) {
+                main.post { pushNetworkType(TdApi.NetworkTypeNone()) }
+            }
+        })
+    }
+
+    /** Main thread. */
+    private fun pushNetworkType(type: TdApi.NetworkType) {
+        if (type.javaClass == lastNetworkType) return
+        lastNetworkType = type.javaClass
+        client?.send(TdApi.SetNetworkType(type)) { result ->
+            if (result is TdApi.Error) {
+                Log.w(TAG, "SetNetworkType failed: ${result.message}")
+            }
+        }
+    }
+
+    /**
      * Quiet TDLib down and point its (verbose, occasionally useful) log at a
      * file before the first client exists. Once per process.
      */
@@ -311,6 +436,10 @@ object TelegramEngine {
 
     private const val TAG = "phone-mcp"
     private val loggingConfigured = AtomicBoolean(false)
+    private val networkKickRegistered = AtomicBoolean(false)
+
+    /** Main-thread; the dedupe for [pushNetworkType]. */
+    private var lastNetworkType: Class<*>? = null
 
     /** How many chats to pull into the cache at login; the gateway's number. */
     private const val CHAT_LIST_LOAD_LIMIT = 500

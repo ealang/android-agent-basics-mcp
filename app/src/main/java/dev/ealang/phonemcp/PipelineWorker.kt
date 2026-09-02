@@ -24,6 +24,9 @@ class PipelineWorker(
     interface TelegramSender {
         /** Hand one item's text to Telegram. Success means *handed off*, not delivered. */
         fun send(item: RecordingStore.Item, text: String): StepResult
+
+        /** What became of an item [send] already handed off. */
+        fun reconcile(item: RecordingStore.Item): ReconcileResult
     }
 
     /** The transcription step, behind an interface so tests need no network. */
@@ -69,9 +72,25 @@ class PipelineWorker(
         var blockedOn: String? = null
 
         for (item in store.pending()) {
-            // Handed off already: it waits for confirmation (stage 4's
-            // reconcile), and does not block the items behind it.
-            if (item.processorState(PROCESSOR_TELEGRAM) != null) continue
+            // Handed off already: ask the destination what became of it.
+            // Whatever the answer, it does not block the items behind it —
+            // Pending here means TDLib's own outbox is still working.
+            if (item.processorState(PROCESSOR_TELEGRAM) != null) {
+                when (val settled = telegramSender.reconcile(item)) {
+                    is ReconcileResult.Delivered -> {
+                        completed++
+                        log.record(item.name, "completed")
+                        store.complete(item)
+                    }
+                    is ReconcileResult.Failed -> {
+                        newlyFailed++
+                        log.record(item.name, "failed", settled.why)
+                        store.fail(item, settled.why)
+                    }
+                    is ReconcileResult.Pending -> {}
+                }
+                continue
+            }
 
             val result = try {
                 process(item)

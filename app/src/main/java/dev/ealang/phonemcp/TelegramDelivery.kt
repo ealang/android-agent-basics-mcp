@@ -10,11 +10,13 @@ import java.util.concurrent.TimeUnit
  * The real Telegram destination (docs/webhook-pipeline.md §7). Handoff and
  * confirmation are separate: [send] records the accepted message id in
  * `telegram.json` and returns — the item stops blocking the queue but
- * *stays* as the visible record that confirmation is owed — and [confirm],
- * fed by TDLib's UpdateMessageSendSucceeded through the service, is what
- * finally deletes it. Never re-send on a gap: TDLib's own persistent outbox
- * is retrying underneath, and a timeout that re-sends is how duplicates are
- * made. The stuck cases (send failed, session dead) are step 3's reconcile.
+ * *stays* as the visible record that confirmation is owed — and [reconcile],
+ * run on every drain, is what finally deletes it. The engine's events carry
+ * no payload; the drain discovers what changed by asking TDLib about each
+ * handed-off item. Never re-send on a gap: TDLib's own persistent outbox is
+ * retrying underneath, and a timeout that re-sends is how duplicates are
+ * made. The one retry we ever issue is ResendMessages, which retries the
+ * same message and cannot duplicate it.
  */
 class TelegramDelivery(
     context: Context,
@@ -62,22 +64,79 @@ class TelegramDelivery(
     }
 
     /**
-     * TDLib confirmed the message reached the server: delete the item it
-     * belongs to. Runs on the worker thread — the single writer — via
-     * [PipelineWorker.post]; the id is the temporary one recorded at handoff,
-     * which is exactly what UpdateMessageSendSucceeded carries as oldMessageId.
+     * Ask TDLib what became of a handed-off item. Worker thread, blocking
+     * like [send]. The recorded id is the *temporary* one; on success TDLib
+     * reassigns it, so GetMessage answering "not found" means delivered —
+     * exactly the trace a missed UpdateMessageSendSucceeded leaves behind.
+     * A retryable failure is resent here (ResendMessages retries the same
+     * message, so it cannot duplicate) and the replacement id recorded;
+     * everything unclear is Pending, which costs nothing but another look.
      */
-    fun confirm(oldMessageId: Long) {
-        for (item in store.pending()) {
-            val state = item.processorState(PipelineWorker.PROCESSOR_TELEGRAM) ?: continue
-            if (state.optLong("messageId") == oldMessageId) {
+    override fun reconcile(item: RecordingStore.Item): ReconcileResult {
+        val state = item.processorState(PipelineWorker.PROCESSOR_TELEGRAM)
+            ?: return ReconcileResult.Pending // caller's bug; stay harmless
+        val chatId = state.optLong("chatId")
+        val messageId = state.optLong("messageId")
+
+        var outcome: TelegramEngine.SendState = TelegramEngine.SendState.Unknown
+        val latch = CountDownLatch(1)
+        TelegramEngine.checkSend(chatId, messageId) { answer ->
+            outcome = answer
+            latch.countDown()
+        }
+        if (!latch.await(ANSWER_TIMEOUT_S, TimeUnit.SECONDS)) {
+            return ReconcileResult.Pending
+        }
+
+        return when (val seen = outcome) {
+            is TelegramEngine.SendState.Delivered -> {
                 log.record(item.name, "delivered")
-                store.complete(item)
-                return
+                ReconcileResult.Delivered
+            }
+            is TelegramEngine.SendState.Pending,
+            is TelegramEngine.SendState.Unknown,
+            -> ReconcileResult.Pending
+
+            is TelegramEngine.SendState.Failed -> {
+                if (!seen.canRetry) return ReconcileResult.Failed(seen.reason)
+                resend(item, chatId, messageId, seen.reason)
             }
         }
-        // No match: an item already reconciled away, or a send from another
-        // surface on this account. Normal, not an error.
+    }
+
+    /** TDLib gave up but says a retry can work: resend and record the new id. */
+    private fun resend(
+        item: RecordingStore.Item,
+        chatId: Long,
+        messageId: Long,
+        reason: String,
+    ): ReconcileResult {
+        var newId: Long? = null
+        var problem: String? = null
+        val latch = CountDownLatch(1)
+        TelegramEngine.resend(chatId, messageId) { id, why ->
+            newId = id
+            problem = why
+            latch.countDown()
+        }
+        if (!latch.await(ANSWER_TIMEOUT_S, TimeUnit.SECONDS)) {
+            return ReconcileResult.Pending
+        }
+        val id = newId
+        // A refused resend on a message TDLib already gave up on is terminal:
+        // nothing left in the outbox will ever move this item again.
+        ?: return ReconcileResult.Failed("$reason; resend refused: ${problem ?: "no answer"}")
+
+        store.writeProcessorState(
+            item,
+            PipelineWorker.PROCESSOR_TELEGRAM,
+            JSONObject()
+                .put("chatId", chatId)
+                .put("messageId", id)
+                .put("handedOffAtMs", System.currentTimeMillis()),
+        )
+        log.record(item.name, "resent", "message $id → chat $chatId, after: $reason")
+        return ReconcileResult.Pending
     }
 
     companion object {

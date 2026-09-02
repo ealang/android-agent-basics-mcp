@@ -199,16 +199,11 @@ class McpService : Service() {
             it.wake() // drain anything left from before the restart
         }
 
-        // TDLib's delivery confirmations route to the worker thread — the
-        // queue's single writer — where the confirmed item is deleted. Also a
-        // wake: an item blocked on "not connected" should not have to wait
-        // out the gate's backoff when the engine is demonstrably alive.
-        dev.ealang.phonemcp.telegram.TelegramEngine.onSendSucceeded = { oldId ->
-            worker?.let {
-                it.post { delivery.confirm(oldId) }
-                it.wake()
-            }
-        }
+        // Every engine event — a delivery confirmed, a send abandoned, the
+        // connection back — is the same parameter-free wake; the drain
+        // discovers what changed by reconciling. The event path stays
+        // ignorant of any particular messenger on purpose.
+        dev.ealang.phonemcp.telegram.TelegramEngine.onDeliveryEvent = { worker?.wake() }
 
         getSystemService(android.net.ConnectivityManager::class.java)
             .registerDefaultNetworkCallback(connectivity)
@@ -233,7 +228,7 @@ class McpService : Service() {
         } catch (e: Exception) {
             // Never registered; nothing to do.
         }
-        dev.ealang.phonemcp.telegram.TelegramEngine.onSendSucceeded = {}
+        dev.ealang.phonemcp.telegram.TelegramEngine.onDeliveryEvent = {}
         gate?.cancel()
         worker?.quit()
         activeWorker = null
