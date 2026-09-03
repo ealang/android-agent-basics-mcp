@@ -188,10 +188,9 @@ object MediaExplorer {
                 "pause" -> tc.pause()
                 "play" -> tc.play()
                 "stop" -> tc.stop()
-                else -> {
-                    done("unknown action \"$action\" — use next, previous, pause, play, stop")
-                    return@withBrowser
-                }
+                // Anything else is taken as a custom action id, verbatim —
+                // the read-back lists what the app advertises.
+                else -> tc.sendCustomAction(action, null)
             }
             Log.i(TAG, "explore: ${app.pkg} $action")
             main.postDelayed({ done(readBack(app, controller, action)) }, PLAY_SETTLE_MS)
@@ -220,7 +219,39 @@ object MediaExplorer {
         }
         val playing = title?.let { " Now loaded: \"$it\"." } ?: ""
         return "Sent ${app.label} $described. ${PLAY_SETTLE_MS / 1000}s later the " +
-            "session reports: $stateName.$playing"
+            "session reports: $stateName.$playing${advertised(state)}"
+    }
+
+    /**
+     * What the session claims to support: the standard-action bitmask decoded
+     * to names, plus any custom actions with their ids. This is the per-app
+     * survey data — e.g. whether "next" being ignored is honesty (not
+     * advertised) or a lie (advertised, unimplemented).
+     */
+    private fun advertised(state: PlaybackState?): String {
+        if (state == null) return " Advertised actions: none (no playback state)."
+        val names = mutableListOf<String>()
+        fun has(bit: Long, name: String) {
+            if (state.actions and bit != 0L) names.add(name)
+        }
+        has(PlaybackState.ACTION_PLAY, "play")
+        has(PlaybackState.ACTION_PAUSE, "pause")
+        has(PlaybackState.ACTION_PLAY_PAUSE, "play_pause")
+        has(PlaybackState.ACTION_STOP, "stop")
+        has(PlaybackState.ACTION_SKIP_TO_NEXT, "skip_to_next")
+        has(PlaybackState.ACTION_SKIP_TO_PREVIOUS, "skip_to_previous")
+        has(PlaybackState.ACTION_SKIP_TO_QUEUE_ITEM, "skip_to_queue_item")
+        has(PlaybackState.ACTION_FAST_FORWARD, "fast_forward")
+        has(PlaybackState.ACTION_REWIND, "rewind")
+        has(PlaybackState.ACTION_SEEK_TO, "seek_to")
+        has(PlaybackState.ACTION_PLAY_FROM_MEDIA_ID, "play_from_media_id")
+        has(PlaybackState.ACTION_PLAY_FROM_SEARCH, "play_from_search")
+        has(PlaybackState.ACTION_PLAY_FROM_URI, "play_from_uri")
+        has(PlaybackState.ACTION_PREPARE, "prepare")
+        has(PlaybackState.ACTION_SET_RATING, "set_rating")
+        val custom = state.customActions.joinToString(", ") { "\"${it.action}\" (${it.name})" }
+        val customPart = if (custom.isEmpty()) "" else " Custom actions: $custom."
+        return " Advertised actions: ${names.joinToString(", ").ifEmpty { "none" }}.$customPart"
     }
 
     /**

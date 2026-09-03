@@ -637,7 +637,7 @@ class McpServer(
             .put("inputSchema", JSONObject().put("type", "object").put("properties", JSONObject()))
         val mediaCommand = JSONObject()
             .put("name", "media_command")
-            .put("description", "EXPERIMENTAL: send a media app a transport command: next, previous, pause, play, stop. Reads back the session state after a beat.")
+            .put("description", "EXPERIMENTAL: send a media app a transport command: next, previous, pause, play, stop, or a custom action id verbatim. Reads back the session state and advertised actions after a beat.")
             .put(
                 "inputSchema",
                 JSONObject().put("type", "object").put(
