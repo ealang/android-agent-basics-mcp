@@ -168,6 +168,35 @@ object MediaExplorer {
             main.postDelayed({ done(readBack(app, controller, described)) }, PLAY_SETTLE_MS)
         }
 
+    /**
+     * Transport controls beyond starting playback: next/previous/pause/play/
+     * stop, same connect-and-read-back shape as [play].
+     */
+    fun command(context: Context, app: MediaApp, action: String): String =
+        withBrowser(context, app) { browser, done ->
+            val controller = try {
+                MediaController(context, browser.sessionToken)
+            } catch (e: Exception) {
+                Log.w(TAG, "explore: no session from ${app.pkg}", e)
+                done("${app.label} accepted the connection but exposed no usable media session")
+                return@withBrowser
+            }
+            val tc = controller.transportControls
+            when (action) {
+                "next" -> tc.skipToNext()
+                "previous" -> tc.skipToPrevious()
+                "pause" -> tc.pause()
+                "play" -> tc.play()
+                "stop" -> tc.stop()
+                else -> {
+                    done("unknown action \"$action\" — use next, previous, pause, play, stop")
+                    return@withBrowser
+                }
+            }
+            Log.i(TAG, "explore: ${app.pkg} $action")
+            main.postDelayed({ done(readBack(app, controller, action)) }, PLAY_SETTLE_MS)
+        }
+
     private fun readBack(app: MediaApp, controller: MediaController, described: String): String {
         val state = try {
             controller.playbackState

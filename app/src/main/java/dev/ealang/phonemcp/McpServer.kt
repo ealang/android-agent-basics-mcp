@@ -635,9 +635,21 @@ class McpServer(
             .put("name", "media_apps")
             .put("description", "EXPERIMENTAL: list installed apps declaring a MediaBrowserService.")
             .put("inputSchema", JSONObject().put("type", "object").put("properties", JSONObject()))
+        val mediaCommand = JSONObject()
+            .put("name", "media_command")
+            .put("description", "EXPERIMENTAL: send a media app a transport command: next, previous, pause, play, stop. Reads back the session state after a beat.")
+            .put(
+                "inputSchema",
+                JSONObject().put("type", "object").put(
+                    "properties",
+                    JSONObject()
+                        .put("app", JSONObject().put("type", "string").put("description", "App name or package, fuzzy matched."))
+                        .put("action", JSONObject().put("type", "string").put("description", "next, previous, pause, play, or stop.")),
+                ).put("required", JSONArray().put("app").put("action")),
+            )
 
         return JSONArray().put(setTimer).put(cancelTimer)
-            .put(mediaApps).put(mediaBrowse).put(mediaPlay)
+            .put(mediaApps).put(mediaBrowse).put(mediaPlay).put(mediaCommand)
             .put(launchWatchApp).put(stopWatchApp).put(setWatchTimer).put(getLocation)
             .put(playPodcast).put(nowPlaying).put(findMyPhone).put(silencePhone)
             .put(startVoice).put(stopVoice).put(voiceStatus)
@@ -881,6 +893,12 @@ class McpServer(
                     args.optString("query").ifBlank { null },
                 ) to false
             }
+        }
+
+        "media_command" -> {
+            val (app, problem) = MediaExplorer.resolve(context, args.optString("app"))
+            if (app == null) "FAILED: $problem" to true
+            else MediaExplorer.command(context, app, args.optString("action").trim().lowercase()) to false
         }
 
         else -> "No such tool: $name" to true
