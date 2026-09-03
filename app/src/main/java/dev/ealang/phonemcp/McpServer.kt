@@ -615,7 +615,8 @@ class McpServer(
                     "properties",
                     JSONObject()
                         .put("app", JSONObject().put("type", "string").put("description", "App name or package, fuzzy matched."))
-                        .put("node", JSONObject().put("type", "string").put("description", "Media id of the node to list.")),
+                        .put("node", JSONObject().put("type", "string").put("description", "Media id of the node to list."))
+                        .put("offset", JSONObject().put("type", "integer").put("description", "Skip this many children — for paging long listings.")),
                 ).put("required", JSONArray().put("app")),
             )
         val mediaPlay = JSONObject()
@@ -637,14 +638,14 @@ class McpServer(
             .put("inputSchema", JSONObject().put("type", "object").put("properties", JSONObject()))
         val mediaCommand = JSONObject()
             .put("name", "media_command")
-            .put("description", "EXPERIMENTAL: send a media app a transport command: next, previous, pause, play, stop, queue, queue:<id>, seek:<seconds> (absolute, or +N/-N relative), speed:<multiplier>, rate:up/down/clear/<number>, or a custom action id verbatim. Reads back the session state, position, and advertised actions after a beat.")
+            .put("description", "EXPERIMENTAL: send a media app a transport command: next, previous, pause, play, stop, queue, queue:<id>, seek:<seconds> (absolute, or +N/-N relative), speed:<multiplier>, rate:up/down/clear/<number>, queue_add:<id>, queue_add:<pos>:<id>, queue_remove:<id>, or a custom action id verbatim. Reads back the session state, position, and advertised actions after a beat.")
             .put(
                 "inputSchema",
                 JSONObject().put("type", "object").put(
                     "properties",
                     JSONObject()
                         .put("app", JSONObject().put("type", "string").put("description", "App name or package, fuzzy matched."))
-                        .put("action", JSONObject().put("type", "string").put("description", "next, previous, pause, play, stop, queue, queue:<id>, seek:<seconds>, seek:+N, seek:-N, speed:<multiplier>, rate:up/down/clear/<number>, or a custom action id.")),
+                        .put("action", JSONObject().put("type", "string").put("description", "next, previous, pause, play, stop, queue, queue:<id>, seek:<seconds>, seek:+N, seek:-N, speed:<multiplier>, rate:up/down/clear/<number>, queue_add:<id>, queue_add:<pos>:<id>, queue_remove:<id>, or a custom action id.")),
                 ).put("required", JSONArray().put("app").put("action")),
             )
         val mediaSearch = JSONObject()
@@ -890,7 +891,12 @@ class McpServer(
         "media_browse" -> {
             val (app, problem) = MediaExplorer.resolve(context, args.optString("app"))
             if (app == null) "FAILED: $problem" to true
-            else MediaExplorer.browse(context, app, args.optString("node").ifBlank { null }) to false
+            else MediaExplorer.browse(
+                context,
+                app,
+                args.optString("node").ifBlank { null },
+                args.optInt("offset", 0).coerceAtLeast(0),
+            ) to false
         }
 
         "media_play" -> {
@@ -909,8 +915,15 @@ class McpServer(
 
         "media_command" -> {
             val (app, problem) = MediaExplorer.resolve(context, args.optString("app"))
+            val action = args.optString("action")
             if (app == null) "FAILED: $problem" to true
-            else MediaExplorer.command(context, app, args.optString("action")) to false
+            // Queue edits ride the compat protocol, so they take a different
+            // connection path from the rest of the commands.
+            else if (action.trim().startsWith("queue_add:") || action.trim().startsWith("queue_remove:")) {
+                MediaExplorer.queueEdit(context, app, action.trim()) to false
+            } else {
+                MediaExplorer.command(context, app, action) to false
+            }
         }
 
         "media_search" -> {

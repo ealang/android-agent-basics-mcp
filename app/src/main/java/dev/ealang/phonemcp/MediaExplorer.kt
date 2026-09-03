@@ -91,7 +91,7 @@ object MediaExplorer {
      * Returns prose either way; there is no failure shape, because for a
      * survey tool "REFUSED" is a finding, not an error.
      */
-    fun browse(context: Context, app: MediaApp, nodeId: String?): String =
+    fun browse(context: Context, app: MediaApp, nodeId: String?, offset: Int = 0): String =
         withBrowser(context, app) { browser, done ->
             val node = nodeId ?: browser.root
             val timeout = Runnable {
@@ -103,7 +103,7 @@ object MediaExplorer {
                 object : MediaBrowser.SubscriptionCallback() {
                     override fun onChildrenLoaded(parentId: String, children: List<MediaBrowser.MediaItem>) {
                         main.removeCallbacks(timeout)
-                        done(describeChildren(app, node, children))
+                        done(describeChildren(app, node, children, offset))
                     }
 
                     override fun onError(parentId: String) {
@@ -120,10 +120,99 @@ object MediaExplorer {
      * implemented onSearch answers with an error or silence, and either is a
      * survey finding.
      */
-    fun search(context: Context, app: MediaApp, query: String): String {
-        // Search is compat-protocol only — the framework MediaBrowser has no
-        // search() — so this one path uses MediaBrowserCompat with its own
-        // connect, instead of withBrowser's framework browser.
+    fun search(context: Context, app: MediaApp, query: String): String =
+        withCompatBrowser(context, app, "search") { browser, done ->
+            browser.search(
+                query,
+                null,
+                object : android.support.v4.media.MediaBrowserCompat.SearchCallback() {
+                    override fun onSearchResult(
+                        q: String,
+                        extras: android.os.Bundle?,
+                        items: List<android.support.v4.media.MediaBrowserCompat.MediaItem>,
+                    ) {
+                        done(
+                            if (items.isEmpty()) {
+                                "${app.label} answered search \"$query\" with no results"
+                            } else {
+                                describeCompatItems(app, query, items)
+                            },
+                        )
+                    }
+
+                    override fun onError(q: String, extras: android.os.Bundle?) {
+                        done("${app.label} answered search \"$query\" with an error — search not supported or refused")
+                    }
+                },
+            )
+        }
+
+    /**
+     * Queue editing — like search, compat-protocol only, and optional per
+     * app: addQueueItem/removeQueueItem land in the app's onAddQueueItem
+     * callbacks, which most sessions never implement. The read-back is the
+     * queue itself a beat later, so a silently-ignored edit is visible.
+     *
+     * The description carries just the mediaId; whether that is enough is
+     * itself per-app (Substack's ids are self-contained JSON, so probably).
+     */
+    fun queueEdit(context: Context, app: MediaApp, spec: String): String =
+        withCompatBrowser(context, app, "queue edit") { browser, done ->
+            val controller = try {
+                android.support.v4.media.session.MediaControllerCompat(context, browser.sessionToken)
+            } catch (e: Exception) {
+                Log.w(TAG, "explore: no compat session from ${app.pkg}", e)
+                done("${app.label} exposed no usable media session")
+                return@withCompatBrowser
+            }
+            fun describe(id: String) = android.support.v4.media.MediaDescriptionCompat.Builder()
+                .setMediaId(id)
+                .build()
+            when {
+                spec.startsWith("queue_add:") -> {
+                    // queue_add:<id> appends; queue_add:<pos>:<id> inserts.
+                    val rest = spec.substringAfter("queue_add:")
+                    val pos = rest.substringBefore(":").toIntOrNull()
+                    if (pos != null && rest.contains(":")) {
+                        controller.addQueueItem(describe(rest.substringAfter(":")), pos)
+                    } else {
+                        controller.addQueueItem(describe(rest))
+                    }
+                }
+                spec.startsWith("queue_remove:") ->
+                    controller.removeQueueItem(describe(spec.substringAfter("queue_remove:")))
+                else -> {
+                    done("queue edits are queue_add:<id>, queue_add:<pos>:<id>, or queue_remove:<id>")
+                    return@withCompatBrowser
+                }
+            }
+            Log.i(TAG, "explore: ${app.pkg} $spec")
+            main.postDelayed({
+                val queue = controller.queue
+                done(
+                    "Sent ${app.label} $spec. ${PLAY_SETTLE_MS / 1000}s later the queue has " +
+                        if (queue.isNullOrEmpty()) {
+                            "no items — the edit was likely ignored"
+                        } else {
+                            "${queue.size} items:\n" +
+                                queue.take(MAX_CHILDREN).joinToString("\n") { "  ${it.queueId}: ${it.description.title}" }
+                        },
+                )
+            }, PLAY_SETTLE_MS)
+        }
+
+    /**
+     * The compat twin of [withBrowser], for the protocol surface the
+     * framework client never got (search, queue editing). Same shape: connect
+     * on the main thread, run [block], answer exactly once, always
+     * disconnect.
+     */
+    private fun withCompatBrowser(
+        context: Context,
+        app: MediaApp,
+        what: String,
+        block: (android.support.v4.media.MediaBrowserCompat, done: (String) -> Unit) -> Unit,
+    ): String {
         var answer = "no answer from ${app.label} within ${CONNECT_TIMEOUT_MS / 1000}s"
         val latch = CountDownLatch(1)
 
@@ -144,37 +233,21 @@ object MediaExplorer {
             }
 
             val timeout = Runnable {
-                done("no search answer from ${app.label} within ${BROWSE_TIMEOUT_MS / 1000}s — the app likely never implemented search")
+                done("no $what answer from ${app.label} within ${BROWSE_TIMEOUT_MS / 1000}s — the app likely never implemented it")
             }
 
             val callback = object : android.support.v4.media.MediaBrowserCompat.ConnectionCallback() {
                 override fun onConnected() {
                     val connected = browser ?: return done("connected, then vanished")
-                    connected.search(
-                        query,
-                        null,
-                        object : android.support.v4.media.MediaBrowserCompat.SearchCallback() {
-                            override fun onSearchResult(
-                                q: String,
-                                extras: android.os.Bundle?,
-                                items: List<android.support.v4.media.MediaBrowserCompat.MediaItem>,
-                            ) {
-                                main.removeCallbacks(timeout)
-                                done(
-                                    if (items.isEmpty()) {
-                                        "${app.label} answered search \"$query\" with no results"
-                                    } else {
-                                        describeCompatItems(app, query, items)
-                                    },
-                                )
-                            }
-
-                            override fun onError(q: String, extras: android.os.Bundle?) {
-                                main.removeCallbacks(timeout)
-                                done("${app.label} answered search \"$query\" with an error — search not supported or refused")
-                            }
-                        },
-                    )
+                    try {
+                        block(connected) { text ->
+                            main.removeCallbacks(timeout)
+                            done(text)
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "explore: ${app.pkg} $what", e)
+                        done("${app.label} answered, then threw: ${e.message}")
+                    }
                 }
 
                 override fun onConnectionFailed() {
@@ -202,8 +275,8 @@ object MediaExplorer {
             }
         }
 
-        if (!latch.await(CONNECT_TIMEOUT_MS + BROWSE_TIMEOUT_MS + 1_000, TimeUnit.MILLISECONDS)) {
-            Log.w(TAG, "explore: search latch expired for ${app.pkg}")
+        if (!latch.await(CONNECT_TIMEOUT_MS + BROWSE_TIMEOUT_MS + PLAY_SETTLE_MS + 1_000, TimeUnit.MILLISECONDS)) {
+            Log.w(TAG, "explore: $what latch expired for ${app.pkg}")
         }
         return answer
     }
@@ -227,12 +300,16 @@ object MediaExplorer {
         return "${app.label}, search \"$query\", ${items.size} results:\n$lines$more"
     }
 
-    private fun describeChildren(app: MediaApp, node: String, children: List<MediaBrowser.MediaItem>): String {
+    private fun describeChildren(app: MediaApp, node: String, children: List<MediaBrowser.MediaItem>, offset: Int = 0): String {
         if (children.isEmpty()) {
             return "${app.label}, node \"$node\": no children — either an empty " +
                 "folder or browsing withheld from strangers"
         }
-        val lines = children.take(MAX_CHILDREN).joinToString("\n") { item ->
+        if (offset >= children.size) {
+            return "${app.label}, node \"$node\": ${children.size} children, offset $offset is past the end"
+        }
+        val page = children.drop(offset).take(MAX_CHILDREN)
+        val lines = page.joinToString("\n") { item ->
             val kind = when {
                 item.isBrowsable && item.isPlayable -> "dir+playable"
                 item.isBrowsable -> "dir"
@@ -242,12 +319,14 @@ object MediaExplorer {
             val subtitle = item.description.subtitle?.let { " — $it" } ?: ""
             "[$kind] ${item.description.title}$subtitle\n    id: ${item.mediaId}"
         }
-        val more = if (children.size > MAX_CHILDREN) {
-            "\n… and ${children.size - MAX_CHILDREN} more"
+        val shownTo = offset + page.size
+        val more = if (shownTo < children.size) {
+            "\n… ${children.size - shownTo} more — pass offset=$shownTo for the next page"
         } else {
             ""
         }
-        return "${app.label}, node \"$node\", ${children.size} children:\n$lines$more"
+        val range = if (offset > 0 || shownTo < children.size) " (showing $offset–${shownTo - 1})" else ""
+        return "${app.label}, node \"$node\", ${children.size} children$range:\n$lines$more"
     }
 
     /**
