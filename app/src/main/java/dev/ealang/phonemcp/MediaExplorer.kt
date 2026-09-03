@@ -111,6 +111,119 @@ object MediaExplorer {
             )
         }
 
+    /**
+     * The browser-side search: unlike playFromSearch this returns a result
+     * list without playing anything. Optional per app — an app that never
+     * implemented onSearch answers with an error or silence, and either is a
+     * survey finding.
+     */
+    fun search(context: Context, app: MediaApp, query: String): String {
+        // Search is compat-protocol only — the framework MediaBrowser has no
+        // search() — so this one path uses MediaBrowserCompat with its own
+        // connect, instead of withBrowser's framework browser.
+        var answer = "no answer from ${app.label} within ${CONNECT_TIMEOUT_MS / 1000}s"
+        val latch = CountDownLatch(1)
+
+        main.post {
+            var browser: android.support.v4.media.MediaBrowserCompat? = null
+            var finished = false
+
+            fun done(text: String) {
+                if (finished) return
+                finished = true
+                answer = text
+                try {
+                    browser?.disconnect()
+                } catch (e: Exception) {
+                    Log.w(TAG, "explore: disconnect ${app.pkg}", e)
+                }
+                latch.countDown()
+            }
+
+            val timeout = Runnable {
+                done("no search answer from ${app.label} within ${BROWSE_TIMEOUT_MS / 1000}s — the app likely never implemented search")
+            }
+
+            val callback = object : android.support.v4.media.MediaBrowserCompat.ConnectionCallback() {
+                override fun onConnected() {
+                    val connected = browser ?: return done("connected, then vanished")
+                    connected.search(
+                        query,
+                        null,
+                        object : android.support.v4.media.MediaBrowserCompat.SearchCallback() {
+                            override fun onSearchResult(
+                                q: String,
+                                extras: android.os.Bundle?,
+                                items: List<android.support.v4.media.MediaBrowserCompat.MediaItem>,
+                            ) {
+                                main.removeCallbacks(timeout)
+                                done(
+                                    if (items.isEmpty()) {
+                                        "${app.label} answered search \"$query\" with no results"
+                                    } else {
+                                        describeCompatItems(app, query, items)
+                                    },
+                                )
+                            }
+
+                            override fun onError(q: String, extras: android.os.Bundle?) {
+                                main.removeCallbacks(timeout)
+                                done("${app.label} answered search \"$query\" with an error — search not supported or refused")
+                            }
+                        },
+                    )
+                }
+
+                override fun onConnectionFailed() {
+                    main.removeCallbacks(timeout)
+                    done("${app.label} REFUSED the connection (its onGetRoot said no)")
+                }
+
+                override fun onConnectionSuspended() {
+                    main.removeCallbacks(timeout)
+                    done("${app.label} suspended the connection")
+                }
+            }
+
+            try {
+                browser = android.support.v4.media.MediaBrowserCompat(
+                    context,
+                    ComponentName(app.pkg, app.service),
+                    callback,
+                    null,
+                )
+                browser.connect()
+                main.postDelayed(timeout, CONNECT_TIMEOUT_MS + BROWSE_TIMEOUT_MS)
+            } catch (e: Exception) {
+                done("connecting to ${app.label} threw: ${e.message}")
+            }
+        }
+
+        if (!latch.await(CONNECT_TIMEOUT_MS + BROWSE_TIMEOUT_MS + 1_000, TimeUnit.MILLISECONDS)) {
+            Log.w(TAG, "explore: search latch expired for ${app.pkg}")
+        }
+        return answer
+    }
+
+    private fun describeCompatItems(
+        app: MediaApp,
+        query: String,
+        items: List<android.support.v4.media.MediaBrowserCompat.MediaItem>,
+    ): String {
+        val lines = items.take(MAX_CHILDREN).joinToString("\n") { item ->
+            val kind = when {
+                item.isBrowsable && item.isPlayable -> "dir+playable"
+                item.isBrowsable -> "dir"
+                item.isPlayable -> "playable"
+                else -> "?"
+            }
+            val subtitle = item.description.subtitle?.let { " — $it" } ?: ""
+            "[$kind] ${item.description.title}$subtitle\n    id: ${item.mediaId}"
+        }
+        val more = if (items.size > MAX_CHILDREN) "\n… and ${items.size - MAX_CHILDREN} more" else ""
+        return "${app.label}, search \"$query\", ${items.size} results:\n$lines$more"
+    }
+
     private fun describeChildren(app: MediaApp, node: String, children: List<MediaBrowser.MediaItem>): String {
         if (children.isEmpty()) {
             return "${app.label}, node \"$node\": no children — either an empty " +
@@ -208,6 +321,22 @@ object MediaExplorer {
                         return@withBrowser
                     }
                     tc.skipToQueueItem(id)
+                } else if (action.trim().lowercase().startsWith("seek:")) {
+                    // seek:<seconds> absolute, seek:+30 / seek:-30 relative to
+                    // the session's reported position.
+                    val spec = action.trim().substringAfter(":").trim()
+                    val amount = spec.toLongOrNull()
+                    if (amount == null) {
+                        done("seek:<seconds> needs a number — absolute, or +N/-N for relative")
+                        return@withBrowser
+                    }
+                    val targetMs = if (spec.startsWith("+") || spec.startsWith("-")) {
+                        val pos = controller.playbackState?.position ?: 0L
+                        (pos + amount * 1000L).coerceAtLeast(0L)
+                    } else {
+                        amount * 1000L
+                    }
+                    tc.seekTo(targetMs)
                 } else {
                     tc.sendCustomAction(action.trim(), null)
                 }
@@ -238,8 +367,16 @@ object MediaExplorer {
             else -> "state ${state.state}"
         }
         val playing = title?.let { " Now loaded: \"$it\"." } ?: ""
+        val position = state?.takeIf { it.position > 0 }?.let {
+            val dur = try {
+                controller.metadata?.getLong(android.media.MediaMetadata.METADATA_KEY_DURATION)
+            } catch (e: Exception) {
+                null
+            }?.takeIf { d -> d > 0 }?.let { d -> " of ${d / 1000}s" } ?: ""
+            " Position: ${it.position / 1000}s$dur."
+        } ?: ""
         return "Sent ${app.label} $described. ${PLAY_SETTLE_MS / 1000}s later the " +
-            "session reports: $stateName.$playing${advertised(state)}"
+            "session reports: $stateName.$playing$position${advertised(state)}"
     }
 
     /**

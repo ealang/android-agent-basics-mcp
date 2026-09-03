@@ -69,6 +69,9 @@ dependencies {
     // constants with androidx IntDef/Nullable; this is compile-time metadata
     // only, no runtime library comes with it.
     implementation("androidx.annotation:annotation:1.8.2")
+    // MediaBrowserCompat, for the experimental media_search only: search is
+    // part of the androidx media protocol, not the framework MediaBrowser.
+    implementation("androidx.media:media:1.7.0")
 
     // Unit tests only cover logic that needs no device — the time parser being
     // the case where a quiet mistake produces a timer at the wrong hour rather

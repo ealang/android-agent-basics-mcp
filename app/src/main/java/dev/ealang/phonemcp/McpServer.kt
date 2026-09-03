@@ -637,19 +637,31 @@ class McpServer(
             .put("inputSchema", JSONObject().put("type", "object").put("properties", JSONObject()))
         val mediaCommand = JSONObject()
             .put("name", "media_command")
-            .put("description", "EXPERIMENTAL: send a media app a transport command: next, previous, pause, play, stop, or a custom action id verbatim. Reads back the session state and advertised actions after a beat.")
+            .put("description", "EXPERIMENTAL: send a media app a transport command: next, previous, pause, play, stop, queue, queue:<id>, seek:<seconds> (absolute, or +N/-N relative), or a custom action id verbatim. Reads back the session state, position, and advertised actions after a beat.")
             .put(
                 "inputSchema",
                 JSONObject().put("type", "object").put(
                     "properties",
                     JSONObject()
                         .put("app", JSONObject().put("type", "string").put("description", "App name or package, fuzzy matched."))
-                        .put("action", JSONObject().put("type", "string").put("description", "next, previous, pause, play, or stop.")),
+                        .put("action", JSONObject().put("type", "string").put("description", "next, previous, pause, play, stop, queue, queue:<id>, seek:<seconds>, seek:+N, seek:-N, or a custom action id.")),
                 ).put("required", JSONArray().put("app").put("action")),
+            )
+        val mediaSearch = JSONObject()
+            .put("name", "media_search")
+            .put("description", "EXPERIMENTAL: search a media app's catalog and list the results without playing anything. Optional per app — some never implemented it.")
+            .put(
+                "inputSchema",
+                JSONObject().put("type", "object").put(
+                    "properties",
+                    JSONObject()
+                        .put("app", JSONObject().put("type", "string").put("description", "App name or package, fuzzy matched."))
+                        .put("query", JSONObject().put("type", "string").put("description", "Free-text search.")),
+                ).put("required", JSONArray().put("app").put("query")),
             )
 
         return JSONArray().put(setTimer).put(cancelTimer)
-            .put(mediaApps).put(mediaBrowse).put(mediaPlay).put(mediaCommand)
+            .put(mediaApps).put(mediaBrowse).put(mediaPlay).put(mediaCommand).put(mediaSearch)
             .put(launchWatchApp).put(stopWatchApp).put(setWatchTimer).put(getLocation)
             .put(playPodcast).put(nowPlaying).put(findMyPhone).put(silencePhone)
             .put(startVoice).put(stopVoice).put(voiceStatus)
@@ -899,6 +911,12 @@ class McpServer(
             val (app, problem) = MediaExplorer.resolve(context, args.optString("app"))
             if (app == null) "FAILED: $problem" to true
             else MediaExplorer.command(context, app, args.optString("action")) to false
+        }
+
+        "media_search" -> {
+            val (app, problem) = MediaExplorer.resolve(context, args.optString("app"))
+            if (app == null) "FAILED: $problem" to true
+            else MediaExplorer.search(context, app, args.optString("query")) to false
         }
 
         else -> "No such tool: $name" to true
