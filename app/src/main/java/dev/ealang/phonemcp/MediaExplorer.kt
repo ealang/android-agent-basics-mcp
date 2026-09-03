@@ -13,11 +13,11 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 /**
- * Experimental, like [MediaProbe]: the generic media surface, exposed as MCP
- * tools so the survey can be driven remotely — walk any app's browse tree,
- * then try to actually start playback, one app at a time, and see what
- * happens on the device. What survives into a real `play_media` design gets
- * decided by what these calls turn up.
+ * Experimental: the generic media surface, exposed as MCP tools so the
+ * survey can be driven remotely — walk any app's browse tree, then try to
+ * actually start playback, one app at a time, and see what happens on the
+ * device. What survives into a real `play_media` design gets decided by
+ * what these calls turn up.
  *
  * Everything here binds the target app's MediaBrowserService. That is the
  * Android Auto route: connecting wakes the app's process without any
@@ -35,6 +35,9 @@ object MediaExplorer {
 
     private const val TAG = "phone-mcp"
 
+    /** The action Auto and Wear query for; compat services register it too. */
+    private const val SERVICE_ACTION = "android.media.browse.MediaBrowserService"
+
     private const val CONNECT_TIMEOUT_MS = 6_000L
     private const val BROWSE_TIMEOUT_MS = 6_000L
 
@@ -50,7 +53,7 @@ object MediaExplorer {
     /** Every installed app declaring a MediaBrowserService, Auto's own query. */
     fun mediaApps(context: Context): List<MediaApp> =
         context.packageManager
-            .queryIntentServices(Intent(MediaProbe.SERVICE_ACTION), 0)
+            .queryIntentServices(Intent(SERVICE_ACTION), 0)
             .mapNotNull { resolved ->
                 val info = resolved.serviceInfo ?: return@mapNotNull null
                 MediaApp(
