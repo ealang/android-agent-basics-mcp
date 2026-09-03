@@ -898,7 +898,7 @@ class McpServer(
         "media_command" -> {
             val (app, problem) = MediaExplorer.resolve(context, args.optString("app"))
             if (app == null) "FAILED: $problem" to true
-            else MediaExplorer.command(context, app, args.optString("action").trim().lowercase()) to false
+            else MediaExplorer.command(context, app, args.optString("action")) to false
         }
 
         else -> "No such tool: $name" to true

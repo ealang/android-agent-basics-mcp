@@ -182,15 +182,35 @@ object MediaExplorer {
                 return@withBrowser
             }
             val tc = controller.transportControls
-            when (action) {
+            // Built-ins matched loosely; anything else is a custom action id,
+            // passed exactly as given — those are case-sensitive.
+            when (action.trim().lowercase()) {
                 "next" -> tc.skipToNext()
                 "previous" -> tc.skipToPrevious()
                 "pause" -> tc.pause()
                 "play" -> tc.play()
                 "stop" -> tc.stop()
-                // Anything else is taken as a custom action id, verbatim —
-                // the read-back lists what the app advertises.
-                else -> tc.sendCustomAction(action, null)
+                // The session's queue, for apps advertising skip_to_queue_item:
+                // "queue" lists it, "queue:<id>" jumps to an entry.
+                "queue" -> {
+                    val queue = controller.queue
+                    done(
+                        if (queue.isNullOrEmpty()) "${app.label} exposes no queue on its session"
+                        else "${app.label} queue, ${queue.size} items:\n" +
+                            queue.joinToString("\n") { "  ${it.queueId}: ${it.description.title}" },
+                    )
+                    return@withBrowser
+                }
+                else -> if (action.trim().lowercase().startsWith("queue:")) {
+                    val id = action.trim().substringAfter(":").trim().toLongOrNull()
+                    if (id == null) {
+                        done("queue:<id> needs the numeric id from the queue listing")
+                        return@withBrowser
+                    }
+                    tc.skipToQueueItem(id)
+                } else {
+                    tc.sendCustomAction(action.trim(), null)
+                }
             }
             Log.i(TAG, "explore: ${app.pkg} $action")
             main.postDelayed({ done(readBack(app, controller, action)) }, PLAY_SETTLE_MS)
