@@ -49,6 +49,13 @@
         <package android:name="com.agentvoicegateway.app" />
         <provider android:authorities="com.agentvoicegateway.app.automation" />
         <package android:name="dev.ealang.voicerecorder" />
+        <!-- See every app declaring a MediaBrowserService — the same query
+             Android Auto builds its media-app list from. Intent-scoped, so no
+             QUERY_ALL_PACKAGES; used by the media probe and, later, generic
+             media control. -->
+        <intent>
+            <action android:name="android.media.browse.MediaBrowserService" />
+        </intent>
     </queries>
 
     <application

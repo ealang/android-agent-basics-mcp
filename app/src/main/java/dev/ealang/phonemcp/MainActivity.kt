@@ -392,6 +392,21 @@ class MainActivity : Activity() {
             },
         )
 
+        root.addView(
+            Button(this).apply {
+                // Temporary survey tool: which installed media apps accept a
+                // MediaBrowser connection from us, and what their tree shows.
+                // Informs the generic media-control design; remove once decided.
+                text = "Probe media apps"
+                setOnClickListener {
+                    toast("Probing — a few seconds per app…")
+                    MediaProbe(this@MainActivity).run { report ->
+                        showLog("Media probe", report.trimEnd().lines())
+                    }
+                }
+            },
+        )
+
         setContentView(
             ScrollView(this).apply {
                 // Targeting SDK 35 forces edge-to-edge, which slid the last
