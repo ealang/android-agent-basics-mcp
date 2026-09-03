@@ -604,7 +604,40 @@ class McpServer(
                 JSONObject().put("type", "object").put("properties", JSONObject()),
             )
 
+        // Experimental media-exploration prototype — no polish, remove or
+        // promote after the survey.
+        val mediaBrowse = JSONObject()
+            .put("name", "media_browse")
+            .put("description", "EXPERIMENTAL: list one node of a media app's browse tree (root if no node given).")
+            .put(
+                "inputSchema",
+                JSONObject().put("type", "object").put(
+                    "properties",
+                    JSONObject()
+                        .put("app", JSONObject().put("type", "string").put("description", "App name or package, fuzzy matched."))
+                        .put("node", JSONObject().put("type", "string").put("description", "Media id of the node to list.")),
+                ).put("required", JSONArray().put("app")),
+            )
+        val mediaPlay = JSONObject()
+            .put("name", "media_play")
+            .put("description", "EXPERIMENTAL: try to start playback in a media app — by media_id, by search query, or bare resume. Reads back the session state after a beat. Audible on the phone.")
+            .put(
+                "inputSchema",
+                JSONObject().put("type", "object").put(
+                    "properties",
+                    JSONObject()
+                        .put("app", JSONObject().put("type", "string").put("description", "App name or package, fuzzy matched."))
+                        .put("media_id", JSONObject().put("type", "string").put("description", "A playable id from media_browse."))
+                        .put("query", JSONObject().put("type", "string").put("description", "Free-text search the app resolves itself.")),
+                ).put("required", JSONArray().put("app")),
+            )
+        val mediaApps = JSONObject()
+            .put("name", "media_apps")
+            .put("description", "EXPERIMENTAL: list installed apps declaring a MediaBrowserService.")
+            .put("inputSchema", JSONObject().put("type", "object").put("properties", JSONObject()))
+
         return JSONArray().put(setTimer).put(cancelTimer)
+            .put(mediaApps).put(mediaBrowse).put(mediaPlay)
             .put(launchWatchApp).put(stopWatchApp).put(setWatchTimer).put(getLocation)
             .put(playPodcast).put(nowPlaying).put(findMyPhone).put(silencePhone)
             .put(startVoice).put(stopVoice).put(voiceStatus)
@@ -820,6 +853,33 @@ class McpServer(
                         "FAILED: the watch received the request and refused it. Nothing " +
                             "is counting down." to true
                 }
+            }
+        }
+
+        // Experimental prototype tools; findings over polish.
+        "media_apps" -> {
+            val apps = MediaExplorer.mediaApps(context)
+            if (apps.isEmpty()) "No installed app declares a MediaBrowserService." to false
+            else apps.joinToString("\n") { "${it.label} (${it.pkg})" } to false
+        }
+
+        "media_browse" -> {
+            val (app, problem) = MediaExplorer.resolve(context, args.optString("app"))
+            if (app == null) "FAILED: $problem" to true
+            else MediaExplorer.browse(context, app, args.optString("node").ifBlank { null }) to false
+        }
+
+        "media_play" -> {
+            val (app, problem) = MediaExplorer.resolve(context, args.optString("app"))
+            if (app == null) {
+                "FAILED: $problem" to true
+            } else {
+                MediaExplorer.play(
+                    context,
+                    app,
+                    args.optString("media_id").ifBlank { null },
+                    args.optString("query").ifBlank { null },
+                ) to false
             }
         }
 
