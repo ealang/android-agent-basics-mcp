@@ -637,14 +637,14 @@ class McpServer(
             .put("inputSchema", JSONObject().put("type", "object").put("properties", JSONObject()))
         val mediaCommand = JSONObject()
             .put("name", "media_command")
-            .put("description", "EXPERIMENTAL: send a media app a transport command: next, previous, pause, play, stop, queue, queue:<id>, seek:<seconds> (absolute, or +N/-N relative), or a custom action id verbatim. Reads back the session state, position, and advertised actions after a beat.")
+            .put("description", "EXPERIMENTAL: send a media app a transport command: next, previous, pause, play, stop, queue, queue:<id>, seek:<seconds> (absolute, or +N/-N relative), speed:<multiplier>, rate:up/down/clear/<number>, or a custom action id verbatim. Reads back the session state, position, and advertised actions after a beat.")
             .put(
                 "inputSchema",
                 JSONObject().put("type", "object").put(
                     "properties",
                     JSONObject()
                         .put("app", JSONObject().put("type", "string").put("description", "App name or package, fuzzy matched."))
-                        .put("action", JSONObject().put("type", "string").put("description", "next, previous, pause, play, stop, queue, queue:<id>, seek:<seconds>, seek:+N, seek:-N, or a custom action id.")),
+                        .put("action", JSONObject().put("type", "string").put("description", "next, previous, pause, play, stop, queue, queue:<id>, seek:<seconds>, seek:+N, seek:-N, speed:<multiplier>, rate:up/down/clear/<number>, or a custom action id.")),
                 ).put("required", JSONArray().put("app").put("action")),
             )
         val mediaSearch = JSONObject()

@@ -321,6 +321,39 @@ object MediaExplorer {
                         return@withBrowser
                     }
                     tc.skipToQueueItem(id)
+                } else if (action.trim().lowercase().startsWith("speed:")) {
+                    val speed = action.trim().substringAfter(":").trim().toFloatOrNull()
+                    if (speed == null || speed <= 0f) {
+                        done("speed:<multiplier> needs a positive number, e.g. speed:1.5")
+                        return@withBrowser
+                    }
+                    tc.setPlaybackSpeed(speed)
+                } else if (action.trim().lowercase().startsWith("rate:")) {
+                    // Built against whatever rating scheme the session declares
+                    // (heart, thumbs, stars, percentage): up/down/clear, or a
+                    // number for star/percentage schemes.
+                    val spec = action.trim().substringAfter(":").trim().lowercase()
+                    val type = controller.ratingType
+                    val rating = when {
+                        spec == "clear" -> android.media.Rating.newUnratedRating(type)
+                        type == android.media.Rating.RATING_HEART ->
+                            android.media.Rating.newHeartRating(spec == "up")
+                        type == android.media.Rating.RATING_THUMB_UP_DOWN ->
+                            android.media.Rating.newThumbRating(spec == "up")
+                        type in android.media.Rating.RATING_3_STARS..android.media.Rating.RATING_5_STARS ->
+                            spec.toFloatOrNull()?.let { android.media.Rating.newStarRating(type, it) }
+                        type == android.media.Rating.RATING_PERCENTAGE ->
+                            spec.toFloatOrNull()?.let { android.media.Rating.newPercentageRating(it) }
+                        else -> null
+                    }
+                    if (rating == null) {
+                        done(
+                            "this session's rating type is $type — use rate:up, rate:down, " +
+                                "rate:clear, or rate:<number> for star/percentage types",
+                        )
+                        return@withBrowser
+                    }
+                    tc.setRating(rating)
                 } else if (action.trim().lowercase().startsWith("seek:")) {
                     // seek:<seconds> absolute, seek:+30 / seek:-30 relative to
                     // the session's reported position.
@@ -375,8 +408,19 @@ object MediaExplorer {
             }?.takeIf { d -> d > 0 }?.let { d -> " of ${d / 1000}s" } ?: ""
             " Position: ${it.position / 1000}s$dur."
         } ?: ""
+        val speed = state?.playbackSpeed?.takeIf { it != 1.0f && it != 0.0f }
+            ?.let { " Speed: ${it}x." } ?: ""
+        val ratingType = when (controller.ratingType) {
+            android.media.Rating.RATING_HEART -> " Rating type: heart."
+            android.media.Rating.RATING_THUMB_UP_DOWN -> " Rating type: thumbs."
+            android.media.Rating.RATING_3_STARS -> " Rating type: 3 stars."
+            android.media.Rating.RATING_4_STARS -> " Rating type: 4 stars."
+            android.media.Rating.RATING_5_STARS -> " Rating type: 5 stars."
+            android.media.Rating.RATING_PERCENTAGE -> " Rating type: percentage."
+            else -> ""
+        }
         return "Sent ${app.label} $described. ${PLAY_SETTLE_MS / 1000}s later the " +
-            "session reports: $stateName.$playing$position${advertised(state)}"
+            "session reports: $stateName.$playing$position$speed$ratingType${advertised(state)}"
     }
 
     /**
