@@ -436,6 +436,16 @@ object MediaExplorer {
                         return@withBrowser
                     }
                     tc.setRating(rating)
+                } else if (action.trim().lowercase().startsWith("uri:")) {
+                    // playFromUri, for apps advertising play_from_uri: the
+                    // rest of the action is the URI, passed verbatim (so no
+                    // lowercasing — URLs are case-sensitive past the host).
+                    val uri = action.trim().substringAfter(":").trim()
+                    if (uri.isEmpty()) {
+                        done("uri:<uri> needs the URI to play")
+                        return@withBrowser
+                    }
+                    tc.playFromUri(android.net.Uri.parse(uri), null)
                 } else if (action.trim().lowercase().startsWith("seek:")) {
                     // seek:<seconds> absolute, seek:+30 / seek:-30 relative to
                     // the session's reported position.
