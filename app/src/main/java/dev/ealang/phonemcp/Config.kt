@@ -27,6 +27,13 @@ class Config(context: Context) {
      * Tailscale interface is a generic `tunN` on Android, so there is nothing
      * stable to match on by name — the address itself is the durable handle,
      * since Tailscale pins it to the node.
+     *
+     * Open question (2026-09-04, deliberately unresolved): a blank field
+     * binds every interface, which a user without networking knowledge can
+     * do by accident. Auto-detecting tunnel interfaces or offering a
+     * dropdown of addresses might fix that; whether tunnels can be detected
+     * reliably is the unanswered part. The webhook no longer rides on this
+     * setting — it has its own loopback-only listener.
      */
     var bindAddress: String
         get() = prefs.getString(KEY_BIND, "") ?: ""

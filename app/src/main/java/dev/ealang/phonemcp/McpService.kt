@@ -141,6 +141,14 @@ class McpService : Service() {
 
     private var server: McpServer? = null
 
+    /**
+     * The Pebble webhook's own listener, hardcoded to loopback (see
+     * [McpServer.WEBHOOK_BIND]). Separate from [server] so the recording
+     * inbox neither depends on the configurable bind address nor is exposed
+     * by it.
+     */
+    private var webhookServer: McpServer? = null
+
     private val main = Handler(Looper.getMainLooper())
     private val retry = Runnable { attemptStart() }
     private var retryDelayMs = INITIAL_RETRY_MS
@@ -357,44 +365,81 @@ class McpService : Service() {
      */
     private fun attemptStart() {
         main.removeCallbacks(retry)
-        if (server != null) return
 
         val config = Config(this)
-        val listeningOn = config.bindAddress.ifBlank { "every interface" }
-        val instance = McpServer(
-            applicationContext,
-            config.bindAddress,
-            config.port,
-            config.token,
-            onDied = ::onServerDied,
-            // Runs on NanoHTTPD's request thread. enqueue is thread-safe (it
-            // only ever creates), wake is thread-safe by design; a throw here
-            // becomes the 500 that makes the watch retry.
-            webhookEnqueue = { audio, meta ->
-                val item = store?.enqueue(audio, meta)
-                    ?: throw IllegalStateException("pipeline not started")
-                pipelineLog?.record(item.name, "received", meta.trigger.name)
-                worker?.wake()
-            },
-        )
-        try {
-            // daemon=false: the socket should outlive the thread that made it.
-            instance.start(NanoTimeouts.SOCKET_READ_MS, false)
-            server = instance
-            running = true
-            retryDelayMs = INITIAL_RETRY_MS
-            EventLog.record("listening on $listeningOn:${config.port}")
-            baseText = "Listening on $listeningOn:${config.port}"
-            notify(baseText)
-            Log.i(TAG, "Listening on $listeningOn port ${config.port}")
-        } catch (e: Exception) {
-            Log.w(TAG, "Could not bind $listeningOn port ${config.port}; will retry", e)
-            EventLog.record(
-                "bind $listeningOn:${config.port} failed " +
-                    "(${e.message ?: e::class.java.simpleName}); retry in ${retryDelayMs / 1000}s",
+
+        // The webhook listener first: loopback always exists, so this bind
+        // owes nothing to Tailscale being up and should not wait behind it.
+        if (webhookServer == null) {
+            val instance = McpServer(
+                applicationContext,
+                McpServer.WEBHOOK_BIND,
+                McpServer.WEBHOOK_PORT,
+                config.token,
+                onDied = ::onWebhookServerDied,
+                // Runs on NanoHTTPD's request thread. enqueue is thread-safe
+                // (it only ever creates), wake is thread-safe by design; a
+                // throw here becomes the 500 that makes the watch retry.
+                webhookEnqueue = { audio, meta ->
+                    val item = store?.enqueue(audio, meta)
+                        ?: throw IllegalStateException("pipeline not started")
+                    pipelineLog?.record(item.name, "received", meta.trigger.name)
+                    worker?.wake()
+                },
+                mcpEnabled = false,
             )
-            baseText = "Waiting to bind $listeningOn:${config.port}"
-            notify(baseText)
+            try {
+                instance.start(NanoTimeouts.SOCKET_READ_MS, false)
+                webhookServer = instance
+                EventLog.record(
+                    "webhook listening on ${McpServer.WEBHOOK_BIND}:${McpServer.WEBHOOK_PORT}",
+                )
+            } catch (e: Exception) {
+                // Only a port squatter can make loopback fail; the shared
+                // retry below picks it up.
+                Log.w(TAG, "Could not bind the webhook listener; will retry", e)
+                EventLog.record(
+                    "webhook bind ${McpServer.WEBHOOK_BIND}:${McpServer.WEBHOOK_PORT} failed " +
+                        "(${e.message ?: e::class.java.simpleName})",
+                )
+            }
+        }
+
+        val listeningOn = config.bindAddress.ifBlank { "every interface" }
+        if (server == null) {
+            val instance = McpServer(
+                applicationContext,
+                config.bindAddress,
+                config.port,
+                config.token,
+                onDied = ::onServerDied,
+            )
+            try {
+                // daemon=false: the socket should outlive the thread that made it.
+                instance.start(NanoTimeouts.SOCKET_READ_MS, false)
+                server = instance
+                running = true
+                retryDelayMs = INITIAL_RETRY_MS
+                EventLog.record("listening on $listeningOn:${config.port}")
+                baseText = "Listening on $listeningOn:${config.port}"
+                notify(baseText)
+                Log.i(TAG, "Listening on $listeningOn port ${config.port}")
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not bind $listeningOn port ${config.port}; will retry", e)
+                EventLog.record(
+                    "bind $listeningOn:${config.port} failed " +
+                        "(${e.message ?: e::class.java.simpleName}); retry in ${retryDelayMs / 1000}s",
+                )
+                baseText = "Waiting to bind $listeningOn:${config.port}"
+                notify(baseText)
+                main.postDelayed(retry, retryDelayMs)
+                retryDelayMs = (retryDelayMs * 2).coerceAtMost(MAX_RETRY_MS)
+            }
+        }
+
+        if (webhookServer == null && server != null) {
+            // The MCP bind succeeded so its catch armed no retry; the webhook
+            // still needs one.
             main.postDelayed(retry, retryDelayMs)
             retryDelayMs = (retryDelayMs * 2).coerceAtMost(MAX_RETRY_MS)
         }
@@ -416,6 +461,16 @@ class McpService : Service() {
         }
     }
 
+    private fun onWebhookServerDied() {
+        main.post {
+            Log.w(TAG, "Webhook listener died underneath us; rebinding")
+            EventLog.record("webhook listener restarting after socket death")
+            webhookServer?.stop()
+            webhookServer = null
+            attemptStart()
+        }
+    }
+
     override fun onDestroy() {
         main.removeCallbacks(retry)
         stopPipeline()
@@ -424,6 +479,8 @@ class McpService : Service() {
         Sound.stop()
         server?.stop()
         server = null
+        webhookServer?.stop()
+        webhookServer = null
         running = false
         degraded = false
         sendBroadcast(Intent(ACTION_STATE_CHANGED).setPackage(packageName))

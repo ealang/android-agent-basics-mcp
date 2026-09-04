@@ -602,8 +602,10 @@ class MainActivity : Activity() {
             "No OpenAI key, so audio-only recordings will wait in the queue " +
                 "until one is saved below."
         }
+        val endpoint = "Receives at http://${McpServer.WEBHOOK_BIND}:${McpServer.WEBHOOK_PORT}" +
+            "${McpServer.WEBHOOK_PATH} — this phone only, same Bearer token as the MCP server."
         webhookStatus.text =
-            "Queued: $pending   Failed: ${failed.size}\n\n$notes\n\n$transcription"
+            "Queued: $pending   Failed: ${failed.size}\n\n$endpoint\n\n$notes\n\n$transcription"
 
         failedContainer.removeAllViews()
         for (item in failed) {

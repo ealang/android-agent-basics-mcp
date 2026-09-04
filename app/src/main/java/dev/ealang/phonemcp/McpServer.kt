@@ -29,6 +29,11 @@ class McpServer(
      * answered with a 500 so the watch retries. Null disables the route.
      */
     private val webhookEnqueue: ((audio: File?, meta: Meta) -> Unit)? = null,
+    /**
+     * False for the loopback webhook listener, which must not expose the MCP
+     * tools on an address every app on the phone can reach.
+     */
+    private val mcpEnabled: Boolean = true,
     // A null hostname makes NanoHTTPD bind the wildcard address; anything else
     // binds that one address, which is how the server is kept off the LAN.
 ) : NanoHTTPD(bindAddress.ifBlank { null }, port) {
@@ -38,6 +43,16 @@ class McpServer(
         private const val FALLBACK_PROTOCOL = "2025-11-25"
         const val MCP_PATH = "/mcp"
         const val WEBHOOK_PATH = "/webhook"
+
+        /**
+         * The webhook's own listener is hardcoded to loopback: its one caller
+         * is CoreApp on this same phone, so it needs no route from anywhere
+         * else and must not inherit whatever the user typed into the bind
+         * field — a blanked field means "every interface", and a recording
+         * inbox open to the network is exactly the mistake this removes.
+         */
+        const val WEBHOOK_BIND = "127.0.0.1"
+        const val WEBHOOK_PORT = 8911
     }
 
     init {
@@ -71,7 +86,9 @@ class McpServer(
             return json(Response.Status.OK, JSONObject().put("ok", true).put("service", "phone-mcp"))
         }
 
-        if (uri != MCP_PATH && !(uri == WEBHOOK_PATH && webhookEnqueue != null)) {
+        val served = (uri == MCP_PATH && mcpEnabled) ||
+            (uri == WEBHOOK_PATH && webhookEnqueue != null)
+        if (!served) {
             return json(Response.Status.NOT_FOUND, JSONObject().put("error", "Not found: $uri"))
         }
 
