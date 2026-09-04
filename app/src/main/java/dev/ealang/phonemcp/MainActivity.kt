@@ -106,6 +106,20 @@ class MainActivity : Activity() {
         }
         root.addView(toggle)
 
+        root.addView(
+            Button(this).apply {
+                text = "Copy MCP URL"
+                setOnClickListener {
+                    val url = mcpUrl()
+                    if (url == null) {
+                        toast("No address to build a URL from — is the phone on a network?")
+                    } else {
+                        copyToClipboard("MCP URL", url)
+                    }
+                }
+            },
+        )
+
         root.addView(label("Port"))
         portField = EditText(this).apply {
             inputType = InputType.TYPE_CLASS_NUMBER
@@ -141,8 +155,8 @@ class MainActivity : Activity() {
             Button(this).apply {
                 text = "Copy"
                 setOnClickListener {
-                    val clipboard = getSystemService(ClipboardManager::class.java)
-                    clipboard.setPrimaryClip(ClipData.newPlainText("token", config.token))
+                    getSystemService(ClipboardManager::class.java)
+                        .setPrimaryClip(ClipData.newPlainText("token", config.token))
                     toast("Token copied")
                 }
             },
@@ -181,6 +195,12 @@ class MainActivity : Activity() {
         pipelineLog = PipelineLog(filesDir)
         webhookStatus = TextView(this).apply { textSize = 13f }
         root.addView(webhookStatus)
+        root.addView(
+            Button(this).apply {
+                text = "Copy webhook URL"
+                setOnClickListener { copyToClipboard("webhook URL", webhookUrl()) }
+            },
+        )
         failedContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(failedContainer)
         root.addView(
@@ -602,8 +622,8 @@ class MainActivity : Activity() {
             "No OpenAI key, so audio-only recordings will wait in the queue " +
                 "until one is saved below."
         }
-        val endpoint = "Receives at http://${McpServer.WEBHOOK_BIND}:${McpServer.WEBHOOK_PORT}" +
-            "${McpServer.WEBHOOK_PATH} — this phone only, same Bearer token as the MCP server."
+        val endpoint = "Receives at ${webhookUrl()} — this phone only, " +
+            "same Bearer token as the MCP server."
         webhookStatus.text =
             "Queued: $pending   Failed: ${failed.size}\n\n$endpoint\n\n$notes\n\n$transcription"
 
@@ -707,6 +727,29 @@ class MainActivity : Activity() {
         this.text = text
         textSize = 13f
         setPadding(0, 32, 0, 8)
+    }
+
+    /**
+     * The URL a client should be given, mirroring what the status text shows:
+     * the bind address when one is set, else the first interface the phone has
+     * (in every-interface mode any of them reaches the server), else null.
+     */
+    private fun mcpUrl(): String? {
+        val host = config.bindAddress.ifBlank {
+            McpService.localAddresses().firstOrNull()?.substringBefore(' ')
+        } ?: return null
+        return "http://$host:${config.port}${McpServer.MCP_PATH}"
+    }
+
+    private fun webhookUrl(): String =
+        "http://${McpServer.WEBHOOK_BIND}:${McpServer.WEBHOOK_PORT}${McpServer.WEBHOOK_PATH}"
+
+    private fun copyToClipboard(label: String, text: String) {
+        getSystemService(ClipboardManager::class.java)
+            .setPrimaryClip(ClipData.newPlainText(label, text))
+        // Echo what actually landed on the clipboard, so a copy made with a
+        // stale field or no network is caught at a glance.
+        toast("Copied $text")
     }
 
     private fun toast(text: String) = Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
