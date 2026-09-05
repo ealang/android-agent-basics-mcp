@@ -573,10 +573,11 @@ class McpServer(
                             JSONObject().put("type", "boolean")
                                 .put(
                                     "description",
-                                    "True replays everything since the user's own last " +
-                                        "message, even if already read or heard — use it " +
-                                        "when they ask to hear a message again or rewind. " +
-                                        "Default false: only unread messages are read aloud.",
+                                    "Only when the user explicitly asks to hear messages " +
+                                        "again: true rewinds to their own last sent message " +
+                                        "and replays everything after it, even if already " +
+                                        "read or heard. Works on a running session too — no " +
+                                        "need to stop it first. Otherwise omit it.",
                                 ),
                         ),
                     ),
