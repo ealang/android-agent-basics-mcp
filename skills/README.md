@@ -36,7 +36,8 @@ don't try search.
 | Libro.fm | [apps/librofm.md](apps/librofm.md) | everything works; cleanest interface |
 | Substack | [apps/substack.md](apps/substack.md) | works with sharp edges |
 | AIMP | [apps/aimp.md](apps/aimp.md) | plays only while connected |
-| YouTube, Audible, others | [apps/unavailable.md](apps/unavailable.md) | no usable route — don't re-probe |
+| YouTube | [apps/youtube.md](apps/youtube.md) | dead while idle, fully drivable once playing |
+| Audible, others | [apps/unavailable.md](apps/unavailable.md) | no usable route — don't re-probe |
 
 Not documented here: apps with purpose-built integrations in phone-mcp
 itself (the Pebble watchapps, the voice gateway, the recorder). Their

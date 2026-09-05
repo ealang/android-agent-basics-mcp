@@ -18,16 +18,6 @@ MediaBrowser route.
 - **YouTube Music** (`com.google.android.apps.youtube.music`)
 - **Telegram** (`org.telegram.messenger`)
 
-## YouTube — connects, but playback is paywalled
-
-`com.google.android.youtube`. The session accepts strangers (empty browse
-root, rating type reported), but every play route errors: playFromSearch
-and playFromMediaId → "Action not supported"; plain play → **"Required
-premium account to perform action in background"**. Media-session play
-with no YouTube UI foregrounded is background playback, a Premium
-feature. On a non-Premium account nothing works and nothing is
-advertised. Retry playFromSearch only if the account gains Premium.
-
 ## Eleven Reader — no MediaBrowserService at all
 
 Absent from `media_apps`: it ships no browser service, so this entire
