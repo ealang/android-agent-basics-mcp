@@ -52,6 +52,14 @@ bare (activity mode, no extras) opens the real search-along-route panel
 with the search box focused, over the running navigation. The query
 cannot be passed in — the user types or speaks it.
 
+## Open the destination-entry screen
+
+Launching
+`com.google.android.apps.maps/com.google.android.maps.driveabout.app.DestinationActivity`
+bare opens Maps at the destination-entry screen (during active
+navigation, after an exit-navigation prompt). Useful only as "open Maps
+ready for the user to type a destination".
+
 ## Not possible
 
 - **End navigation** — no exported component, no URI. The user taps End.
