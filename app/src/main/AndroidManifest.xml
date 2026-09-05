@@ -38,6 +38,13 @@
         android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
         tools:ignore="ScopedStorage" />
 
+    <!-- The generic intent tools scan every installed app's automation
+         surface — components, filters, permissions. Scoped <queries> entries
+         cannot express "everything", so this is the one legitimate use of the
+         blanket permission. Play Store policy would object; this app is
+         sideloaded and is precisely a device-automation tool. -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+
     <!-- Android 11+ hides other packages by default. Without these, the Pebble
          companion looks uninstalled and its state provider unreadable. -->
     <queries>

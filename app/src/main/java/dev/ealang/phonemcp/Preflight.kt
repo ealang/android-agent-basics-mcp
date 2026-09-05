@@ -43,6 +43,10 @@ object Preflight {
         else -> null
     }
 
+    /** Any activity start on someone else's behalf needs the overlay grant. */
+    fun activityLaunch(context: Context): String? =
+        if (!Clock.canStartFromBackground(context)) NO_BACKGROUND_LAUNCH else null
+
     fun watch(context: Context): String? = when {
         !installed(context, Watch.COREAPP_PACKAGE) ->
             "the Pebble companion app is not installed on the phone. Nothing was sent."

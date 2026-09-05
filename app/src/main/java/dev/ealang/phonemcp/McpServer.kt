@@ -678,8 +678,60 @@ class McpServer(
                 ).put("required", JSONArray().put("app").put("query")),
             )
 
+        // Experimental generic-intent prototype — same status as the media
+        // tools above: findings decide what gets promoted.
+        val intentSpecProperties = JSONObject()
+            .put("action", JSONObject().put("type", "string").put("description", "Intent action, e.g. android.intent.action.VIEW."))
+            .put("data", JSONObject().put("type", "string").put("description", "Data URI, e.g. https://... or geo:..."))
+            .put("mime_type", JSONObject().put("type", "string").put("description", "MIME type of the data."))
+            .put("categories", JSONObject().put("type", "array").put("items", JSONObject().put("type", "string")).put("description", "Intent categories."))
+            .put("package", JSONObject().put("type", "string").put("description", "Limit to this package without naming a component."))
+            .put("component", JSONObject().put("type", "string").put("description", "Explicit target, \"package/ClassName\" (leading-dot class ok)."))
+            .put(
+                "extras",
+                JSONObject().put("type", "array").put(
+                    "items",
+                    JSONObject().put("type", "object").put(
+                        "properties",
+                        JSONObject()
+                            .put("key", JSONObject().put("type", "string"))
+                            .put("type", JSONObject().put("type", "string").put("description", "string, int, long, boolean, float, double, uri, string_array, int_array, or long_array."))
+                            .put("value", JSONObject().put("description", "The value, matching the type.")),
+                    ).put("required", JSONArray().put("key").put("value")),
+                ).put("description", "Typed extras. The type must match what the receiving app reads."),
+            )
+        val intentScan = JSONObject()
+            .put("name", "intent_scan")
+            .put("description", "EXPERIMENTAL: scan an app's automation surface — its exported activities, receivers, and services with their intent filters and guarding permissions. With no package, lists every installed package.")
+            .put(
+                "inputSchema",
+                JSONObject().put("type", "object").put(
+                    "properties",
+                    JSONObject().put("package", JSONObject().put("type", "string").put("description", "Exact package name to scan; omit to list all packages.")),
+                ),
+            )
+        val intentResolve = JSONObject()
+            .put("name", "intent_resolve")
+            .put("description", "EXPERIMENTAL: dry run — list which activities, receivers, and services would handle an intent, without sending it.")
+            .put(
+                "inputSchema",
+                JSONObject().put("type", "object").put("properties", intentSpecProperties),
+            )
+        val sendIntent = JSONObject()
+            .put("name", "send_intent")
+            .put("description", "EXPERIMENTAL: build and fire an Android intent — start an activity (opens on screen), send a broadcast, or start a service. Resolution is checked first; an intent nothing handles is not sent.")
+            .put(
+                "inputSchema",
+                JSONObject().put("type", "object").put(
+                    "properties",
+                    JSONObject(intentSpecProperties.toString())
+                        .put("mode", JSONObject().put("type", "string").put("description", "activity (default), broadcast, service, or foreground_service.")),
+                ),
+            )
+
         return JSONArray().put(setTimer).put(cancelTimer)
             .put(mediaApps).put(mediaBrowse).put(mediaPlay).put(mediaCommand).put(mediaSearch)
+            .put(intentScan).put(intentResolve).put(sendIntent)
             .put(launchWatchApp).put(stopWatchApp).put(setWatchTimer).put(getLocation)
             .put(playPodcast).put(nowPlaying).put(findMyPhone).put(silencePhone)
             .put(startVoice).put(stopVoice).put(voiceStatus)
@@ -947,6 +999,22 @@ class McpServer(
             val (app, problem) = MediaExplorer.resolve(context, args.optString("app"))
             if (app == null) "FAILED: $problem" to true
             else MediaExplorer.search(context, app, args.optString("query")) to false
+        }
+
+        "intent_scan" -> {
+            val pkg = args.optString("package").trim()
+            val text = if (pkg.isEmpty()) IntentExplorer.listPackages(context) else IntentExplorer.scan(context, pkg)
+            text to text.startsWith("FAILED:")
+        }
+
+        "intent_resolve" -> {
+            val text = IntentExplorer.resolve(context, args)
+            text to text.startsWith("FAILED:")
+        }
+
+        "send_intent" -> {
+            val text = IntentExplorer.send(context, args)
+            text to text.startsWith("FAILED:")
         }
 
         else -> "No such tool: $name" to true
