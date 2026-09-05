@@ -37,6 +37,7 @@ don't try search.
 | Substack | [apps/substack.md](apps/substack.md) | works with sharp edges |
 | AIMP | [apps/aimp.md](apps/aimp.md) | plays only while connected |
 | YouTube | [apps/youtube.md](apps/youtube.md) | dead while idle, fully drivable once playing |
+| Google Maps | [apps/google-maps.md](apps/google-maps.md) | start navigation hands-free; everything else is one tap |
 | Audible, others | [apps/unavailable.md](apps/unavailable.md) | no usable route — don't re-probe |
 
 Not documented here: apps with purpose-built integrations in phone-mcp
@@ -48,7 +49,6 @@ skills cover only apps driven through the *generic* surfaces.
 
 Candidates for the same treatment once the tool surface exists:
 
-- Generic intent sending (launch activities / send broadcasts by name).
 - Generic Pebble AppMessage commands (the watch equivalent of intents).
 - Active-MediaSession control via notification-listener — would reach apps
   with no MediaBrowserService (e.g. Eleven Reader) while they are playing.
