@@ -25,11 +25,13 @@ Three states, in decreasing capability. What matters is whether the
 ### UI closed, process still alive — transport only
 
 The session keeps answering (metadata, advertised actions unchanged) but
-**`play_from_uri` is silently dropped** even though still advertised —
-tested with multiple URLs and a known-good control id. Transport on the
-already-loaded video still works. Quirk: a dropped URI load may
-*restart the last-loaded video* as a fallback instead. `m.youtube.com`
-vs `www.youtube.com` makes no difference.
+**`play_from_uri` drops the URI** even though still advertised — tested
+with multiple URLs and a known-good control id; the same URL that failed
+here switched instantly once the UI was foregrounded. Instead of loading
+the URI it may *launch the app and restart the last-loaded video* as a
+fallback — visible, and confusing to the user, so don't fire URI loads
+at a backgrounded YouTube. `m.youtube.com` vs `www.youtube.com` makes no
+difference.
 
 ### Never started / process dead — nothing
 
