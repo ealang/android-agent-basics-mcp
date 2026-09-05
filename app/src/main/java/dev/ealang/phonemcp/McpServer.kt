@@ -678,6 +678,25 @@ class McpServer(
                 ).put("required", JSONArray().put("app").put("query")),
             )
 
+        val navigate = JSONObject()
+            .put("name", "navigate")
+            .put(
+                "description",
+                "Start turn-by-turn navigation on the user's phone, in Google Maps. " +
+                    "The destination can be a place name, an address, \"lat,long\", or " +
+                    "the user's saved \"home\" or \"work\". Only works while the phone " +
+                    "is unlocked.",
+            )
+            .put(
+                "inputSchema",
+                JSONObject().put("type", "object").put(
+                    "properties",
+                    JSONObject()
+                        .put("destination", JSONObject().put("type", "string").put("description", "Place name, address, lat,long, or home/work."))
+                        .put("mode", JSONObject().put("type", "string").put("description", "drive (default), walk, or bike.")),
+                ).put("required", JSONArray().put("destination")),
+            )
+
         // Experimental generic-intent prototype — same status as the media
         // tools above: findings decide what gets promoted.
         val intentSpecProperties = JSONObject()
@@ -732,6 +751,7 @@ class McpServer(
         return JSONArray().put(setTimer).put(cancelTimer)
             .put(mediaApps).put(mediaBrowse).put(mediaPlay).put(mediaCommand).put(mediaSearch)
             .put(intentScan).put(intentResolve).put(sendIntent)
+            .put(navigate)
             .put(launchWatchApp).put(stopWatchApp).put(setWatchTimer).put(getLocation)
             .put(playPodcast).put(nowPlaying).put(findMyPhone).put(silencePhone)
             .put(startVoice).put(stopVoice).put(voiceStatus)
@@ -999,6 +1019,16 @@ class McpServer(
             val (app, problem) = MediaExplorer.resolve(context, args.optString("app"))
             if (app == null) "FAILED: $problem" to true
             else MediaExplorer.search(context, app, args.optString("query")) to false
+        }
+
+        "navigate" -> blocked(Preflight.navigation(context)) ?: run {
+            val destination = args.optString("destination").trim()
+            if (destination.isEmpty()) {
+                "FAILED: give a destination — a place name, address, or the user's saved home or work." to true
+            } else {
+                val text = Navigation.navigate(context, destination, args.optString("mode").ifBlank { null })
+                text to text.startsWith("FAILED:")
+            }
         }
 
         "intent_scan" -> {
