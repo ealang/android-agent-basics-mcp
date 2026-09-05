@@ -568,6 +568,16 @@ class McpServer(
                                         "one to be unambiguous. voice_status lists them. " +
                                         "Omit it to resume the most recent conversation.",
                                 ),
+                        ).put(
+                            "catch_up",
+                            JSONObject().put("type", "boolean")
+                                .put(
+                                    "description",
+                                    "True replays everything since the user's own last " +
+                                        "message, even if already read or heard — use it " +
+                                        "when they ask to hear a message again or rewind. " +
+                                        "Default false: only unread messages are read aloud.",
+                                ),
                         ),
                     ),
             )
@@ -895,12 +905,15 @@ class McpServer(
             // reads a missing extra that way, so the blank is passed through as
             // null rather than refused.
             val conversation = args.optString("conversation").trim().ifBlank { null }
+            val catchUp = args.optBoolean("catch_up", false)
             blocked(Preflight.voice(context))
                 ?: conversation?.let { blocked(Preflight.voiceConversation(context, it)) }
-                ?: when (val r = Voice.start(context, conversation)) {
+                ?: when (val r = Voice.start(context, conversation, catchUp)) {
                     is Voice.Result.Accepted ->
                         "The voice session with ${r.conversation ?: "the most recent " +
-                            "conversation"} is open on the phone." to false
+                            "conversation"} is open on the phone" +
+                            (if (catchUp) ", replaying from their last sent message" else "") +
+                            "." to false
                     else -> voiceFailure(r)
                 }
         }

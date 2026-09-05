@@ -31,9 +31,19 @@ object Voice {
     const val PACKAGE = "com.agentvoicegateway.app"
     const val AUTHORITY = "com.agentvoicegateway.app.automation"
 
-    /** The gateway's exported trampoline, and the extra it reads. */
+    /** The gateway's exported trampoline, and the extras it reads. */
     private const val START_ACTIVITY = "$PACKAGE.AutomationStartActivity"
     private const val EXTRA_CONVERSATION = "conversation"
+    private const val EXTRA_MODE = "mode"
+
+    /**
+     * The gateway's catch-up start (added their side 2026-09-05): flush any
+     * queued playback, mark the conversation read, and replay everything
+     * after the user's most recent sent message — the whole thread if they
+     * never sent one. One fixed sequence whatever the session state, so it
+     * doubles as "rewind" on a session already in flight.
+     */
+    private const val MODE_SINCE_LAST_SENT = "since_last_sent"
 
     // Cold-start retries. The gateway process is being started by our own
     // request, so the wait is short and the first retry usually succeeds —
@@ -80,19 +90,23 @@ object Voice {
      * The overlay grant and the conversation name are checked by [Preflight]
      * before this is called. Everything past that point is theirs.
      */
-    fun start(context: Context, conversation: String?): Result {
+    fun start(context: Context, conversation: String?, catchUp: Boolean = false): Result {
         val locked = context.getSystemService(KeyguardManager::class.java)?.isKeyguardLocked == true
         return try {
             context.startActivity(
                 Intent()
                     .setClassName(PACKAGE, START_ACTIVITY)
-                    .apply { conversation?.let { putExtra(EXTRA_CONVERSATION, it) } }
+                    .apply {
+                        conversation?.let { putExtra(EXTRA_CONVERSATION, it) }
+                        if (catchUp) putExtra(EXTRA_MODE, MODE_SINCE_LAST_SENT)
+                    }
                     .addFlags(launchFlags(locked)),
             )
             Log.i(
                 TAG,
                 "Voice gateway: launched a session for " +
-                    "${conversation?.let { "\"$it\"" } ?: "the last conversation"} (locked=$locked)",
+                    "${conversation?.let { "\"$it\"" } ?: "the last conversation"} " +
+                    "(locked=$locked, catchUp=$catchUp)",
             )
             Result.Accepted(conversation)
         } catch (e: Exception) {
