@@ -10,40 +10,35 @@ import android.util.Log
 import android.view.WindowManager
 
 /**
- * The generic locked-phone gate: an invisible activity of our own that shows
- * over the keyguard — an app may always do that for *its own* activities, no
- * grant needed — asks Android to dismiss the keyguard, and fires a carried
- * intent the moment the user unlocks.
+ * The visible half of [UnlockGate]: an invisible activity whose only job is
+ * to wake the screen and put the user's own unlock prompt up. An app may
+ * always show *its own* activity over the keyguard — no grant needed — which
+ * is the one lever we have for getting a locked, dark phone to ask its owner
+ * for a PIN or fingerprint.
  *
- * This exists because a launch aimed at a locked phone is otherwise swallowed
- * in silence when the target does not show over the keyguard itself: the
- * activity start "succeeds", the payload is discarded (Google Maps, measured
- * 2026-09-05, `docs/maps-survey.md`). We cannot force someone else's activity
- * over the keyguard — `setShowWhenLocked` is the target's own call — but we
- * can put *our* activity there and have the system walk the user through
- * their normal PIN or biometric prompt. Unlock, and the carried intent fires
- * with the keyguard gone; ignore or fail the prompt, and it is dropped here,
- * with a log line, which is exactly what the caller was told would happen.
- *
- * Not exported, so the carried intent can only ever come from this app.
+ * It carries nothing and fires nothing. The pending intent lives in
+ * [UnlockGate], which fires it on the ACTION_USER_PRESENT broadcast — the
+ * one signal Android guarantees at unlock. Both earlier designs that made
+ * this activity responsible for firing failed on the device (2026-09-05):
+ * requestDismissKeyguard's success callback never came, and an activity
+ * already showing over the keyguard gets no lifecycle event when the
+ * keyguard is dismissed, so there was nothing left to hook. requestDismiss-
+ * Keyguard is still called, but purely as UX — it is what makes the PIN pane
+ * appear immediately instead of the user having to swipe first.
  */
 class UnlockGateActivity : Activity() {
 
     companion object {
         private const val TAG = "phone-mcp"
-        private const val EXTRA_INTENT = "pending_intent"
 
-        /** Wake the screen, prompt for unlock, then fire [pending]. */
-        fun launch(context: Context, pending: Intent) {
+        fun launch(context: Context) {
             context.startActivity(
                 Intent(context, UnlockGateActivity::class.java)
-                    .putExtra(EXTRA_INTENT, pending)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             )
         }
     }
 
-    private var pending: Intent? = null
     private var dismissRequested = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -58,67 +53,40 @@ class UnlockGateActivity : Activity() {
                     WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON,
             )
         }
-
-        @Suppress("DEPRECATION")
-        pending = intent.getParcelableExtra(EXTRA_INTENT)
-        if (pending == null) {
-            Log.w(TAG, "unlock gate: launched with no carried intent")
-            finish()
-        }
     }
 
-    /**
-     * Everything happens from resume, not create. requestDismissKeyguard
-     * from an activity that is not yet resumed can be answered with
-     * onDismissError and the request silently dies — measured on the
-     * device: the screen woke, the user unlocked, nothing fired. Resume is
-     * also re-entered when the keyguard state changes while we are showing,
-     * so checking "is it unlocked now?" here doubles as the path for a user
-     * who unlocks by hand instead of through our requested prompt.
-     */
     override fun onResume() {
         super.onResume()
-        val toFire = pending ?: return
-        val km = getSystemService(KeyguardManager::class.java)
-
-        if (km == null || !km.isKeyguardLocked) {
-            fire(toFire)
+        if (dismissRequested) return
+        dismissRequested = true
+        val km = getSystemService(KeyguardManager::class.java) ?: return
+        if (!km.isKeyguardLocked) {
             finish()
             return
         }
-
-        if (dismissRequested) return
-        dismissRequested = true
         km.requestDismissKeyguard(
             this,
             object : KeyguardManager.KeyguardDismissCallback() {
                 override fun onDismissSucceeded() {
-                    pending?.let { fire(it) }
                     finish()
                 }
 
                 override fun onDismissCancelled() {
-                    // The user saw the prompt and declined — their answer.
-                    Log.i(TAG, "unlock gate: user declined the unlock, intent dropped")
                     finish()
                 }
 
                 override fun onDismissError() {
-                    // Stay up rather than die: if the user unlocks by hand
-                    // while we are still showing, onResume fires the intent.
-                    Log.w(TAG, "unlock gate: keyguard dismiss request failed, waiting for a manual unlock")
+                    // Stay up; the user can still unlock by hand and the
+                    // USER_PRESENT receiver does not care how they did it.
+                    Log.w(TAG, "unlock gate: keyguard dismiss request errored")
                 }
             },
         )
     }
 
-    private fun fire(toFire: Intent) {
-        try {
-            startActivity(Intent(toFire).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            Log.i(TAG, "unlock gate: keyguard gone, fired ${toFire.action ?: toFire.component}")
-        } catch (e: Exception) {
-            Log.w(TAG, "unlock gate: carried intent failed to start", e)
-        }
-        pending = null
+    /** Anything taking the foreground — the fired intent, a screen-off — ends the flare. */
+    override fun onStop() {
+        super.onStop()
+        finish()
     }
 }

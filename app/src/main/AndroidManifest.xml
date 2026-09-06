@@ -101,10 +101,10 @@
                 android:value="Local MCP server for the paired Pebble/agent to call" />
         </service>
 
-        <!-- The locked-phone gate: invisible, shows over the keyguard (our
-             own activity, so no grant needed), prompts the user to unlock,
-             and fires a carried intent once they do. Not exported — the
-             carried intent can only come from this app. -->
+        <!-- The locked-phone gate's flare: invisible, shows over the keyguard
+             (our own activity, so no grant needed) to wake the screen and
+             surface the unlock prompt. The pending intent lives in UnlockGate
+             and fires on the USER_PRESENT broadcast, not here. -->
         <activity
             android:name=".UnlockGateActivity"
             android:exported="false"

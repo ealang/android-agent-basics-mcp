@@ -15,7 +15,7 @@ import android.util.Log
  * loudest possible read-back, so a silent failure is cheap. The one silent
  * failure that isn't cheap — the keyguard discarding the destination while
  * appearing to work (`docs/maps-survey.md`) — is routed through
- * [UnlockGateActivity] instead: the phone wakes with the user's own unlock
+ * [UnlockGate] instead: the phone wakes with the user's own unlock
  * prompt, and the intent fires the moment they pass it.
  */
 object Navigation {
@@ -51,11 +51,12 @@ object Navigation {
             // Straight at a locked phone, Maps swallows the destination in
             // silence. Through the gate, the phone wakes with the unlock
             // prompt and the intent fires the moment the user passes it.
-            UnlockGateActivity.launch(context, intent)
+            UnlockGate.launch(context, intent)
             Log.i(TAG, "navigate (via unlock gate): $uri")
             return "The phone is locked, so it is now showing the unlock prompt. " +
                 "Navigation to \"$destination\" starts the moment the user unlocks; " +
-                "if they dismiss the prompt instead, nothing happens."
+                "if they leave the phone locked instead, the request expires after " +
+                "two minutes and nothing happens."
         }
 
         context.startActivity(intent)
