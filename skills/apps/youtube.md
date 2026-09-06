@@ -78,10 +78,14 @@ package, not "youtube" — the name is ambiguous with YouTube Music. On
 a locked phone add `via_unlock_gate: true`, since the launch needs the
 screen; the video then starts when the user unlocks.
 
-The scan also shows `vnd.youtube:<id>` as a VIEW scheme and
-`android.media.action.MEDIA_PLAY_FROM_SEARCH` on
-`Shell_MediaSearchActivity` (untested). Video ids still must come from
-outside — web search or a known URL; the app exposes no catalog.
+`android.media.action.MEDIA_PLAY_FROM_SEARCH` with a string extra
+`query` (verified 2026-09-06) opens the search **results** for the
+query but does not auto-play the top hit — one tap from playing, like
+Maps' search-along-route. Use it for "find X on YouTube"; use the VIEW
+intent when a video id or URL is already known. The scan also shows
+`vnd.youtube:<id>` as a VIEW scheme (untested; the watch URL already
+covers it). Video ids still must come from outside — web search or a
+known URL; the app exposes no catalog.
 
 So: fire the VIEW intent to start any video; UI open = full control
 including play-by-URL; UI closed = transport on the current video only.
