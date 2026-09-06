@@ -43,6 +43,9 @@ class UnlockGateActivity : Activity() {
         }
     }
 
+    private var pending: Intent? = null
+    private var dismissRequested = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
@@ -57,26 +60,40 @@ class UnlockGateActivity : Activity() {
         }
 
         @Suppress("DEPRECATION")
-        val pending = intent.getParcelableExtra<Intent>(EXTRA_INTENT)
+        pending = intent.getParcelableExtra(EXTRA_INTENT)
         if (pending == null) {
             Log.w(TAG, "unlock gate: launched with no carried intent")
             finish()
-            return
         }
+    }
 
+    /**
+     * Everything happens from resume, not create. requestDismissKeyguard
+     * from an activity that is not yet resumed can be answered with
+     * onDismissError and the request silently dies — measured on the
+     * device: the screen woke, the user unlocked, nothing fired. Resume is
+     * also re-entered when the keyguard state changes while we are showing,
+     * so checking "is it unlocked now?" here doubles as the path for a user
+     * who unlocks by hand instead of through our requested prompt.
+     */
+    override fun onResume() {
+        super.onResume()
+        val toFire = pending ?: return
         val km = getSystemService(KeyguardManager::class.java)
+
         if (km == null || !km.isKeyguardLocked) {
-            // Unlocked by the time we came up — a race the user wins. Fire.
-            fire(pending)
+            fire(toFire)
             finish()
             return
         }
 
+        if (dismissRequested) return
+        dismissRequested = true
         km.requestDismissKeyguard(
             this,
             object : KeyguardManager.KeyguardDismissCallback() {
                 override fun onDismissSucceeded() {
-                    fire(pending)
+                    pending?.let { fire(it) }
                     finish()
                 }
 
@@ -87,19 +104,21 @@ class UnlockGateActivity : Activity() {
                 }
 
                 override fun onDismissError() {
-                    Log.w(TAG, "unlock gate: keyguard dismiss failed, intent dropped")
-                    finish()
+                    // Stay up rather than die: if the user unlocks by hand
+                    // while we are still showing, onResume fires the intent.
+                    Log.w(TAG, "unlock gate: keyguard dismiss request failed, waiting for a manual unlock")
                 }
             },
         )
     }
 
-    private fun fire(pending: Intent) {
+    private fun fire(toFire: Intent) {
         try {
-            startActivity(Intent(pending).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            Log.i(TAG, "unlock gate: keyguard gone, fired ${pending.action ?: pending.component}")
+            startActivity(Intent(toFire).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            Log.i(TAG, "unlock gate: keyguard gone, fired ${toFire.action ?: toFire.component}")
         } catch (e: Exception) {
             Log.w(TAG, "unlock gate: carried intent failed to start", e)
         }
+        pending = null
     }
 }
