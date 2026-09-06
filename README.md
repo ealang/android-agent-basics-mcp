@@ -35,10 +35,10 @@ apps that have no polished tool yet.
 - `navigate(destination, mode?)` — turn-by-turn in Google Maps. On a
   locked phone it wakes the screen with the user's own unlock prompt and
   starts the moment they unlock.
-- `launch_watch_app(app)` / `stop_watch_app(app)` — a Pebble watchapp, by UUID
-  or by a name from `Watch.KNOWN_APPS`.
 - `set_watch_timer(seconds, label?)` — a timer on the watch's Timer app,
-  confirmed by AppMessage ACK. See `docs/watch-timer-retry.md`.
+  confirmed by AppMessage ACK. Launching the watchapp, pinging until it
+  answers, and sending the payload are all inside it; the caller names a
+  duration and nothing else. See `docs/watch-timer-retry.md`.
 - `get_location(max_age_seconds?)` — coordinates, accuracy, fix age, and a
   street address when the geocoder can supply one.
 - `find_my_phone(seconds?, volume?)` / `silence_phone()` — ring the phone to
@@ -71,6 +71,17 @@ apps that have no polished tool yet.
   ContentProvider on the device with its permission guards; with a
   `content://` uri, run the query and get rows back. Intents are
   fire-and-forget; providers are the generic way to read app state.
+- `launch_watch_app(app)` / `stop_watch_app(app)` — start or stop any Pebble
+  watchapp, by UUID or by a name from `Watch.KNOWN_APPS`. Fire-and-forget:
+  the watch never acknowledges a launch.
+- `send_watch_message(app, tuples, ensure_running_ping_key?)` — the watch
+  equivalent of `send_intent`: a raw AppMessage to any watchapp, tuples
+  passed verbatim, the watch's own ACK or NACK returned. An ACK proves
+  delivery to a running app, not that the keys meant anything — key tables
+  are per-app knowledge and belong in `skills/`. A message to a watchapp
+  that is not running vanishes silently, so launch it first, or pass
+  `ensure_running_ping_key` to run the ping loop; that key must be one the
+  target app is known to ignore, which is why it is the caller's to name.
 
 ### Timers
 

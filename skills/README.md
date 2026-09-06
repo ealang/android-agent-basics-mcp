@@ -25,6 +25,9 @@ don't try search.
   browse, session search, queue, now-playing, and out-of-band web APIs.
 - [app-launch.md](app-launch.md) — when a launch is needed at all, and the
   one class of app that must be foregrounded.
+- [watch-control.md](watch-control.md) — driving a Pebble watchapp: launch,
+  raw AppMessage, the silent discard when the app is not running, and what
+  an ACK does and does not prove.
 
 ## Per-app skills
 
@@ -39,17 +42,22 @@ don't try search.
 | YouTube | [apps/youtube.md](apps/youtube.md) | VIEW intent cold-starts any video; fully drivable once playing |
 | Google Maps | [apps/google-maps.md](apps/google-maps.md) | start navigation hands-free; everything else is one tap |
 | Samsung Clock | [apps/samsung-clock.md](apps/samsung-clock.md) | timers and alarms via public actions; stopwatch signature-locked — don't re-probe |
+| Agent Timer (Pebble) | [apps/pebble-agent-timer.md](apps/pebble-agent-timer.md) | key table for the generic path; `set_watch_timer` is easier |
 | Audible, others | [apps/unavailable.md](apps/unavailable.md) | no usable route — don't re-probe |
 
-Not documented here: apps with purpose-built integrations in phone-mcp
-itself (the Pebble watchapps, the voice gateway, the recorder). Their
+Not documented here: apps reachable only through a purpose-built
+integration in phone-mcp itself (the voice gateway, the recorder). Their
 contracts live in `docs/` next to the code that implements them; these
-skills cover only apps driven through the *generic* surfaces.
+skills cover apps driven through the *generic* surfaces. The Agent Timer
+watchapp is in both places — it has a first-class tool, but it is also
+reachable generically, and its key table is the worked example.
 
 ## Future generic capabilities (not yet built)
 
 Candidates for the same treatment once the tool surface exists:
 
-- Generic Pebble AppMessage commands (the watch equivalent of intents).
 - Active-MediaSession control via notification-listener — would reach apps
   with no MediaBrowserService (e.g. Eleven Reader) while they are playing.
+- Receiving AppMessages *from* the watch. Deliberately not built: a watchapp
+  with something to say should say it to a companion app of its own, not to
+  a generic listener that has no idea what the keys mean.
