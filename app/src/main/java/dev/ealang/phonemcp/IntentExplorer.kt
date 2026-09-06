@@ -115,75 +115,116 @@ object IntentExplorer {
         return sb.toString()
     }
 
+    // Asset cookies are small positive ints handed out per APK loaded into an
+    // AssetManager; a package context's manager holds the framework, the
+    // app's base APK, and every split. High enough for any real app.
+    private const val MAX_ASSET_COOKIE = 64
+
     /**
      * The intent filters, per component, read out of the target app's
      * compiled AndroidManifest.xml. PackageManager never exposes these;
      * the manifest itself does, through the app's asset space.
+     *
+     * Apps installed as bundles are several APKs — base plus splits — and
+     * each carries a manifest, most of them near-empty stubs. Opening
+     * "AndroidManifest.xml" without saying which APK resolves against
+     * whichever asset path comes first, which for bundled apps is a stub:
+     * it parses cleanly and yields nothing, indistinguishable from an app
+     * with no filters. So every asset cookie is walked, and each manifest
+     * whose root `package` matches the target is parsed and merged. The
+     * base manifest has the components; stubs contribute nothing; dynamic
+     * feature splits can declare components of their own, which merging
+     * picks up too.
      */
     private fun manifestFilters(context: Context, pkg: String): Map<String, List<String>> {
         val result = mutableMapOf<String, MutableList<String>>()
-        try {
-            val target = context.createPackageContext(pkg, 0)
-            val parser = target.assets.openXmlResourceParser("AndroidManifest.xml")
-            var component: String? = null
-            var actions = mutableListOf<String>()
-            var categories = mutableListOf<String>()
-            var datas = mutableListOf<String>()
-            var inFilter = false
-            var event = parser.eventType
-            while (event != XmlPullParser.END_DOCUMENT) {
-                when (event) {
-                    XmlPullParser.START_TAG -> when (parser.name) {
-                        "activity", "activity-alias", "receiver", "service" -> {
-                            val name = parser.getAttributeValue(ANDROID_NS, "name")
-                            component = name?.let { if (it.startsWith(".")) pkg + it else it }
-                        }
-                        "intent-filter" -> {
-                            inFilter = true
-                            actions = mutableListOf()
-                            categories = mutableListOf()
-                            datas = mutableListOf()
-                        }
-                        "action" -> if (inFilter) {
-                            parser.getAttributeValue(ANDROID_NS, "name")?.let { actions.add(it) }
-                        }
-                        "category" -> if (inFilter) {
-                            parser.getAttributeValue(ANDROID_NS, "name")?.let { categories.add(it) }
-                        }
-                        "data" -> if (inFilter) {
-                            val parts = mutableListOf<String>()
-                            parser.getAttributeValue(ANDROID_NS, "scheme")?.let { parts.add("scheme=$it") }
-                            parser.getAttributeValue(ANDROID_NS, "host")?.let { parts.add("host=$it") }
-                            parser.getAttributeValue(ANDROID_NS, "port")?.let { parts.add("port=$it") }
-                            parser.getAttributeValue(ANDROID_NS, "path")?.let { parts.add("path=$it") }
-                            parser.getAttributeValue(ANDROID_NS, "pathPrefix")?.let { parts.add("pathPrefix=$it") }
-                            parser.getAttributeValue(ANDROID_NS, "pathPattern")?.let { parts.add("pathPattern=$it") }
-                            parser.getAttributeValue(ANDROID_NS, "mimeType")?.let { parts.add("mimeType=$it") }
-                            if (parts.isNotEmpty()) datas.add(parts.joinToString(" "))
-                        }
+        val assets = try {
+            context.createPackageContext(pkg, 0).assets
+        } catch (e: Exception) {
+            Log.w(TAG, "intent: no package context for $pkg", e)
+            return result
+        }
+        for (cookie in 1..MAX_ASSET_COOKIE) {
+            try {
+                assets.openXmlResourceParser(cookie, "AndroidManifest.xml").use { parser ->
+                    parseManifest(parser, pkg, result)
+                }
+            } catch (e: Exception) {
+                // No such cookie, or an asset path with no manifest — both
+                // ordinary; the loop just keeps walking.
+            }
+        }
+        if (result.isEmpty()) Log.w(TAG, "intent: no filters found in any manifest of $pkg")
+        return result
+    }
+
+    /** One manifest into [result] — skipped whole if it is not [pkg]'s. */
+    private fun parseManifest(
+        parser: android.content.res.XmlResourceParser,
+        pkg: String,
+        result: MutableMap<String, MutableList<String>>,
+    ) {
+        var component: String? = null
+        var actions = mutableListOf<String>()
+        var categories = mutableListOf<String>()
+        var datas = mutableListOf<String>()
+        var inFilter = false
+        var event = parser.eventType
+        while (event != XmlPullParser.END_DOCUMENT) {
+            when (event) {
+                XmlPullParser.START_TAG -> when (parser.name) {
+                    "manifest" -> {
+                        // The framework and shared-library APKs are in the
+                        // same asset space; only the target's own manifests
+                        // count. The package attribute has no namespace.
+                        val owner = parser.getAttributeValue(null, "package")
+                        if (owner != null && owner != pkg) return
                     }
-                    XmlPullParser.END_TAG -> when (parser.name) {
-                        "intent-filter" -> {
-                            inFilter = false
-                            val c = component
-                            if (c != null && actions.isNotEmpty()) {
-                                val desc = StringBuilder(actions.joinToString(", "))
-                                val extraCats = categories.filter { it != "android.intent.category.DEFAULT" }
-                                if (extraCats.isNotEmpty()) desc.append(" [${extraCats.joinToString(", ")}]")
-                                if (datas.isNotEmpty()) desc.append(" (${datas.joinToString("; ")})")
-                                result.getOrPut(c) { mutableListOf() }.add(desc.toString())
-                            }
-                        }
-                        "activity", "activity-alias", "receiver", "service" -> component = null
+                    "activity", "activity-alias", "receiver", "service" -> {
+                        val name = parser.getAttributeValue(ANDROID_NS, "name")
+                        component = name?.let { if (it.startsWith(".")) pkg + it else it }
+                    }
+                    "intent-filter" -> {
+                        inFilter = true
+                        actions = mutableListOf()
+                        categories = mutableListOf()
+                        datas = mutableListOf()
+                    }
+                    "action" -> if (inFilter) {
+                        parser.getAttributeValue(ANDROID_NS, "name")?.let { actions.add(it) }
+                    }
+                    "category" -> if (inFilter) {
+                        parser.getAttributeValue(ANDROID_NS, "name")?.let { categories.add(it) }
+                    }
+                    "data" -> if (inFilter) {
+                        val parts = mutableListOf<String>()
+                        parser.getAttributeValue(ANDROID_NS, "scheme")?.let { parts.add("scheme=$it") }
+                        parser.getAttributeValue(ANDROID_NS, "host")?.let { parts.add("host=$it") }
+                        parser.getAttributeValue(ANDROID_NS, "port")?.let { parts.add("port=$it") }
+                        parser.getAttributeValue(ANDROID_NS, "path")?.let { parts.add("path=$it") }
+                        parser.getAttributeValue(ANDROID_NS, "pathPrefix")?.let { parts.add("pathPrefix=$it") }
+                        parser.getAttributeValue(ANDROID_NS, "pathPattern")?.let { parts.add("pathPattern=$it") }
+                        parser.getAttributeValue(ANDROID_NS, "mimeType")?.let { parts.add("mimeType=$it") }
+                        if (parts.isNotEmpty()) datas.add(parts.joinToString(" "))
                     }
                 }
-                event = parser.next()
+                XmlPullParser.END_TAG -> when (parser.name) {
+                    "intent-filter" -> {
+                        inFilter = false
+                        val c = component
+                        if (c != null && actions.isNotEmpty()) {
+                            val desc = StringBuilder(actions.joinToString(", "))
+                            val extraCats = categories.filter { it != "android.intent.category.DEFAULT" }
+                            if (extraCats.isNotEmpty()) desc.append(" [${extraCats.joinToString(", ")}]")
+                            if (datas.isNotEmpty()) desc.append(" (${datas.joinToString("; ")})")
+                            result.getOrPut(c) { mutableListOf() }.add(desc.toString())
+                        }
+                    }
+                    "activity", "activity-alias", "receiver", "service" -> component = null
+                }
             }
-            parser.close()
-        } catch (e: Exception) {
-            Log.w(TAG, "intent: manifest parse failed for $pkg", e)
+            event = parser.next()
         }
-        return result
     }
 
     // ------------------------------------------------------------- resolve
