@@ -1,13 +1,43 @@
 # Working on phone-mcp
 
-## The calling agent is a small model
+## Two tiers of tools, two doctrines
 
-Assume the model on the other end of these tools is a weak one. It may be a
-local or cheap model with little room for reasoning, and it will be reading tool
-descriptions and result strings without much capacity to interpret them.
+The tool surface is split in two on purpose, and most rules in this file
+apply to exactly one side of the split:
 
-So the interface stays as simple as it can be, and everything the app can work
-out for itself, it works out for itself. Concretely:
+- **App-specific tools** — `navigate`, `set_timer`, `play_podcast`,
+  `set_watch_timer`, the voice and recorder tools. These cover the common
+  use cases and are wired to be easy for a basic agent: full preflight,
+  one code path that works everywhere, mechanisms absorbed invisibly
+  (`navigate` routes a locked phone through the unlock gate on its own;
+  the caller never knows). Everything in the next two sections is their
+  doctrine.
+- **Advanced generic tools** — `send_intent`, `intent_scan`,
+  `intent_resolve`, the `media_*` family. Raw Android capabilities,
+  remoted, for a capable agent exploring apps nobody has polished yet.
+  They execute exactly what they are told: no guards beyond our own
+  grants, no protection against a send the target will silently discard.
+  Where a mechanism is offered at all it is opt-in and default-off
+  (`send_intent`'s `via_unlock_gate`) — the caller's judgment, never our
+  guard.
+
+A check that belongs on one tier is wrong on the other. Adding a guard to
+a generic tool constrains what it can express; leaving one off a polished
+tool hands a weak model a failure it cannot interpret. The intended flow
+between the tiers is one-way: an app gets explored through the generic
+tools, the findings land in `skills/` and `docs/`, and the use cases that
+prove common graduate to app-specific tools — Maps went `send_intent`
+experiments → `docs/maps-survey.md` → `navigate`.
+
+## The app-specific tools assume a small model
+
+Assume the model calling the app-specific tools is a weak one. It may be a
+local or cheap model with little room for reasoning, and it will be reading
+tool descriptions and result strings without much capacity to interpret
+them.
+
+So that interface stays as simple as it can be, and everything the app can
+work out for itself, it works out for itself. Concretely:
 
 **Try everything internally rather than exposing the choice.** If a command has
 several possible routes, the app tries them and reports the outcome. The caller

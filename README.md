@@ -23,10 +23,22 @@ nothing to push, so every exchange is ordinary request/response JSON.
 
 ## Tools
 
+Two tiers, by design (see `CLAUDE.md`): app-specific tools cover the
+common use cases and are wired to be easy for a basic agent; the advanced
+generic tools are raw Android capabilities for a capable agent exploring
+apps that have no polished tool yet.
+
+### App-specific
+
 - `set_timer(seconds, label?)` — rejects ≤ 0 and > 24h.
 - `cancel_timer(label?)` — by label, or the next one to ring.
+- `navigate(destination, mode?)` — turn-by-turn in Google Maps. On a
+  locked phone it wakes the screen with the user's own unlock prompt and
+  starts the moment they unlock.
 - `launch_watch_app(app)` / `stop_watch_app(app)` — a Pebble watchapp, by UUID
   or by a name from `Watch.KNOWN_APPS`.
+- `set_watch_timer(seconds, label?)` — a timer on the watch's Timer app,
+  confirmed by AppMessage ACK. See `docs/watch-timer-retry.md`.
 - `get_location(max_age_seconds?)` — coordinates, accuracy, fix age, and a
   street address when the geocoder can supply one.
 - `find_my_phone(seconds?, volume?)` / `silence_phone()` — ring the phone to
@@ -38,6 +50,23 @@ nothing to push, so every exchange is ordinary request/response JSON.
   client. Starting opens its entry activity with a launch intent; status and
   stop go through the ContentProvider it exports. See
   `docs/companion-apps.md`.
+- `start_recording(...)` / `stop_recording()` — drive the voice recorder
+  app's automation surface.
+
+### Advanced generic
+
+- `media_apps` / `media_browse` / `media_play` / `media_command` /
+  `media_search` — drive any app that exposes a MediaBrowserService.
+  Per-app findings live in `skills/apps/`.
+- `intent_scan(package?)` — what an installed app declares as automatable:
+  exported components and their intent filters, split APKs included.
+- `intent_resolve(...)` — dry run: who would handle an intent, without
+  sending it.
+- `send_intent(...)` — build and fire an intent as an activity start,
+  broadcast, or service start. Executes exactly what it is told; the one
+  opt-in mechanism is `via_unlock_gate`, a fallback for intents that
+  require the phone to be unlocked — the launch waits behind the user's
+  unlock prompt instead of being silently discarded by the keyguard.
 
 ### Timers
 
