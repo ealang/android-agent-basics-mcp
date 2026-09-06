@@ -755,7 +755,8 @@ class McpServer(
                 JSONObject().put("type", "object").put(
                     "properties",
                     JSONObject(intentSpecProperties.toString())
-                        .put("mode", JSONObject().put("type", "string").put("description", "activity (default), broadcast, service, or foreground_service.")),
+                        .put("mode", JSONObject().put("type", "string").put("description", "activity (default), broadcast, service, or foreground_service."))
+                        .put("via_unlock_gate", JSONObject().put("type", "boolean").put("description", "Activity mode only, default false. Fallback for intents that require the phone to be unlocked: if the phone is locked, wake it with the unlock prompt and start the activity when the user unlocks (expires after two minutes). Without it, a locked phone may silently discard the launch while reporting success.")),
                 ),
             )
 

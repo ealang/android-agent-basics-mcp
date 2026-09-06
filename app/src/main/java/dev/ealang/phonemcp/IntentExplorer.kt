@@ -1,5 +1,6 @@
 package dev.ealang.phonemcp
 
+import android.app.KeyguardManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -280,9 +281,22 @@ object IntentExplorer {
                 } else {
                     Preflight.activityLaunch(context)?.let { return "FAILED: $it" }
                     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    context.startActivity(intent)
-                    Log.i(TAG, "intent: started activity ${describeIntent(intent)}")
-                    "Started activity for ${describeIntent(intent)}."
+                    val locked = context.getSystemService(KeyguardManager::class.java)
+                        ?.isKeyguardLocked == true
+                    if (args.optBoolean("via_unlock_gate", false) && locked) {
+                        // The caller has said this intent needs an unlocked
+                        // phone; everything else stays raw as ever.
+                        UnlockGate.launch(context, intent)
+                        Log.i(TAG, "intent: behind unlock gate ${describeIntent(intent)}")
+                        "The phone is locked, so it is now showing the unlock prompt. " +
+                            "The activity starts the moment the user unlocks; if they " +
+                            "leave the phone locked, the request expires after two " +
+                            "minutes and nothing happens."
+                    } else {
+                        context.startActivity(intent)
+                        Log.i(TAG, "intent: started activity ${describeIntent(intent)}")
+                        "Started activity for ${describeIntent(intent)}."
+                    }
                 }
             }
             "broadcast" -> {

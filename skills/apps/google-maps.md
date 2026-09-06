@@ -21,9 +21,10 @@ while the launch appears to succeed, so `navigate` routes a locked phone
 through an unlock gate: the screen wakes with the user's own unlock
 prompt, and navigation starts the moment they unlock (verified on device
 2026-09-05). If they leave the phone locked, the request expires after
-two minutes and nothing happens. The gate belongs to `navigate` only —
-the raw URI via `send_intent` (`google.navigation:q=<dest>`) on a locked
-phone still gives a false success. Either way, target the Maps package
+two minutes and nothing happens. The raw URI via `send_intent`
+(`google.navigation:q=<dest>`) on a locked phone gives a false success
+by default; pass `via_unlock_gate: true` to get the same
+wake-and-wait-for-unlock fallback. Either way, target the Maps package
 explicitly; Uber also claims the scheme.
 
 ## Change destination mid-navigation — one tap
