@@ -793,9 +793,9 @@ class McpServer(
                                     JSONObject()
                                         .put("key", JSONObject().put("type", "integer"))
                                         .put("type", JSONObject().put("type", "string").put("description", "int, uint, string, or bytes."))
-                                        .put("length", JSONObject().put("type", "integer").put("description", "Byte width: 1, 2, or 4 for int/uint; string length for string."))
+                                        .put("length", JSONObject().put("type", "integer").put("description", "Required by the wire format. Byte width 1, 2, or 4 for int/uint; string length for string; byte count for bytes."))
                                         .put("value", JSONObject().put("description", "Number for int/uint, text for string, base64 for bytes.")),
-                                ).put("required", JSONArray().put("key").put("type").put("value")),
+                                ).put("required", JSONArray().put("key").put("type").put("length").put("value")),
                             ).put("description", "AppMessage tuples, passed to the watch as-is."),
                         ),
                 ).put("required", JSONArray().put("app").put("tuples")),
@@ -1131,7 +1131,7 @@ class McpServer(
             if (tuples == null || tuples.length() == 0) {
                 "FAILED: give tuples, an array of {key, type, length, value}." to true
             } else {
-                when (Watch.sendMessage(context, args.optString("app"), tuples)) {
+                when (val result = Watch.sendMessage(context, args.optString("app"), tuples)) {
                     Watch.SendResult.Acknowledged ->
                         "The watch acknowledged delivery. That proves the message " +
                             "reached the running watchapp — not that the keys meant " +
@@ -1146,6 +1146,9 @@ class McpServer(
                     is Watch.SendResult.UnknownApp ->
                         "FAILED: \"${args.optString("app")}\" is not a UUID or a known " +
                             "app name. Known names: ${Watch.KNOWN_APPS.keys.joinToString(", ")}." to true
+                    is Watch.SendResult.Malformed ->
+                        "FAILED: not sent — ${result.why}. Every tuple needs " +
+                            "key, type, length and value." to true
                 }
             }
         }

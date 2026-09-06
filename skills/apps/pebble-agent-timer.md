@@ -30,11 +30,11 @@ anything else is delivered, ACKed, and ignored.
 
 1. `launch_watch_app` with `{"app": "timer"}`.
 2. Ping until running: `send_watch_message` with
-   `{"app": "timer", "tuples": [{"key": 1, "type": "int", "value": 0}]}`,
+   `{"app": "timer", "tuples": [{"key": 1, "type": "int", "length": 4, "value": 0}]}`,
    repeated on "no reply" (about once a second, give up at 10 s). Key 1 is
    discarded by the app on purpose, so repeats are harmless.
 3. Once — never repeated:
-   `{"app": "timer", "tuples": [{"key": 20, "type": "int", "value": 300}]}`.
+   `{"app": "timer", "tuples": [{"key": 20, "type": "int", "length": 4, "value": 300}]}`.
 
 That sequence is what `set_watch_timer(300)` does internally, in one call.
 

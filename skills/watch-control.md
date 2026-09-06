@@ -12,8 +12,10 @@ read side at all.
   acknowledges a launch, so a success here means the broadcast went out,
   nothing more.
 - `send_watch_message(app, tuples)` — one AppMessage. `tuples` is an array
-  of `{key, type, length?, value}` with `type` one of `int`, `uint`,
-  `string`, `bytes`. Sent verbatim.
+  of `{key, type, length, value}` with `type` one of `int`, `uint`,
+  `string`, `bytes`. **All four fields are required** — `length` is the
+  byte width (1, 2 or 4 for int/uint). Sent verbatim once it fits the wire
+  format; a tuple that does not is refused without being sent.
 
 ## The one rule that catches everyone
 

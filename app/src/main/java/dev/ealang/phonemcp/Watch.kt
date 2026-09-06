@@ -99,6 +99,8 @@ object Watch {
         /** Sent, and nothing came back within the wait. */
         data object NoReply : SendResult
         data class UnknownApp(val given: String) : SendResult
+        /** Never sent: the tuples do not fit CoreApp's wire format. */
+        data class Malformed(val why: String) : SendResult
     }
 
     fun launch(context: Context, app: String): Result = send(context, ACTION_START, app)
@@ -175,6 +177,7 @@ object Watch {
      */
     fun sendMessage(context: Context, app: String, tuples: JSONArray): SendResult {
         val uuid = resolve(app) ?: return SendResult.UnknownApp(app)
+        checkWireFormat(tuples)?.let { return SendResult.Malformed(it) }
         val replies = Replies()
         registerForReplies(context, replies)
 
@@ -193,6 +196,35 @@ object Watch {
         } finally {
             context.unregisterReceiver(replies)
         }
+    }
+
+    /**
+     * The one validation the generic send performs, and it is wire format, not
+     * judgment: CoreApp's tuple parser hard-requires `length` on every tuple
+     * (`getInt` throws on absence) and only knows widths 1, 2 and 4 for
+     * int/uint — and it parses inside a flow collector with no catch, so one
+     * malformed tuple does not just fail, it kills CoreApp's send listener for
+     * that watchapp until the app is restarted on the watch. Found live,
+     * 2026-09-06. A message that would do that is refused here instead.
+     *
+     * Returns the reason the tuples are unsendable, or null when they are fine.
+     */
+    private fun checkWireFormat(tuples: JSONArray): String? {
+        for (i in 0 until tuples.length()) {
+            val t = tuples.optJSONObject(i)
+                ?: return "tuple $i is not an object"
+            if (!t.has("key")) return "tuple $i has no key"
+            val type = t.optString("type")
+            if (type !in setOf("int", "uint", "string", "bytes")) {
+                return "tuple $i has type \"$type\"; the wire format knows int, uint, string, bytes"
+            }
+            if (!t.has("value")) return "tuple $i has no value"
+            if (!t.has("length")) return "tuple $i has no length, which the wire format requires"
+            if (type in setOf("int", "uint") && t.optInt("length") !in setOf(1, 2, 4)) {
+                return "tuple $i has length ${t.optInt("length")}; int and uint must be 1, 2 or 4 bytes"
+            }
+        }
+        return null
     }
 
     /**
