@@ -5,9 +5,9 @@
   and `send_intent`
 - **Verified on device**: 2026-09-05
 
-Rule of thumb: starting single-destination navigation is fully hands-free
-(unlocked phone). Everything beyond that costs exactly one on-screen tap
-from the user.
+Rule of thumb: starting single-destination navigation is fully hands-free;
+on a locked phone it costs the user their normal unlock. Everything beyond
+that costs exactly one on-screen tap.
 
 ## Start navigation — the `navigate` tool
 
@@ -16,12 +16,15 @@ destination Maps can geocode — place name, address, `lat,long`, or the
 user's saved `home` / `work` — plus an optional mode (drive / walk /
 bike). Turn-by-turn starts immediately, no confirmation.
 
-**Unlocked only.** The keyguard silently discards the destination while
-the launch appears to succeed; `navigate` preflights this and fails with
-an unlock-and-retry message. If sending the raw URI via `send_intent`
-instead (`google.navigation:q=<dest>`), target the Maps package
-explicitly — Uber also claims the scheme — and know that a locked phone
-gives a false success.
+**Locked phone: handled.** The keyguard silently discards the destination
+while the launch appears to succeed, so `navigate` routes a locked phone
+through an unlock gate: the screen wakes with the user's own unlock
+prompt, and navigation starts the moment they unlock (verified on device
+2026-09-05). If they leave the phone locked, the request expires after
+two minutes and nothing happens. The gate belongs to `navigate` only —
+the raw URI via `send_intent` (`google.navigation:q=<dest>`) on a locked
+phone still gives a false success. Either way, target the Maps package
+explicitly; Uber also claims the scheme.
 
 ## Change destination mid-navigation — one tap
 
