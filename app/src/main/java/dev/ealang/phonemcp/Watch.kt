@@ -91,6 +91,18 @@ object Watch {
         data object Rejected : TimerResult
     }
 
+    sealed interface SendResult {
+        /** The watch acknowledged delivery. Delivery, not understanding. */
+        data object Acknowledged : SendResult
+        /** The watch answered NACK — reached, and refused. */
+        data object Refused : SendResult
+        /** Sent, and nothing came back within the wait. */
+        data object NoReply : SendResult
+        /** The ping loop ran its course and the app never answered. */
+        data object NeverCameUp : SendResult
+        data class UnknownApp(val given: String) : SendResult
+    }
+
     fun launch(context: Context, app: String): Result = send(context, ACTION_START, app)
 
     fun stop(context: Context, app: String): Result = send(context, ACTION_STOP, app)
@@ -115,34 +127,25 @@ object Watch {
      */
     fun setTimer(context: Context, seconds: Long): TimerResult {
         val replies = Replies()
-        val filter = IntentFilter().apply {
-            addAction(ACTION_RECEIVE_ACK)
-            addAction(ACTION_RECEIVE_NACK)
-        }
-        // CoreApp broadcasts the reply to everyone rather than back to us, so
-        // this has to be listening for an external sender.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            context.registerReceiver(replies, filter, Context.RECEIVER_EXPORTED)
-        } else {
-            @Suppress("UnspecifiedRegisterReceiverFlag")
-            context.registerReceiver(replies, filter)
-        }
+        registerForReplies(context, replies)
 
         return try {
-            if (!awaitWatchapp(context, replies)) return TimerResult.NoAcknowledgement
+            if (!awaitWatchapp(context, replies, TIMER_UUID, KEY_PING)) {
+                return TimerResult.NoAcknowledgement
+            }
 
             val transaction = nextTransaction()
-            replies.expectTimer(transaction)
+            replies.expectMessage(transaction)
             context.sendBroadcast(
-                message(transaction, int32Payload(KEY_START_TIMER, seconds.toInt())),
+                message(TIMER_UUID, transaction, int32Payload(KEY_START_TIMER, seconds.toInt())),
             )
 
             when {
-                !replies.timerReplied.await(ACK_TIMEOUT_MS, TimeUnit.MILLISECONDS) -> {
+                !replies.messageReplied.await(ACK_TIMEOUT_MS, TimeUnit.MILLISECONDS) -> {
                     Log.w(TAG, "set_watch_timer $seconds s: no reply to transaction $transaction")
                     TimerResult.NoAcknowledgement
                 }
-                replies.timerAcknowledged.get() -> {
+                replies.messageAcknowledged.get() -> {
                     Log.i(TAG, "set_watch_timer $seconds s: acknowledged")
                     TimerResult.Confirmed
                 }
@@ -153,6 +156,63 @@ object Watch {
             }
         } finally {
             context.unregisterReceiver(replies)
+        }
+    }
+
+    /**
+     * The generic side of [setTimer]: one raw AppMessage to any watchapp,
+     * tuples passed through to CoreApp's wire format untouched, the watch's
+     * own answer back. Advanced tier — no judgment about what the keys mean,
+     * and an acknowledgement of a key the app never reads looks exactly like
+     * success. What the keys mean is skill-file knowledge.
+     *
+     * [pingKey] is the one opt-in mechanism: with it, the launch-and-ping
+     * loop from [awaitWatchapp] runs first, exactly as for the timer — but
+     * only the caller can know which key an arbitrary watchapp is guaranteed
+     * to ignore, so it is never assumed. Without it, the message is sent
+     * cold, and a closed watchapp swallows it in silence (no reply, not an
+     * error — CoreApp has no receiver for an app that is not running).
+     */
+    fun sendMessage(context: Context, app: String, tuples: JSONArray, pingKey: Int?): SendResult {
+        val uuid = resolve(app) ?: return SendResult.UnknownApp(app)
+        val replies = Replies()
+        registerForReplies(context, replies)
+
+        return try {
+            if (pingKey != null && !awaitWatchapp(context, replies, uuid, pingKey)) {
+                return SendResult.NeverCameUp
+            }
+
+            val transaction = nextTransaction()
+            replies.expectMessage(transaction)
+            context.sendBroadcast(message(uuid, transaction, tuples.toString()))
+            Log.i(TAG, "send_watch_message -> $uuid, transaction $transaction: $tuples")
+
+            when {
+                !replies.messageReplied.await(ACK_TIMEOUT_MS, TimeUnit.MILLISECONDS) ->
+                    SendResult.NoReply
+                replies.messageAcknowledged.get() -> SendResult.Acknowledged
+                else -> SendResult.Refused
+            }
+        } finally {
+            context.unregisterReceiver(replies)
+        }
+    }
+
+    /**
+     * CoreApp broadcasts replies to everyone rather than back to the sender,
+     * so the receiver has to be listening for an external app.
+     */
+    private fun registerForReplies(context: Context, replies: Replies) {
+        val filter = IntentFilter().apply {
+            addAction(ACTION_RECEIVE_ACK)
+            addAction(ACTION_RECEIVE_NACK)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(replies, filter, Context.RECEIVER_EXPORTED)
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            context.registerReceiver(replies, filter)
         }
     }
 
@@ -172,14 +232,19 @@ object Watch {
      * it is fire-and-forget, so a lost one is otherwise indistinguishable from a
      * slow one, and CoreApp documents it as idempotent.
      */
-    private fun awaitWatchapp(context: Context, replies: Replies): Boolean {
+    private fun awaitWatchapp(
+        context: Context,
+        replies: Replies,
+        uuid: String,
+        pingKey: Int,
+    ): Boolean {
         val deadline = SystemClock.elapsedRealtime() + APP_LAUNCH_TIMEOUT_MS
         while (true) {
-            context.sendBroadcast(intentTo(ACTION_START).putExtra(EXTRA_UUID, TIMER_UUID))
+            context.sendBroadcast(intentTo(ACTION_START).putExtra(EXTRA_UUID, uuid))
 
             val transaction = nextTransaction()
             replies.expectPing(transaction)
-            context.sendBroadcast(message(transaction, int32Payload(KEY_PING, 0)))
+            context.sendBroadcast(message(uuid, transaction, int32Payload(pingKey, 0)))
 
             if (replies.watchappUp.await(LAUNCH_ATTEMPT_MS, TimeUnit.MILLISECONDS)) return true
             if (SystemClock.elapsedRealtime() >= deadline) {
@@ -190,8 +255,8 @@ object Watch {
     }
 
     /**
-     * CoreApp's replies for one [setTimer] call, matched back to what was sent
-     * by the transaction id it echoes.
+     * CoreApp's replies for one [setTimer] or [sendMessage] call, matched back
+     * to what was sent by the transaction id it echoes.
      *
      * Pings are pooled rather than tracked one by one: a late acknowledgement of
      * an earlier ping proves exactly what a prompt one does, so a round trip
@@ -203,14 +268,14 @@ object Watch {
         private val pings = Collections.synchronizedSet(mutableSetOf<Int>())
         val watchappUp = CountDownLatch(1)
 
-        @Volatile private var timerTransaction = -1
-        val timerReplied = CountDownLatch(1)
-        val timerAcknowledged = AtomicBoolean(false)
+        @Volatile private var messageTransaction = -1
+        val messageReplied = CountDownLatch(1)
+        val messageAcknowledged = AtomicBoolean(false)
 
         fun expectPing(transaction: Int) = pings.add(transaction)
 
-        fun expectTimer(transaction: Int) {
-            timerTransaction = transaction
+        fun expectMessage(transaction: Int) {
+            messageTransaction = transaction
         }
 
         override fun onReceive(context: Context, intent: Intent) {
@@ -218,9 +283,9 @@ object Watch {
             if (transaction < 0) return
             val acknowledged = intent.action == ACTION_RECEIVE_ACK
             when {
-                transaction == timerTransaction -> {
-                    timerAcknowledged.set(acknowledged)
-                    timerReplied.countDown()
+                transaction == messageTransaction -> {
+                    messageAcknowledged.set(acknowledged)
+                    messageReplied.countDown()
                 }
                 acknowledged && pings.contains(transaction) -> watchappUp.countDown()
             }
@@ -229,10 +294,11 @@ object Watch {
 
     private fun nextTransaction(): Int = transactions.getAndIncrement() and 0xff
 
-    private fun message(transaction: Int, payload: String): Intent = intentTo(ACTION_SEND)
-        .putExtra(EXTRA_UUID, TIMER_UUID)
-        .putExtra(EXTRA_TRANSACTION_ID, transaction)
-        .putExtra(EXTRA_MSG_DATA, payload)
+    private fun message(uuid: String, transaction: Int, payload: String): Intent =
+        intentTo(ACTION_SEND)
+            .putExtra(EXTRA_UUID, uuid)
+            .putExtra(EXTRA_TRANSACTION_ID, transaction)
+            .putExtra(EXTRA_MSG_DATA, payload)
 
     /** The wire form PebbleKit Classic expects: one tuple, as a 4-byte signed int. */
     private fun int32Payload(key: Int, value: Int): String = JSONArray().put(

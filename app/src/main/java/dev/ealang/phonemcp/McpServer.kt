@@ -772,6 +772,42 @@ class McpServer(
                 ),
             )
 
+        val sendWatchMessage = JSONObject()
+            .put("name", "send_watch_message")
+            .put(
+                "description",
+                "EXPERIMENTAL: send a raw AppMessage to any app on the user's Pebble watch — the watch equivalent of send_intent. Tuples go to the watchapp exactly as given; the watch's own ACK or NACK comes back. An ACK proves delivery to the running app, not that the keys meant anything: a key the app ignores is still acknowledged. Key meanings per app are skill-file knowledge. The watchapp must already be running or the message vanishes silently (launch_watch_app first, or use ensure_running_ping_key).",
+            )
+            .put(
+                "inputSchema",
+                JSONObject().put("type", "object").put(
+                    "properties",
+                    JSONObject()
+                        .put("app", JSONObject().put("type", "string").put("description", "Watchapp UUID, or a known name (\"timer\")."))
+                        .put(
+                            "tuples",
+                            JSONObject().put("type", "array").put(
+                                "items",
+                                JSONObject().put("type", "object").put(
+                                    "properties",
+                                    JSONObject()
+                                        .put("key", JSONObject().put("type", "integer"))
+                                        .put("type", JSONObject().put("type", "string").put("description", "int, uint, string, or bytes."))
+                                        .put("length", JSONObject().put("type", "integer").put("description", "Byte width: 1, 2, or 4 for int/uint; string length for string."))
+                                        .put("value", JSONObject().put("description", "Number for int/uint, text for string, base64 for bytes.")),
+                                ).put("required", JSONArray().put("key").put("type").put("value")),
+                            ).put("description", "AppMessage tuples, passed to the watch as-is."),
+                        )
+                        .put(
+                            "ensure_running_ping_key",
+                            JSONObject().put("type", "integer").put(
+                                "description",
+                                "Optional. A key the target watchapp is known to ignore. When given, the app is launched and pinged on this key until it acknowledges (up to 10s) before the real message is sent. Only safe when the key is truly inert in that app.",
+                            ),
+                        ),
+                ).put("required", JSONArray().put("app").put("tuples")),
+            )
+
         val providerQuery = JSONObject()
             .put("name", "provider_query")
             .put("description", "EXPERIMENTAL: read another app's state through its ContentProvider. With no uri, lists every exported provider on the device with its authority and permission guards. With a content:// uri, runs the query and returns rows as text.")
@@ -792,6 +828,7 @@ class McpServer(
         return JSONArray().put(setTimer).put(cancelTimer)
             .put(mediaApps).put(mediaBrowse).put(mediaPlay).put(mediaCommand).put(mediaSearch)
             .put(intentScan).put(intentResolve).put(sendIntent).put(providerQuery)
+            .put(sendWatchMessage)
             .put(navigate)
             .put(launchWatchApp).put(stopWatchApp).put(setWatchTimer).put(getLocation)
             .put(playPodcast).put(nowPlaying).put(findMyPhone).put(silencePhone)
@@ -1094,6 +1131,39 @@ class McpServer(
         "provider_query" -> {
             val text = ProviderExplorer.query(context, args)
             text to text.startsWith("FAILED:")
+        }
+
+        "send_watch_message" -> blocked(Preflight.watch(context)) ?: run {
+            val tuples = args.optJSONArray("tuples")
+            val pingKey = if (args.has("ensure_running_ping_key")) {
+                args.getInt("ensure_running_ping_key")
+            } else {
+                null
+            }
+            if (tuples == null || tuples.length() == 0) {
+                "FAILED: give tuples, an array of {key, type, length, value}." to true
+            } else {
+                when (Watch.sendMessage(context, args.optString("app"), tuples, pingKey)) {
+                    Watch.SendResult.Acknowledged ->
+                        "The watch acknowledged delivery. That proves the message " +
+                            "reached the running watchapp — not that the keys meant " +
+                            "anything to it." to false
+                    Watch.SendResult.Refused ->
+                        "FAILED: NACK — the watch received the message and refused it." to true
+                    Watch.SendResult.NoReply ->
+                        "FAILED: no reply within 5s. Usually the watchapp is not " +
+                            "running — CoreApp only delivers to the running app and a " +
+                            "send to a closed one vanishes. launch_watch_app first, or " +
+                            "pass ensure_running_ping_key if the app has a known-inert " +
+                            "key." to true
+                    Watch.SendResult.NeverCameUp ->
+                        "FAILED: the watchapp never acknowledged the ping within 10s, " +
+                            "so the real message was not sent." to true
+                    is Watch.SendResult.UnknownApp ->
+                        "FAILED: \"${args.optString("app")}\" is not a UUID or a known " +
+                            "app name. Known names: ${Watch.KNOWN_APPS.keys.joinToString(", ")}." to true
+                }
+            }
         }
 
         else -> "No such tool: $name" to true
