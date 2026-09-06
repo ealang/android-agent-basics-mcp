@@ -67,6 +67,10 @@ apps that have no polished tool yet.
   opt-in mechanism is `via_unlock_gate`, a fallback for intents that
   require the phone to be unlocked — the launch waits behind the user's
   unlock prompt instead of being silently discarded by the keyguard.
+- `provider_query(uri?)` — the read side: with no uri, every exported
+  ContentProvider on the device with its permission guards; with a
+  `content://` uri, run the query and get rows back. Intents are
+  fire-and-forget; providers are the generic way to read app state.
 
 ### Timers
 

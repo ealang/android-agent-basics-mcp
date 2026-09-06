@@ -760,9 +760,26 @@ class McpServer(
                 ),
             )
 
+        val providerQuery = JSONObject()
+            .put("name", "provider_query")
+            .put("description", "EXPERIMENTAL: read another app's state through its ContentProvider. With no uri, lists every exported provider on the device with its authority and permission guards. With a content:// uri, runs the query and returns rows as text.")
+            .put(
+                "inputSchema",
+                JSONObject().put("type", "object").put(
+                    "properties",
+                    JSONObject()
+                        .put("uri", JSONObject().put("type", "string").put("description", "content://<authority>/<path>. Omit to list all exported providers."))
+                        .put("projection", JSONObject().put("type", "array").put("items", JSONObject().put("type", "string")).put("description", "Columns to return; omit for all."))
+                        .put("selection", JSONObject().put("type", "string").put("description", "SQL-style WHERE clause, ? placeholders allowed."))
+                        .put("selection_args", JSONObject().put("type", "array").put("items", JSONObject().put("type", "string")).put("description", "Values for the ? placeholders."))
+                        .put("sort_order", JSONObject().put("type", "string").put("description", "SQL-style ORDER BY clause."))
+                        .put("limit", JSONObject().put("type", "integer").put("description", "Max rows to show, default 50, cap 500.")),
+                ),
+            )
+
         return JSONArray().put(setTimer).put(cancelTimer)
             .put(mediaApps).put(mediaBrowse).put(mediaPlay).put(mediaCommand).put(mediaSearch)
-            .put(intentScan).put(intentResolve).put(sendIntent)
+            .put(intentScan).put(intentResolve).put(sendIntent).put(providerQuery)
             .put(navigate)
             .put(launchWatchApp).put(stopWatchApp).put(setWatchTimer).put(getLocation)
             .put(playPodcast).put(nowPlaying).put(findMyPhone).put(silencePhone)
@@ -1059,6 +1076,11 @@ class McpServer(
 
         "send_intent" -> {
             val text = IntentExplorer.send(context, args)
+            text to text.startsWith("FAILED:")
+        }
+
+        "provider_query" -> {
+            val text = ProviderExplorer.query(context, args)
             text to text.startsWith("FAILED:")
         }
 

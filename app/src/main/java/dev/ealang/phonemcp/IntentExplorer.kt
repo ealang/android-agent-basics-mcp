@@ -99,11 +99,9 @@ object IntentExplorer {
 
         val providers = info.providers?.filter { it.exported } ?: emptyList()
         if (providers.isNotEmpty()) {
-            sb.append("\nProviders: ${providers.size} exported\n")
+            sb.append("\nProviders: ${providers.size} exported (query with provider_query)\n")
             for (p in providers) {
-                sb.append("  ${p.name} — authority ${p.authority}")
-                p.readPermission?.let { sb.append(", read guarded by $it") }
-                sb.append("\n")
+                sb.append(ProviderExplorer.describeProvider(p, indent = "  "))
             }
         }
 
