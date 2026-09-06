@@ -24,6 +24,13 @@
     <!-- Lets us hand timers to the clock app. A normal permission: granted at
          install, no prompt. -->
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
+    <!-- A probe, not a dependency. Samsung's Clock gates the one activity that
+         answers INTENT_STOPWATCH behind this, and nothing else on the device
+         handles the platform's ACTION_START_STOPWATCH — so a stopwatch is
+         reachable only if this permission turns out to be normal-level and
+         granted at install. If it is signature-level, the request is ignored
+         and this line should go. -->
+    <uses-permission android:name="com.sec.android.app.clockpackage.permission.ACCESS_WCCITY" />
     <!-- Not for drawing anything. Since Android 10 a background app may not
          start an activity, and a foreground service does not earn the right —
          this is the only exemption a normal app can obtain, so without it the

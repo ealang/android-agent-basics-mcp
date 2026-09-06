@@ -291,9 +291,19 @@ object IntentExplorer {
                             "leave the phone locked, the request expires after two " +
                             "minutes and nothing happens."
                     } else {
-                        context.startActivity(intent)
-                        Log.i(TAG, "intent: started activity ${describeIntent(intent)}")
-                        "Started activity for ${describeIntent(intent)}."
+                        try {
+                            context.startActivity(intent)
+                            Log.i(TAG, "intent: started activity ${describeIntent(intent)}")
+                            "Started activity for ${describeIntent(intent)}."
+                        } catch (e: Exception) {
+                            // A component can resolve and still refuse us — a
+                            // guarding permission we do not hold throws
+                            // SecurityException at start time, not at query
+                            // time. Raw, per the advanced tier: the exception
+                            // names the permission, which is the finding.
+                            Log.w(TAG, "intent: activity start refused", e)
+                            "FAILED: ${e.javaClass.simpleName}: ${e.message ?: "no detail"}"
+                        }
                     }
                 }
             }
@@ -303,10 +313,15 @@ object IntentExplorer {
                     "FAILED: no receiver matches and the broadcast names no package — " +
                         "Android drops implicit broadcasts; set package or component."
                 } else {
-                    context.sendBroadcast(intent)
-                    Log.i(TAG, "intent: broadcast ${describeIntent(intent)} → ${handlers.size} manifest receiver(s)")
-                    "Broadcast sent, ${describeIntent(intent)}. ${handlers.size} manifest receiver(s) matched" +
-                        (if (handlers.isEmpty()) " — a running app could still catch it with a runtime receiver." else ".")
+                    try {
+                        context.sendBroadcast(intent)
+                        Log.i(TAG, "intent: broadcast ${describeIntent(intent)} → ${handlers.size} manifest receiver(s)")
+                        "Broadcast sent, ${describeIntent(intent)}. ${handlers.size} manifest receiver(s) matched" +
+                            (if (handlers.isEmpty()) " — a running app could still catch it with a runtime receiver." else ".")
+                    } catch (e: Exception) {
+                        Log.w(TAG, "intent: broadcast refused", e)
+                        "FAILED: ${e.javaClass.simpleName}: ${e.message ?: "no detail"}"
+                    }
                 }
             }
             "service", "foreground_service" -> {

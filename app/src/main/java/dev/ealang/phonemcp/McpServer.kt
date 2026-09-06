@@ -269,7 +269,19 @@ class McpServer(
             method == "tools/call" -> {
                 val name = params.optString("name")
                 val args = params.optJSONObject("arguments") ?: JSONObject()
-                val (text, isError) = callTool(name, args)
+                // A tool that throws used to take the HTTP worker thread with
+                // it: NanoHTTPD lets anything unchecked out of serve() close
+                // the socket, so the client saw the connection drop rather
+                // than a failure — the server looked dead for that request.
+                // A generic tool firing an intent at a permission-guarded
+                // component is exactly how that happens, and the exception
+                // text is a finding worth returning.
+                val (text, isError) = try {
+                    callTool(name, args)
+                } catch (t: Throwable) {
+                    Log.w(TAG, "Tool $name threw", t)
+                    "FAILED: ${t.javaClass.simpleName}: ${t.message ?: "no detail"}" to true
+                }
                 rpcOk(
                     id,
                     JSONObject()
