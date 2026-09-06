@@ -48,20 +48,16 @@ object Preflight {
         if (!Clock.canStartFromBackground(context)) NO_BACKGROUND_LAUNCH else null
 
     /**
-     * Navigation is an activity launch into Google Maps, and Maps does not
-     * show over the lock screen — a launch at a locked phone brings Maps
-     * forward with the destination silently discarded (measured on the
-     * device, 2026-09-05). An invisible failure the user can fix, which is
-     * exactly what preflight is for.
+     * Navigation is an activity launch into Google Maps. The locked phone is
+     * deliberately not checked here: Maps does not show over the lock screen
+     * and would silently discard the destination (measured on the device,
+     * 2026-09-05), so Navigation routes that case through the unlock gate
+     * rather than failing.
      */
     fun navigation(context: Context): String? = when {
         !installed(context, Navigation.MAPS_PACKAGE) ->
             "Google Maps is not installed on the phone. Nothing was done."
         !Clock.canStartFromBackground(context) -> NO_BACKGROUND_LAUNCH
-        (context.getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager)
-            .isKeyguardLocked ->
-            "the phone is locked, and navigation cannot start over the lock screen. " +
-                "Ask the user to unlock the phone, then try again. Nothing was done."
         else -> null
     }
 

@@ -1,5 +1,6 @@
 package dev.ealang.phonemcp
 
+import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -13,7 +14,9 @@ import android.util.Log
  * needed — Maps opening full-screen with a route (or without one) is the
  * loudest possible read-back, so a silent failure is cheap. The one silent
  * failure that isn't cheap — the keyguard discarding the destination while
- * appearing to work — is caught in Preflight.navigation instead.
+ * appearing to work (`docs/maps-survey.md`) — is routed through
+ * [UnlockGateActivity] instead: the phone wakes with the user's own unlock
+ * prompt, and the intent fires the moment they pass it.
  */
 object Navigation {
 
@@ -42,6 +45,19 @@ object Navigation {
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uri))
             .setPackage(MAPS_PACKAGE)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+        val locked = context.getSystemService(KeyguardManager::class.java)?.isKeyguardLocked == true
+        if (locked) {
+            // Straight at a locked phone, Maps swallows the destination in
+            // silence. Through the gate, the phone wakes with the unlock
+            // prompt and the intent fires the moment the user passes it.
+            UnlockGateActivity.launch(context, intent)
+            Log.i(TAG, "navigate (via unlock gate): $uri")
+            return "The phone is locked, so it is now showing the unlock prompt. " +
+                "Navigation to \"$destination\" starts the moment the user unlocks; " +
+                "if they dismiss the prompt instead, nothing happens."
+        }
+
         context.startActivity(intent)
         Log.i(TAG, "navigate: $uri")
         return "Navigation to \"$destination\" started in Google Maps" +

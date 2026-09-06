@@ -101,6 +101,16 @@
                 android:value="Local MCP server for the paired Pebble/agent to call" />
         </service>
 
+        <!-- The locked-phone gate: invisible, shows over the keyguard (our
+             own activity, so no grant needed), prompts the user to unlock,
+             and fires a carried intent once they do. Not exported — the
+             carried intent can only come from this app. -->
+        <activity
+            android:name=".UnlockGateActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <!-- Empty listener; enabling it in Settings > Notification access is
              what authorizes MediaSessionManager.getActiveSessions, which is the
              only route into Pocket Casts' media session that release builds

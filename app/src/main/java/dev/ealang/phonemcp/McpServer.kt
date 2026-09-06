@@ -695,8 +695,8 @@ class McpServer(
                 "description",
                 "Start turn-by-turn navigation on the user's phone, in Google Maps. " +
                     "The destination can be a place name, an address, \"lat,long\", or " +
-                    "the user's saved \"home\" or \"work\". Only works while the phone " +
-                    "is unlocked.",
+                    "the user's saved \"home\" or \"work\". If the phone is locked it " +
+                    "shows the unlock prompt, and navigation starts once the user unlocks.",
             )
             .put(
                 "inputSchema",
