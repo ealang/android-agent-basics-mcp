@@ -16,11 +16,17 @@ The public alarm-clock actions, all on activities guarded by
 
 ## Stopwatch: unreachable, do not re-probe
 
-There is no programmatic stopwatch on this device.
+There is no programmatic stopwatch on this device — and no standard one
+anywhere in Android.
 
-- The platform's `android.intent.action.START_STOPWATCH` /
-  `STOP_STOPWATCH` resolve to **nothing** — Samsung Clock implements the
-  public timer and alarm actions but not the stopwatch ones.
+- The platform defines **no stopwatch intent at all**: `AlarmClock`
+  stops at alarms and timers (`javap` on the SDK confirms; so does the
+  common-intents documentation). AOSP/Lineage DeskClock export nothing
+  for the stopwatch either — their `START_STOPWATCH`-style actions are
+  internal, on an unexported service. A tool built on a stopwatch
+  action would rest on a contract that does not exist, which is why no
+  first-class `start_stopwatch` was added (decided with the owner,
+  2026-09-06).
 - Samsung's private `com.sec.android.app.clockpackage.INTENT_STOPWATCH`
   is handled only by `ClockPackageExecutable`, an internal entry activity
   (Bixby/Routines surface) guarded by
