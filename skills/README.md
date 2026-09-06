@@ -36,7 +36,7 @@ don't try search.
 | Libro.fm | [apps/librofm.md](apps/librofm.md) | everything works; cleanest interface |
 | Substack | [apps/substack.md](apps/substack.md) | works with sharp edges |
 | AIMP | [apps/aimp.md](apps/aimp.md) | plays only while connected |
-| YouTube | [apps/youtube.md](apps/youtube.md) | dead while idle, fully drivable once playing |
+| YouTube | [apps/youtube.md](apps/youtube.md) | VIEW intent cold-starts any video; fully drivable once playing |
 | Google Maps | [apps/google-maps.md](apps/google-maps.md) | start navigation hands-free; everything else is one tap |
 | Audible, others | [apps/unavailable.md](apps/unavailable.md) | no usable route — don't re-probe |
 

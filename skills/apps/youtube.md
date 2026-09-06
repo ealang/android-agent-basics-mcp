@@ -2,8 +2,9 @@
 
 - **Package**: `com.google.android.youtube`
 - **Tier**: split personality — **dead while idle, transport-drivable once
-  playing**
-- **Verified on device**: 2026-09-04
+  playing** — but a VIEW intent cold-starts it into the fully drivable
+  state (see Automation consequence)
+- **Verified on device**: 2026-09-06
 
 Mechanisms: [media-control.md](../media-control.md).
 
@@ -62,10 +63,25 @@ known URL) — the app tells us nothing about the account's content.
 
 ## Automation consequence
 
-Play-by-URL requires the YouTube UI on screen, so the missing piece is
-opening it. A future generic intent-sending capability could fire a VIEW
-intent at a watch URL, which both opens the UI and starts the video in
-one step — making play_from_uri redundant for the first video and
-available for subsequent switches while the UI stays up. Until then:
-UI open = full control including play-by-URL; UI closed = transport on
-the current video only; otherwise nothing.
+Play-by-URL requires the YouTube UI on screen, and `send_intent` opens
+it. Verified live (2026-09-06): a VIEW intent at a watch URL —
+
+    action: android.intent.action.VIEW
+    data: https://www.youtube.com/watch?v=<id>
+    package: com.google.android.youtube
+    mode: activity
+
+— cold-starts the app, plays the video, and brings up a fully drivable
+media session (transport works, `play_from_uri` advertised for
+subsequent switches while the UI stays up). Match `media_command` by
+package, not "youtube" — the name is ambiguous with YouTube Music. On
+a locked phone add `via_unlock_gate: true`, since the launch needs the
+screen; the video then starts when the user unlocks.
+
+The scan also shows `vnd.youtube:<id>` as a VIEW scheme and
+`android.media.action.MEDIA_PLAY_FROM_SEARCH` on
+`Shell_MediaSearchActivity` (untested). Video ids still must come from
+outside — web search or a known URL; the app exposes no catalog.
+
+So: fire the VIEW intent to start any video; UI open = full control
+including play-by-URL; UI closed = transport on the current video only.
