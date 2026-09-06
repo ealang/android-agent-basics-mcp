@@ -74,14 +74,14 @@ apps that have no polished tool yet.
 - `launch_watch_app(app)` / `stop_watch_app(app)` — start or stop any Pebble
   watchapp, by UUID or by a name from `Watch.KNOWN_APPS`. Fire-and-forget:
   the watch never acknowledges a launch.
-- `send_watch_message(app, tuples, ensure_running_ping_key?)` — the watch
-  equivalent of `send_intent`: a raw AppMessage to any watchapp, tuples
-  passed verbatim, the watch's own ACK or NACK returned. An ACK proves
-  delivery to a running app, not that the keys meant anything — key tables
-  are per-app knowledge and belong in `skills/`. A message to a watchapp
-  that is not running vanishes silently, so launch it first, or pass
-  `ensure_running_ping_key` to run the ping loop; that key must be one the
-  target app is known to ignore, which is why it is the caller's to name.
+- `send_watch_message(app, tuples)` — the watch equivalent of
+  `send_intent`: a raw AppMessage to any watchapp, tuples passed verbatim,
+  the watch's own ACK or NACK returned. An ACK proves delivery to a
+  running app, not that the keys meant anything — key tables are per-app
+  knowledge and belong in `skills/`. A message to a watchapp that is not
+  running vanishes silently, so launch it first; any reply, ACK or NACK,
+  proves the app is up, which is enough to build a wait-until-running loop
+  from these two tools when the app has a key known to be inert.
 
 ### Timers
 

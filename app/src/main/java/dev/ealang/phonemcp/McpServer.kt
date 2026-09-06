@@ -776,7 +776,7 @@ class McpServer(
             .put("name", "send_watch_message")
             .put(
                 "description",
-                "EXPERIMENTAL: send a raw AppMessage to any app on the user's Pebble watch — the watch equivalent of send_intent. Tuples go to the watchapp exactly as given; the watch's own ACK or NACK comes back. An ACK proves delivery to the running app, not that the keys meant anything: a key the app ignores is still acknowledged. Key meanings per app are skill-file knowledge. The watchapp must already be running or the message vanishes silently (launch_watch_app first, or use ensure_running_ping_key).",
+                "EXPERIMENTAL: send a raw AppMessage to any app on the user's Pebble watch — the watch equivalent of send_intent. Tuples go to the watchapp exactly as given; the watch's own ACK or NACK comes back. An ACK proves delivery to the running app, not that the keys meant anything: a key the app ignores is still acknowledged. Key meanings per app are skill-file knowledge. The watchapp must already be running or the message vanishes silently — launch_watch_app first, and any reply (ACK or NACK) proves the app is up.",
             )
             .put(
                 "inputSchema",
@@ -797,13 +797,6 @@ class McpServer(
                                         .put("value", JSONObject().put("description", "Number for int/uint, text for string, base64 for bytes.")),
                                 ).put("required", JSONArray().put("key").put("type").put("value")),
                             ).put("description", "AppMessage tuples, passed to the watch as-is."),
-                        )
-                        .put(
-                            "ensure_running_ping_key",
-                            JSONObject().put("type", "integer").put(
-                                "description",
-                                "Optional. A key the target watchapp is known to ignore. When given, the app is launched and pinged on this key until it acknowledges (up to 10s) before the real message is sent. Only safe when the key is truly inert in that app.",
-                            ),
                         ),
                 ).put("required", JSONArray().put("app").put("tuples")),
             )
@@ -1135,15 +1128,10 @@ class McpServer(
 
         "send_watch_message" -> blocked(Preflight.watch(context)) ?: run {
             val tuples = args.optJSONArray("tuples")
-            val pingKey = if (args.has("ensure_running_ping_key")) {
-                args.getInt("ensure_running_ping_key")
-            } else {
-                null
-            }
             if (tuples == null || tuples.length() == 0) {
                 "FAILED: give tuples, an array of {key, type, length, value}." to true
             } else {
-                when (Watch.sendMessage(context, args.optString("app"), tuples, pingKey)) {
+                when (Watch.sendMessage(context, args.optString("app"), tuples)) {
                     Watch.SendResult.Acknowledged ->
                         "The watch acknowledged delivery. That proves the message " +
                             "reached the running watchapp — not that the keys meant " +
@@ -1152,13 +1140,9 @@ class McpServer(
                         "FAILED: NACK — the watch received the message and refused it." to true
                     Watch.SendResult.NoReply ->
                         "FAILED: no reply within 5s. Usually the watchapp is not " +
-                            "running — CoreApp only delivers to the running app and a " +
-                            "send to a closed one vanishes. launch_watch_app first, or " +
-                            "pass ensure_running_ping_key if the app has a known-inert " +
-                            "key." to true
-                    Watch.SendResult.NeverCameUp ->
-                        "FAILED: the watchapp never acknowledged the ping within 10s, " +
-                            "so the real message was not sent." to true
+                            "running — the phone only delivers to the running app and a " +
+                            "send to a closed one vanishes. launch_watch_app first; any " +
+                            "reply to a later send, ACK or NACK, proves it is up." to true
                     is Watch.SendResult.UnknownApp ->
                         "FAILED: \"${args.optString("app")}\" is not a UUID or a known " +
                             "app name. Known names: ${Watch.KNOWN_APPS.keys.joinToString(", ")}." to true

@@ -11,9 +11,9 @@ read side at all.
   short name the server knows. Fire-and-forget: the watch never
   acknowledges a launch, so a success here means the broadcast went out,
   nothing more.
-- `send_watch_message(app, tuples, ensure_running_ping_key?)` — one
-  AppMessage. `tuples` is an array of `{key, type, length?, value}` with
-  `type` one of `int`, `uint`, `string`, `bytes`. Sent verbatim.
+- `send_watch_message(app, tuples)` — one AppMessage. `tuples` is an array
+  of `{key, type, length?, value}` with `type` one of `int`, `uint`,
+  `string`, `bytes`. Sent verbatim.
 
 ## The one rule that catches everyone
 
@@ -23,17 +23,21 @@ a closed app has no receiver — nothing errors, nothing arrives. Launching
 is not enough on its own either, because a launch takes a second or two
 and the send will lose the race.
 
-Two ways to handle it:
+The reliable pattern is built from the two tools, because any reply — ACK
+or NACK — proves the app is up (see below):
 
-- Pass `ensure_running_ping_key`. The server then launches the app and
-  pings it on that key roughly once a second until the watch acknowledges
-  (giving up at 10 s), and only then sends the real message. **The key must
-  be one the target app is guaranteed to ignore** — it is sent repeatedly,
-  so a key that does anything does it up to ten times.
-- Or `launch_watch_app`, wait, and send. Cheaper to write, and a coin flip.
+1. `launch_watch_app`.
+2. `send_watch_message` with a single tuple on a key **the target app is
+   known to ignore**. Repeat on "no reply", about once a second; a few
+   tries is normal while the app starts. Stop after ~10 s.
+3. Once anything comes back, send the real message — once. Never resend a
+   payload that got no reply: it may have arrived with only the reply
+   lost, and a duplicate is how a user gets two timers.
 
-If you do not know an inert key for the app, you do not have a safe ping,
-and the honest answer is that the send is best-effort.
+The ping key matters: it is sent repeatedly, so a key that does anything
+does it several times. If the app has no key known to be inert, there is
+no safe ping — launch, wait a couple of seconds, and accept that the send
+is best-effort.
 
 ## What an ACK proves
 
@@ -62,8 +66,8 @@ the only way to learn which keys do nothing, which is what a ping needs.
 
 Three ways an app is quietly unreachable, all of them silent:
 
-- It is a **system app** — the stock Timer, for instance. This is why the
-  repo carries a fork of it.
+- It is a **system app**. Stock watchapps cannot be sent to at all; the
+  only route is a sideloaded copy or fork.
 - It **declares an Android companion app**, which routes sends through a
   newer path that checks the calling package. Ours is not it.
 - No watch is connected. This one *is* caught: every watch tool preflights

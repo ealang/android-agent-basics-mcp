@@ -15,7 +15,7 @@ key to the watchapp, or when testing the generic path.
 
 | Key | Name | Type | Effect |
 |---|---|---|---|
-| 1 | `KEY_PING` | any | **Nothing, by design.** Safe as `ensure_running_ping_key`. |
+| 1 | `KEY_PING` | any | **Nothing, by design.** The safe ping key for the wait-until-running loop. |
 | 20 | `KEY_START_TIMER` | `int` (int32, seconds) | Starts a timer and shows its detail screen. |
 
 Declared in `package.json` but unread by the inbox handler: 5
@@ -28,12 +28,15 @@ anything else is delivered, ACKed, and ignored.
 
 ## Driving it generically
 
-```json
-{"app": "timer", "ensure_running_ping_key": 1,
- "tuples": [{"key": 20, "type": "int", "value": 300}]}
-```
+1. `launch_watch_app` with `{"app": "timer"}`.
+2. Ping until running: `send_watch_message` with
+   `{"app": "timer", "tuples": [{"key": 1, "type": "int", "value": 0}]}`,
+   repeated on "no reply" (about once a second, give up at 10 s). Key 1 is
+   discarded by the app on purpose, so repeats are harmless.
+3. Once — never repeated:
+   `{"app": "timer", "tuples": [{"key": 20, "type": "int", "value": 300}]}`.
 
-That is exactly what `set_watch_timer(300)` does internally.
+That sequence is what `set_watch_timer(300)` does internally, in one call.
 
 Showing the detail screen after starting is deliberate: the phone has just
 launched the app, so whatever was on screen is not something the user chose

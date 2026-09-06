@@ -98,8 +98,6 @@ object Watch {
         data object Refused : SendResult
         /** Sent, and nothing came back within the wait. */
         data object NoReply : SendResult
-        /** The ping loop ran its course and the app never answered. */
-        data object NeverCameUp : SendResult
         data class UnknownApp(val given: String) : SendResult
     }
 
@@ -166,23 +164,21 @@ object Watch {
      * and an acknowledgement of a key the app never reads looks exactly like
      * success. What the keys mean is skill-file knowledge.
      *
-     * [pingKey] is the one opt-in mechanism: with it, the launch-and-ping
-     * loop from [awaitWatchapp] runs first, exactly as for the timer — but
-     * only the caller can know which key an arbitrary watchapp is guaranteed
-     * to ignore, so it is never assumed. Without it, the message is sent
-     * cold, and a closed watchapp swallows it in silence (no reply, not an
-     * error — CoreApp has no receiver for an app that is not running).
+     * The message is sent cold: no launch, no ping. A closed watchapp
+     * swallows it in silence (no reply, not an error — CoreApp has no
+     * receiver for an app that is not running). That is not this function's
+     * problem to solve: the "no reply" result already distinguishes reached
+     * from not, so a caller who knows an inert key for the target app can
+     * build the launch-and-ping pattern out of [launch] and this, one call
+     * at a time. The baked-in loop exists only inside [setTimer], where the
+     * inert key is ours to guarantee.
      */
-    fun sendMessage(context: Context, app: String, tuples: JSONArray, pingKey: Int?): SendResult {
+    fun sendMessage(context: Context, app: String, tuples: JSONArray): SendResult {
         val uuid = resolve(app) ?: return SendResult.UnknownApp(app)
         val replies = Replies()
         registerForReplies(context, replies)
 
         return try {
-            if (pingKey != null && !awaitWatchapp(context, replies, uuid, pingKey)) {
-                return SendResult.NeverCameUp
-            }
-
             val transaction = nextTransaction()
             replies.expectMessage(transaction)
             context.sendBroadcast(message(uuid, transaction, tuples.toString()))
