@@ -382,7 +382,11 @@ class McpService : Service() {
         // The webhook listener first: loopback always exists, so this bind
         // owes nothing to Tailscale being up and should not wait behind it.
         if (webhookServer == null) {
+            // Read here, not in the constructor call, so the log lines below
+            // name the port that was actually tried.
+            val webhookPort = config.webhookPort
             val instance = PebbleWebhookServer(
+                webhookPort,
                 config.token,
                 onDied = ::onWebhookServerDied,
                 // Runs on NanoHTTPD's request thread. enqueue is thread-safe
@@ -399,14 +403,14 @@ class McpService : Service() {
                 instance.start(NanoTimeouts.SOCKET_READ_MS, false)
                 webhookServer = instance
                 EventLog.record(
-                    "webhook listening on ${PebbleWebhookServer.BIND}:${PebbleWebhookServer.PORT}",
+                    "webhook listening on ${PebbleWebhookServer.BIND}:$webhookPort",
                 )
             } catch (e: Exception) {
                 // Only a port squatter can make loopback fail; the shared
                 // retry below picks it up.
                 Log.w(TAG, "Could not bind the webhook listener; will retry", e)
                 EventLog.record(
-                    "webhook bind ${PebbleWebhookServer.BIND}:${PebbleWebhookServer.PORT} failed " +
+                    "webhook bind ${PebbleWebhookServer.BIND}:$webhookPort failed " +
                         "(${e.message ?: e::class.java.simpleName})",
                 )
             }

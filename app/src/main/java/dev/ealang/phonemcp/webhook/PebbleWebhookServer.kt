@@ -13,6 +13,8 @@ import java.io.File
  * See `docs/webhook-pipeline.md` §2.
  */
 class PebbleWebhookServer(
+    /** Read from Config at service start; changing it restarts the service. */
+    port: Int,
     token: String,
     onDied: () -> Unit,
     /**
@@ -22,7 +24,7 @@ class PebbleWebhookServer(
      * 500 so the watch retries.
      */
     private val enqueue: (audio: File?, meta: Meta) -> Unit,
-) : AuthedHttpServer(BIND, PORT, token, onDied) {
+) : AuthedHttpServer(BIND, port, token, onDied) {
 
     companion object {
         private const val TAG = "PebbleWebhookServer"
@@ -36,6 +38,8 @@ class PebbleWebhookServer(
          * is exactly the mistake this removes.
          */
         const val BIND = "127.0.0.1"
+
+        /** The default port; Config.webhookPort is what a running listener binds. */
         const val PORT = 8911
     }
 

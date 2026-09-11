@@ -128,9 +128,8 @@ class Config(context: Context) {
         prefs.edit().putString("buttons_$destination", value).apply()
 
     /**
-     * The webhook listener's port. UI-only for now, same caveat as
-     * [featureEnabled]: the listener still binds PebbleWebhookServer.PORT
-     * until the wiring step lands.
+     * The webhook listener's port, bound at service start; the Save button
+     * restarts the service to apply a change.
      */
     var webhookPort: Int
         get() = prefs.getInt(KEY_WEBHOOK_PORT, PebbleWebhookServer.PORT)

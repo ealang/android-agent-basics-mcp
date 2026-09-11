@@ -30,7 +30,6 @@ import dev.ealang.phonemcp.MainActivity
 import dev.ealang.phonemcp.McpService
 import dev.ealang.phonemcp.SecretStore
 import dev.ealang.phonemcp.mcp.McpServer
-import dev.ealang.phonemcp.webhook.PebbleWebhookServer
 
 /**
  * The two servers and the token they share — everything a client needs to be
@@ -85,25 +84,13 @@ fun ServersTab(activity: MainActivity) {
                 value = portText,
                 onValueChange = { portText = it },
                 label = { Text("Port") },
-                supportingText = {
-                    Text(
-                        "Saved, but not enforced yet — the listener still binds " +
-                            "${PebbleWebhookServer.PORT}.",
-                    )
-                },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
             OutlinedButton(onClick = {
-                val port = portText.toIntOrNull()
-                if (port == null || port !in 1024..65535) {
-                    activity.toast("Port must be between 1024 and 65535")
-                    return@OutlinedButton
-                }
-                config.webhookPort = port
-                activity.toast("Saved")
-            }) { Text("Save") }
+                activity.saveWebhookPort(portText)
+            }) { Text("Save and restart") }
         }
 
         SectionCard("MCP server") {

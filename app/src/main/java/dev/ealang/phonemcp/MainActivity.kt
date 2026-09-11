@@ -180,7 +180,24 @@ class MainActivity : ComponentActivity() {
     }
 
     fun webhookUrl(): String =
-        "http://${PebbleWebhookServer.BIND}:${PebbleWebhookServer.PORT}${PebbleWebhookServer.PATH}"
+        "http://${PebbleWebhookServer.BIND}:${config.webhookPort}${PebbleWebhookServer.PATH}"
+
+    fun saveWebhookPort(portText: String) {
+        val port = portText.toIntOrNull()
+        if (port == null || port !in 1024..65535) {
+            toast("Port must be between 1024 and 65535")
+            return
+        }
+        config.webhookPort = port
+        // Same restart shape as saveNetwork: the listener binds its port at
+        // service start, so a running service is bounced to pick it up.
+        if (McpService.running) {
+            McpService.stop(this)
+            handler.postDelayed({ startServer() }, 300)
+        }
+        toast("Saved")
+        bump()
+    }
 
     fun copyToClipboard(label: String, text: String) {
         getSystemService(ClipboardManager::class.java)
