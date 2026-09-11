@@ -227,6 +227,7 @@ fun PebbleTab(activity: MainActivity) {
                     "All files access is not granted, so note recordings will " +
                         "fail. Grant it below."
                 },
+                warn = !notesOk,
             )
             Button(onClick = {
                 // For writing notes into a top-level folder, which scoped

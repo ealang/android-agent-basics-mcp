@@ -7,6 +7,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -51,6 +52,12 @@ fun PhoneMcpApp(activity: MainActivity) {
                     icon = { Icon(Icons.Filled.Build, contentDescription = null) },
                     label = { Text("MCP") },
                 )
+                NavigationBarItem(
+                    selected = tab == 3,
+                    onClick = { tab = 3 },
+                    icon = { Icon(Icons.Filled.Settings, contentDescription = null) },
+                    label = { Text("Servers") },
+                )
             }
         },
     ) { padding ->
@@ -59,6 +66,7 @@ fun PhoneMcpApp(activity: MainActivity) {
                 0 -> StatusTab(activity)
                 1 -> PebbleTab(activity)
                 2 -> McpTab(activity)
+                3 -> ServersTab(activity)
             }
         }
     }

@@ -65,13 +65,21 @@ fun SwitchRow(
     }
 }
 
-/** Smaller status prose, the tone the old single page used for state lines. */
+/**
+ * Smaller status prose, the tone the old single page used for state lines.
+ * [warn] paints it in the error color — for a missing grant or a stopped
+ * server, so the fact something needs doing is visible before reading.
+ */
 @Composable
-fun StatusText(text: String) {
+fun StatusText(text: String, warn: Boolean = false) {
     Text(
         text,
         style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        color = if (warn) {
+            MaterialTheme.colorScheme.error
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        },
     )
 }
 

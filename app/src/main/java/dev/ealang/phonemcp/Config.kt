@@ -127,6 +127,15 @@ class Config(context: Context) {
     fun setButtonAssignment(destination: String, value: String) =
         prefs.edit().putString("buttons_$destination", value).apply()
 
+    /**
+     * The webhook listener's port. UI-only for now, same caveat as
+     * [featureEnabled]: the listener still binds McpServer.WEBHOOK_PORT until
+     * the wiring step lands.
+     */
+    var webhookPort: Int
+        get() = prefs.getInt(KEY_WEBHOOK_PORT, McpServer.WEBHOOK_PORT)
+        set(value) = prefs.edit().putInt(KEY_WEBHOOK_PORT, value).apply()
+
     /** Signature line appended to forwarded Telegram messages. UI-only for now. */
     var telegramSignature: String
         get() = prefs.getString(KEY_TG_SIGNATURE, "") ?: ""
@@ -170,5 +179,6 @@ class Config(context: Context) {
         private const val KEY_TG_CHAT = "telegram_chat_id"
         private const val KEY_TG_DB_KEY = "telegram_db_key"
         private const val KEY_TG_SIGNATURE = "telegram_signature"
+        private const val KEY_WEBHOOK_PORT = "webhook_port"
     }
 }
