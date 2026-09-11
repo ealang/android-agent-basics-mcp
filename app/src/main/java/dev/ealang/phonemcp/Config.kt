@@ -104,8 +104,11 @@ class Config(context: Context) {
     /**
      * Feature switches. The MCP tool keys are enforced per request — a tool
      * whose key is off vanishes from tools/list and is refused at dispatch.
-     * The webhook destination switches are still UI-only: every configured
-     * destination stays active regardless, until their wiring lands.
+     * [FEATURE_WEBHOOK] gates the webhook listener socket: off means the
+     * watch gets connection-refused, while the pipeline worker stays up and
+     * drains whatever was already accepted. The webhook *destination*
+     * switches are still UI-only: every configured destination stays active
+     * regardless, until their wiring lands.
      *
      * Keys are namespaced with "feature_" so they can be enumerated later.
      */
@@ -171,6 +174,10 @@ class Config(context: Context) {
 
     companion object {
         const val DEFAULT_PORT = 8910
+
+        /** The whole webhook listener, as one feature key. */
+        const val FEATURE_WEBHOOK = "webhook_server"
+
         private const val KEY_PORT = "port"
         private const val KEY_BIND = "bind_address"
         private const val KEY_TOKEN = "token"

@@ -62,16 +62,21 @@ fun ServersTab(activity: MainActivity) {
         }
 
         SectionCard("Pebble webhook server") {
+            val webhookOn = config.featureEnabled(Config.FEATURE_WEBHOOK)
             SwitchRow(
                 title = "Server",
-                supporting = "Runs with the MCP service; not separately switchable yet.",
-                checked = running,
-                enabled = false,
-                onChange = {},
+                supporting = if (webhookOn) {
+                    "Listens while the MCP service runs. Off stops intake only — " +
+                        "recordings already received still go out."
+                } else {
+                    "Off — the watch gets connection refused and retries later."
+                },
+                checked = webhookOn,
+                onChange = { activity.setWebhookEnabled(it) },
             )
             StatusText(
                 "Receives at ${activity.webhookUrl()} — this phone only.",
-                warn = !running,
+                warn = !running || !webhookOn,
             )
             OutlinedButton(onClick = {
                 activity.copyToClipboard("webhook URL", activity.webhookUrl())

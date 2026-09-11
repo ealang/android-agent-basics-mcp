@@ -43,6 +43,9 @@ class McpService : Service() {
 
         const val ACTION_STOP = "dev.ealang.phonemcp.STOP"
 
+        /** Re-read [Config.FEATURE_WEBHOOK] and bind or stop the listener to match. */
+        private const val ACTION_APPLY_WEBHOOK = "dev.ealang.phonemcp.APPLY_WEBHOOK"
+
         private const val INITIAL_RETRY_MS = 5_000L
         /** A capped once-a-minute retry costs nothing and never wakes a sleeping phone. */
         private const val MAX_RETRY_MS = 60_000L
@@ -88,6 +91,20 @@ class McpService : Service() {
 
         fun stop(context: Context) {
             context.startService(Intent(context, McpService::class.java).setAction(ACTION_STOP))
+        }
+
+        /**
+         * Tell a running service the webhook switch flipped. Intake only:
+         * off stops the listener socket, so the watch sees connection-refused
+         * and retries on its side, while the pipeline worker finishes draining
+         * whatever was already accepted and then idles. Callers guard with
+         * [running] — on a stopped service the config value alone is enough,
+         * the next start reads it.
+         */
+        fun applyWebhookToggle(context: Context) {
+            context.startService(
+                Intent(context, McpService::class.java).setAction(ACTION_APPLY_WEBHOOK),
+            )
         }
 
         /**
@@ -261,6 +278,11 @@ class McpService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_APPLY_WEBHOOK) {
+            applyWebhookToggle()
+            return START_STICKY
+        }
+
         if (intent?.action == ACTION_STOP) {
             Config(this).enabled = false
             EventLog.record("stopped by user")
@@ -381,7 +403,10 @@ class McpService : Service() {
 
         // The webhook listener first: loopback always exists, so this bind
         // owes nothing to Tailscale being up and should not wait behind it.
-        if (webhookServer == null) {
+        // Switched off means don't bind — and, below, don't retry: a listener
+        // that is off by choice is not a bind that failed.
+        val webhookWanted = config.featureEnabled(Config.FEATURE_WEBHOOK)
+        if (webhookServer == null && webhookWanted) {
             // Read here, not in the constructor call, so the log lines below
             // name the port that was actually tried.
             val webhookPort = config.webhookPort
@@ -448,7 +473,7 @@ class McpService : Service() {
             }
         }
 
-        if (webhookServer == null && mcpServer != null) {
+        if (webhookServer == null && webhookWanted && mcpServer != null) {
             // The MCP bind succeeded so its catch armed no retry; the webhook
             // still needs one.
             main.postDelayed(retry, retryDelayMs)
@@ -469,6 +494,24 @@ class McpService : Service() {
             mcpServer = null
             running = false
             attemptStart()
+        }
+    }
+
+    /**
+     * The switch flipped while we were running. Off: stop the socket and
+     * nothing else — the worker keeps draining what was accepted, and any
+     * retry already scheduled for the MCP bind is left alone (its next
+     * attemptStart sees the switch and skips the webhook). On: attemptStart
+     * binds it, idempotently.
+     */
+    private fun applyWebhookToggle() {
+        if (Config(this).featureEnabled(Config.FEATURE_WEBHOOK)) {
+            attemptStart()
+        } else if (webhookServer != null) {
+            webhookServer?.stop()
+            webhookServer = null
+            EventLog.record("webhook listener switched off")
+            sendBroadcast(Intent(ACTION_STATE_CHANGED).setPackage(packageName))
         }
     }
 

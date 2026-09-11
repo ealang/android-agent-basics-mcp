@@ -182,6 +182,15 @@ class MainActivity : ComponentActivity() {
     fun webhookUrl(): String =
         "http://${PebbleWebhookServer.BIND}:${config.webhookPort}${PebbleWebhookServer.PATH}"
 
+    fun setWebhookEnabled(on: Boolean) {
+        config.setFeatureEnabled(Config.FEATURE_WEBHOOK, on)
+        // A stopped service reads the switch at its next start; a running one
+        // is told to bind or drop the listener in place — the pipeline worker
+        // is untouched either way.
+        if (McpService.running) McpService.applyWebhookToggle(this)
+        bumpSoon()
+    }
+
     fun saveWebhookPort(portText: String) {
         val port = portText.toIntOrNull()
         if (port == null || port !in 1024..65535) {
