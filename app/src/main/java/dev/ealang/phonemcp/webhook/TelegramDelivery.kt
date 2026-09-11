@@ -34,7 +34,11 @@ class TelegramDelivery(
         val chatId = config.telegramChatId
             ?: return StepResult.Transient("no Telegram chat id is set — save one in the app")
 
-        val message = MESSAGE_TEMPLATE.replace("{text}", text)
+        // Signature read at pickup like the chat id, so editing it applies to
+        // anything still queued. Its own line: it marks provenance, not prose.
+        val signature = config.telegramSignature
+        val message = MESSAGE_TEMPLATE.replace("{text}", text) +
+            if (signature.isEmpty()) "" else "\n$signature"
         var messageId: Long? = null
         var problem: String? = null
         val latch = CountDownLatch(1)

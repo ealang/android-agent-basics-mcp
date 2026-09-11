@@ -102,11 +102,10 @@ class Config(context: Context) {
         }
 
     /**
-     * UI-only feature switches (2026-09-10): the settings screens persist
-     * these, but nothing reads them yet — every tool stays registered and
-     * every webhook destination stays active regardless. Wiring them into
-     * tools/list and the pipeline is deliberately a later step; the UI came
-     * first so the shape could be judged on the phone.
+     * Feature switches. The MCP tool keys are enforced per request — a tool
+     * whose key is off vanishes from tools/list and is refused at dispatch.
+     * The webhook destination switches are still UI-only: every configured
+     * destination stays active regardless, until their wiring lands.
      *
      * Keys are namespaced with "feature_" so they can be enumerated later.
      */
@@ -137,7 +136,11 @@ class Config(context: Context) {
         get() = prefs.getInt(KEY_WEBHOOK_PORT, PebbleWebhookServer.PORT)
         set(value) = prefs.edit().putInt(KEY_WEBHOOK_PORT, value).apply()
 
-    /** Signature line appended to forwarded Telegram messages. UI-only for now. */
+    /**
+     * Signature line appended to forwarded Telegram messages, on its own
+     * line. Read at pickup by TelegramDelivery, so an edit applies to
+     * queued items too. Blank appends nothing.
+     */
     var telegramSignature: String
         get() = prefs.getString(KEY_TG_SIGNATURE, "") ?: ""
         set(value) = prefs.edit().putString(KEY_TG_SIGNATURE, value.trim()).apply()

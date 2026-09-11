@@ -203,7 +203,7 @@ fun PebbleTab(activity: MainActivity) {
             )
             OutlinedButton(onClick = {
                 config.telegramSignature = signature
-                activity.toast("Saved — not appended yet, UI only for now")
+                activity.toast("Saved — applies from the next forwarded message")
             }) { Text("Save signature") }
         }
 
