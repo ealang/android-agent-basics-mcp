@@ -33,10 +33,10 @@ private val APP_SPECIFIC = listOf(
 )
 
 /**
- * What the MCP server offers, as switches. UI-first (2026-09-10): the values
- * persist, but tools/list does not read them yet — flipping one changes
- * nothing until the enforcement step lands. The supporting text at the top
- * says so, so nobody is surprised on the phone.
+ * What the MCP server offers, as switches. Live: tools/list hides a switched-
+ * off tool and dispatch refuses it by name, per request — no restart. The
+ * three phone-capability tools (get_location, find_my_phone, silence_phone)
+ * have no switch on purpose; they have a null featureKey in the registry.
  */
 @Composable
 fun McpTab(activity: MainActivity) {
@@ -48,9 +48,9 @@ fun McpTab(activity: MainActivity) {
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         StatusText(
-            "Which tools the MCP server offers. These switches are saved but " +
-                "not enforced yet — every tool stays available until the " +
-                "wiring step lands.",
+            "Which tools the MCP server offers. Takes effect immediately: a " +
+                "switched-off tool disappears from tools/list and is refused " +
+                "if called anyway.",
         )
 
         SectionCard("Generic") {

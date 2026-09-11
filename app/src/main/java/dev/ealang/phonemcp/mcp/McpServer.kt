@@ -3,6 +3,7 @@ package dev.ealang.phonemcp.mcp
 import android.content.Context
 import android.util.Log
 import dev.ealang.phonemcp.AuthedHttpServer
+import dev.ealang.phonemcp.Config
 import dev.ealang.phonemcp.mcp.apps.AppTools
 import dev.ealang.phonemcp.mcp.generic.GenericTools
 import dev.ealang.phonemcp.mcp.pebble.PebbleTools
@@ -38,6 +39,17 @@ class McpServer(
         AppTools.specs(context) + PebbleTools.specs(context) + GenericTools.specs(context)
 
     private val byName: Map<String, ToolSpec> = tools.associateBy { it.name }
+
+    private val config = Config(context)
+
+    /**
+     * The MCP tab's feature switches, honoured per request — SharedPreferences
+     * is an in-memory map after first load, so reading it fresh each time *is*
+     * the real-time toggle, no restart involved. A null featureKey means
+     * always on: a capability of the phone itself, with no switch to check.
+     */
+    private fun enabled(spec: ToolSpec): Boolean =
+        spec.featureKey == null || config.featureEnabled(spec.featureKey)
 
     companion object {
         private const val TAG = "PhoneMcpServer"
@@ -117,7 +129,9 @@ class McpServer(
                 id,
                 JSONObject().put(
                     "tools",
-                    JSONArray().also { list -> tools.forEach { list.put(it.definition) } },
+                    JSONArray().also { list ->
+                        tools.filter(::enabled).forEach { list.put(it.definition) }
+                    },
                 ),
             )
 
@@ -137,9 +151,18 @@ class McpServer(
                 // A generic tool firing an intent at a permission-guarded
                 // component is exactly how that happens, and the exception
                 // text is a finding worth returning.
+                val spec = byName[name]
                 val (text, isError) = try {
-                    byName[name]?.handler?.invoke(args)
-                        ?: ("No such tool: $name" to true)
+                    when {
+                        spec == null -> "No such tool: $name" to true
+                        // Checked at dispatch too, not just in tools/list:
+                        // clients cache the list, so a tool switched off after
+                        // the handshake still arrives here by name.
+                        !enabled(spec) ->
+                            "FAILED: the user has switched this tool off in the " +
+                                "Phone MCP app." to true
+                        else -> spec.handler(args)
+                    }
                 } catch (t: Throwable) {
                     Log.w(TAG, "Tool $name threw", t)
                     "FAILED: ${t.javaClass.simpleName}: ${t.message ?: "no detail"}" to true
