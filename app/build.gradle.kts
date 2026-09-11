@@ -3,6 +3,7 @@ import java.util.Properties
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 // The debug keystore lives outside the repo (path comes from local.properties),
@@ -55,6 +56,10 @@ android {
         jvmTarget = "17"
     }
 
+    buildFeatures {
+        compose = true
+    }
+
     testOptions {
         // The queue classes call android.util.Log; let those calls no-op on
         // the JVM instead of throwing "not mocked".
@@ -72,6 +77,13 @@ dependencies {
     // MediaBrowserCompat, for the experimental media_search only: search is
     // part of the androidx media protocol, not the framework MediaBrowser.
     implementation("androidx.media:media:1.7.0")
+
+    // The UI. Compose draws every widget itself — none of this is in the OS —
+    // so the whole toolkit rides in the APK. The BOM pins the androidx.compose
+    // artifacts to versions tested together; only it carries a version.
+    implementation(platform("androidx.compose:compose-bom:2024.09.03"))
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.activity:activity-compose:1.9.2")
 
     // Unit tests only cover logic that needs no device — the time parser being
     // the case where a quiet mistake produces a timer at the wrong hour rather

@@ -100,6 +100,38 @@ class Config(context: Context) {
             return fresh
         }
 
+    /**
+     * UI-only feature switches (2026-09-10): the settings screens persist
+     * these, but nothing reads them yet — every tool stays registered and
+     * every webhook destination stays active regardless. Wiring them into
+     * tools/list and the pipeline is deliberately a later step; the UI came
+     * first so the shape could be judged on the phone.
+     *
+     * Keys are namespaced with "feature_" so they can be enumerated later.
+     */
+    fun featureEnabled(key: String, default: Boolean = true): Boolean =
+        prefs.getBoolean("feature_$key", default)
+
+    fun setFeatureEnabled(key: String, value: Boolean) =
+        prefs.edit().putBoolean("feature_$key", value).apply()
+
+    /**
+     * Which watch button presses a webhook destination should claim:
+     * "single", "double" or "both". UI-only, same caveat as [featureEnabled];
+     * today the recorder sends everything and the pipeline fans out to
+     * whatever is configured.
+     */
+    fun buttonAssignment(destination: String): String =
+        prefs.getString("buttons_$destination", "both") ?: "both"
+
+    fun setButtonAssignment(destination: String, value: String) =
+        prefs.edit().putString("buttons_$destination", value).apply()
+
+    /** Signature line appended to forwarded Telegram messages. UI-only for now. */
+    var telegramSignature: String
+        get() = prefs.getString(KEY_TG_SIGNATURE, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_TG_SIGNATURE, value.trim()).apply()
+
     /** Whether the user wants the server up — also what the boot receiver checks. */
     var enabled: Boolean
         get() = prefs.getBoolean(KEY_ENABLED, false)
@@ -137,5 +169,6 @@ class Config(context: Context) {
         private const val KEY_TG_API_HASH = "telegram_api_hash"
         private const val KEY_TG_CHAT = "telegram_chat_id"
         private const val KEY_TG_DB_KEY = "telegram_db_key"
+        private const val KEY_TG_SIGNATURE = "telegram_signature"
     }
 }
