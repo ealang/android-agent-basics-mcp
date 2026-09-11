@@ -1,0 +1,239 @@
+package dev.ealang.phonemcp.mcp.generic
+
+import android.content.Context
+import dev.ealang.phonemcp.mcp.ToolSpec
+import org.json.JSONArray
+import org.json.JSONObject
+
+/**
+ * The advanced generic tier (CLAUDE.md's second doctrine): raw Android
+ * capabilities, remoted. They execute exactly what they are told — no guards
+ * beyond our own grants. Experimental prototypes; findings over polish.
+ */
+object GenericTools {
+
+    fun specs(context: Context): List<ToolSpec> {
+        val mediaApps = ToolSpec(
+            name = "media_apps",
+            featureKey = "media_control",
+            definition = JSONObject()
+                .put("name", "media_apps")
+                .put("description", "EXPERIMENTAL: list installed apps declaring a MediaBrowserService.")
+                .put("inputSchema", JSONObject().put("type", "object").put("properties", JSONObject())),
+        ) { _ ->
+            val apps = MediaExplorer.mediaApps(context)
+            if (apps.isEmpty()) "No installed app declares a MediaBrowserService." to false
+            else apps.joinToString("\n") { "${it.label} (${it.pkg})" } to false
+        }
+
+        val mediaBrowse = ToolSpec(
+            name = "media_browse",
+            featureKey = "media_control",
+            definition = JSONObject()
+                .put("name", "media_browse")
+                .put("description", "EXPERIMENTAL: list one node of a media app's browse tree (root if no node given).")
+                .put(
+                    "inputSchema",
+                    JSONObject().put("type", "object").put(
+                        "properties",
+                        JSONObject()
+                            .put("app", JSONObject().put("type", "string").put("description", "App name or package, fuzzy matched."))
+                            .put("node", JSONObject().put("type", "string").put("description", "Media id of the node to list."))
+                            .put("offset", JSONObject().put("type", "integer").put("description", "Skip this many children — for paging long listings.")),
+                    ).put("required", JSONArray().put("app")),
+                ),
+        ) { args ->
+            val (app, problem) = MediaExplorer.resolve(context, args.optString("app"))
+            if (app == null) "FAILED: $problem" to true
+            else MediaExplorer.browse(
+                context,
+                app,
+                args.optString("node").ifBlank { null },
+                args.optInt("offset", 0).coerceAtLeast(0),
+            ) to false
+        }
+
+        val mediaPlay = ToolSpec(
+            name = "media_play",
+            featureKey = "media_control",
+            definition = JSONObject()
+                .put("name", "media_play")
+                .put("description", "EXPERIMENTAL: try to start playback in a media app — by media_id, by search query, or bare resume. Reads back the session state after a beat. Audible on the phone.")
+                .put(
+                    "inputSchema",
+                    JSONObject().put("type", "object").put(
+                        "properties",
+                        JSONObject()
+                            .put("app", JSONObject().put("type", "string").put("description", "App name or package, fuzzy matched."))
+                            .put("media_id", JSONObject().put("type", "string").put("description", "A playable id from media_browse."))
+                            .put("query", JSONObject().put("type", "string").put("description", "Free-text search the app resolves itself.")),
+                    ).put("required", JSONArray().put("app")),
+                ),
+        ) { args ->
+            val (app, problem) = MediaExplorer.resolve(context, args.optString("app"))
+            if (app == null) {
+                "FAILED: $problem" to true
+            } else {
+                MediaExplorer.play(
+                    context,
+                    app,
+                    args.optString("media_id").ifBlank { null },
+                    args.optString("query").ifBlank { null },
+                ) to false
+            }
+        }
+
+        val mediaCommand = ToolSpec(
+            name = "media_command",
+            featureKey = "media_control",
+            definition = JSONObject()
+                .put("name", "media_command")
+                .put("description", "EXPERIMENTAL: send a media app a transport command: next, previous, pause, play, stop, queue, queue:<id>, seek:<seconds> (absolute, or +N/-N relative), speed:<multiplier>, rate:up/down/clear/<number>, uri:<uri>, queue_add:<id>, queue_add:<pos>:<id>, queue_remove:<id>, or a custom action id verbatim. Reads back the session state, position, and advertised actions after a beat.")
+                .put(
+                    "inputSchema",
+                    JSONObject().put("type", "object").put(
+                        "properties",
+                        JSONObject()
+                            .put("app", JSONObject().put("type", "string").put("description", "App name or package, fuzzy matched."))
+                            .put("action", JSONObject().put("type", "string").put("description", "next, previous, pause, play, stop, queue, queue:<id>, seek:<seconds>, seek:+N, seek:-N, speed:<multiplier>, rate:up/down/clear/<number>, uri:<uri>, queue_add:<id>, queue_add:<pos>:<id>, queue_remove:<id>, or a custom action id.")),
+                    ).put("required", JSONArray().put("app").put("action")),
+                ),
+        ) { args ->
+            val (app, problem) = MediaExplorer.resolve(context, args.optString("app"))
+            val action = args.optString("action")
+            if (app == null) "FAILED: $problem" to true
+            // Queue edits ride the compat protocol, so they take a different
+            // connection path from the rest of the commands.
+            else if (action.trim().startsWith("queue_add:") || action.trim().startsWith("queue_remove:")) {
+                MediaExplorer.queueEdit(context, app, action.trim()) to false
+            } else {
+                MediaExplorer.command(context, app, action) to false
+            }
+        }
+
+        val mediaSearch = ToolSpec(
+            name = "media_search",
+            featureKey = "media_control",
+            definition = JSONObject()
+                .put("name", "media_search")
+                .put("description", "EXPERIMENTAL: search a media app's catalog and list the results without playing anything. Optional per app — some never implemented it.")
+                .put(
+                    "inputSchema",
+                    JSONObject().put("type", "object").put(
+                        "properties",
+                        JSONObject()
+                            .put("app", JSONObject().put("type", "string").put("description", "App name or package, fuzzy matched."))
+                            .put("query", JSONObject().put("type", "string").put("description", "Free-text search.")),
+                    ).put("required", JSONArray().put("app").put("query")),
+                ),
+        ) { args ->
+            val (app, problem) = MediaExplorer.resolve(context, args.optString("app"))
+            if (app == null) "FAILED: $problem" to true
+            else MediaExplorer.search(context, app, args.optString("query")) to false
+        }
+
+        val intentSpecProperties = JSONObject()
+            .put("action", JSONObject().put("type", "string").put("description", "Intent action, e.g. android.intent.action.VIEW."))
+            .put("data", JSONObject().put("type", "string").put("description", "Data URI, e.g. https://... or geo:..."))
+            .put("mime_type", JSONObject().put("type", "string").put("description", "MIME type of the data."))
+            .put("categories", JSONObject().put("type", "array").put("items", JSONObject().put("type", "string")).put("description", "Intent categories."))
+            .put("package", JSONObject().put("type", "string").put("description", "Limit to this package without naming a component."))
+            .put("component", JSONObject().put("type", "string").put("description", "Explicit target, \"package/ClassName\" (leading-dot class ok)."))
+            .put(
+                "extras",
+                JSONObject().put("type", "array").put(
+                    "items",
+                    JSONObject().put("type", "object").put(
+                        "properties",
+                        JSONObject()
+                            .put("key", JSONObject().put("type", "string"))
+                            .put("type", JSONObject().put("type", "string").put("description", "string, int, long, boolean, float, double, uri, string_array, int_array, or long_array."))
+                            .put("value", JSONObject().put("description", "The value, matching the type.")),
+                    ).put("required", JSONArray().put("key").put("value")),
+                ).put("description", "Typed extras. The type must match what the receiving app reads."),
+            )
+
+        val intentScan = ToolSpec(
+            name = "intent_scan",
+            featureKey = "intents",
+            definition = JSONObject()
+                .put("name", "intent_scan")
+                .put("description", "EXPERIMENTAL: scan an app's automation surface — its exported activities, receivers, and services with their intent filters and guarding permissions. With no package, lists every installed package.")
+                .put(
+                    "inputSchema",
+                    JSONObject().put("type", "object").put(
+                        "properties",
+                        JSONObject().put("package", JSONObject().put("type", "string").put("description", "Exact package name to scan; omit to list all packages.")),
+                    ),
+                ),
+        ) { args ->
+            val pkg = args.optString("package").trim()
+            val text = if (pkg.isEmpty()) IntentExplorer.listPackages(context) else IntentExplorer.scan(context, pkg)
+            text to text.startsWith("FAILED:")
+        }
+
+        val intentResolve = ToolSpec(
+            name = "intent_resolve",
+            featureKey = "intents",
+            definition = JSONObject()
+                .put("name", "intent_resolve")
+                .put("description", "EXPERIMENTAL: dry run — list which activities, receivers, and services would handle an intent, without sending it.")
+                .put(
+                    "inputSchema",
+                    JSONObject().put("type", "object").put("properties", intentSpecProperties),
+                ),
+        ) { args ->
+            val text = IntentExplorer.resolve(context, args)
+            text to text.startsWith("FAILED:")
+        }
+
+        val sendIntent = ToolSpec(
+            name = "send_intent",
+            featureKey = "intents",
+            definition = JSONObject()
+                .put("name", "send_intent")
+                .put("description", "EXPERIMENTAL: build and fire an Android intent — start an activity (opens on screen), send a broadcast, or start a service. Resolution is checked first; an intent nothing handles is not sent.")
+                .put(
+                    "inputSchema",
+                    JSONObject().put("type", "object").put(
+                        "properties",
+                        JSONObject(intentSpecProperties.toString())
+                            .put("mode", JSONObject().put("type", "string").put("description", "activity (default), broadcast, service, or foreground_service."))
+                            .put("via_unlock_gate", JSONObject().put("type", "boolean").put("description", "Activity mode only, default false. Fallback for intents that require the phone to be unlocked: if the phone is locked, wake it with the unlock prompt and start the activity when the user unlocks (expires after two minutes). Without it, a locked phone may silently discard the launch while reporting success.")),
+                    ),
+                ),
+        ) { args ->
+            val text = IntentExplorer.send(context, args)
+            text to text.startsWith("FAILED:")
+        }
+
+        val providerQuery = ToolSpec(
+            name = "provider_query",
+            featureKey = "content_providers",
+            definition = JSONObject()
+                .put("name", "provider_query")
+                .put("description", "EXPERIMENTAL: read another app's state through its ContentProvider. With no uri, lists every exported provider on the device with its authority and permission guards. With a content:// uri, runs the query and returns rows as text.")
+                .put(
+                    "inputSchema",
+                    JSONObject().put("type", "object").put(
+                        "properties",
+                        JSONObject()
+                            .put("uri", JSONObject().put("type", "string").put("description", "content://<authority>/<path>. Omit to list all exported providers."))
+                            .put("projection", JSONObject().put("type", "array").put("items", JSONObject().put("type", "string")).put("description", "Columns to return; omit for all."))
+                            .put("selection", JSONObject().put("type", "string").put("description", "SQL-style WHERE clause, ? placeholders allowed."))
+                            .put("selection_args", JSONObject().put("type", "array").put("items", JSONObject().put("type", "string")).put("description", "Values for the ? placeholders."))
+                            .put("sort_order", JSONObject().put("type", "string").put("description", "SQL-style ORDER BY clause."))
+                            .put("limit", JSONObject().put("type", "integer").put("description", "Max rows to show, default 50, cap 500.")),
+                    ),
+                ),
+        ) { args ->
+            val text = ProviderExplorer.query(context, args)
+            text to text.startsWith("FAILED:")
+        }
+
+        return listOf(
+            mediaApps, mediaBrowse, mediaPlay, mediaCommand, mediaSearch,
+            intentScan, intentResolve, sendIntent, providerQuery,
+        )
+    }
+}
