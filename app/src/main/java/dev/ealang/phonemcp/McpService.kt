@@ -13,6 +13,17 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.util.Log
+import dev.ealang.phonemcp.mcp.McpServer
+import dev.ealang.phonemcp.mcp.apps.Sound
+import dev.ealang.phonemcp.webhook.DrainReport
+import dev.ealang.phonemcp.webhook.NoteWriter
+import dev.ealang.phonemcp.webhook.OpenAiTranscriber
+import dev.ealang.phonemcp.webhook.PebbleWebhookServer
+import dev.ealang.phonemcp.webhook.PipelineLog
+import dev.ealang.phonemcp.webhook.PipelineWorker
+import dev.ealang.phonemcp.webhook.RecordingStore
+import dev.ealang.phonemcp.webhook.RetryGate
+import dev.ealang.phonemcp.webhook.TelegramDelivery
 import java.net.Inet4Address
 import java.net.NetworkInterface
 
@@ -139,15 +150,15 @@ class McpService : Service() {
         }
     }
 
-    private var server: McpServer? = null
+    private var mcpServer: McpServer? = null
 
     /**
      * The Pebble webhook's own listener, hardcoded to loopback (see
-     * [McpServer.WEBHOOK_BIND]). Separate from [server] so the recording
+     * [PebbleWebhookServer.BIND]). Separate from [mcpServer] so the recording
      * inbox neither depends on the configurable bind address nor is exposed
      * by it.
      */
-    private var webhookServer: McpServer? = null
+    private var webhookServer: PebbleWebhookServer? = null
 
     private val main = Handler(Looper.getMainLooper())
     private val retry = Runnable { attemptStart() }
@@ -211,7 +222,7 @@ class McpService : Service() {
         // connection back — is the same parameter-free wake; the drain
         // discovers what changed by reconciling. The event path stays
         // ignorant of any particular messenger on purpose.
-        dev.ealang.phonemcp.telegram.TelegramEngine.onDeliveryEvent = { worker?.wake() }
+        dev.ealang.phonemcp.webhook.telegram.TelegramEngine.onDeliveryEvent = { worker?.wake() }
 
         getSystemService(android.net.ConnectivityManager::class.java)
             .registerDefaultNetworkCallback(connectivity)
@@ -236,7 +247,7 @@ class McpService : Service() {
         } catch (e: Exception) {
             // Never registered; nothing to do.
         }
-        dev.ealang.phonemcp.telegram.TelegramEngine.onDeliveryEvent = {}
+        dev.ealang.phonemcp.webhook.telegram.TelegramEngine.onDeliveryEvent = {}
         gate?.cancel()
         worker?.quit()
         activeWorker = null
@@ -283,7 +294,7 @@ class McpService : Service() {
             // SecretStore too. Starting it here (not only in the activity)
             // keeps the connection alive when the service came up on its own —
             // after a reboot, with no screen ever opened.
-            dev.ealang.phonemcp.telegram.TelegramEngine.ensureStarted(this)
+            dev.ealang.phonemcp.webhook.telegram.TelegramEngine.ensureStarted(this)
             attemptStart()
         }
 
@@ -371,42 +382,38 @@ class McpService : Service() {
         // The webhook listener first: loopback always exists, so this bind
         // owes nothing to Tailscale being up and should not wait behind it.
         if (webhookServer == null) {
-            val instance = McpServer(
-                applicationContext,
-                McpServer.WEBHOOK_BIND,
-                McpServer.WEBHOOK_PORT,
+            val instance = PebbleWebhookServer(
                 config.token,
                 onDied = ::onWebhookServerDied,
                 // Runs on NanoHTTPD's request thread. enqueue is thread-safe
                 // (it only ever creates), wake is thread-safe by design; a
                 // throw here becomes the 500 that makes the watch retry.
-                webhookEnqueue = { audio, meta ->
+                enqueue = { audio, meta ->
                     val item = store?.enqueue(audio, meta)
                         ?: throw IllegalStateException("pipeline not started")
                     pipelineLog?.record(item.name, "received", meta.trigger.name)
                     worker?.wake()
                 },
-                mcpEnabled = false,
             )
             try {
                 instance.start(NanoTimeouts.SOCKET_READ_MS, false)
                 webhookServer = instance
                 EventLog.record(
-                    "webhook listening on ${McpServer.WEBHOOK_BIND}:${McpServer.WEBHOOK_PORT}",
+                    "webhook listening on ${PebbleWebhookServer.BIND}:${PebbleWebhookServer.PORT}",
                 )
             } catch (e: Exception) {
                 // Only a port squatter can make loopback fail; the shared
                 // retry below picks it up.
                 Log.w(TAG, "Could not bind the webhook listener; will retry", e)
                 EventLog.record(
-                    "webhook bind ${McpServer.WEBHOOK_BIND}:${McpServer.WEBHOOK_PORT} failed " +
+                    "webhook bind ${PebbleWebhookServer.BIND}:${PebbleWebhookServer.PORT} failed " +
                         "(${e.message ?: e::class.java.simpleName})",
                 )
             }
         }
 
         val listeningOn = config.bindAddress.ifBlank { "every interface" }
-        if (server == null) {
+        if (mcpServer == null) {
             val instance = McpServer(
                 applicationContext,
                 config.bindAddress,
@@ -417,7 +424,7 @@ class McpService : Service() {
             try {
                 // daemon=false: the socket should outlive the thread that made it.
                 instance.start(NanoTimeouts.SOCKET_READ_MS, false)
-                server = instance
+                mcpServer = instance
                 running = true
                 retryDelayMs = INITIAL_RETRY_MS
                 EventLog.record("listening on $listeningOn:${config.port}")
@@ -437,7 +444,7 @@ class McpService : Service() {
             }
         }
 
-        if (webhookServer == null && server != null) {
+        if (webhookServer == null && mcpServer != null) {
             // The MCP bind succeeded so its catch armed no retry; the webhook
             // still needs one.
             main.postDelayed(retry, retryDelayMs)
@@ -454,8 +461,8 @@ class McpService : Service() {
         main.post {
             Log.w(TAG, "Server died underneath us; rebinding")
             EventLog.record("server restarting after socket death")
-            server?.stop()
-            server = null
+            mcpServer?.stop()
+            mcpServer = null
             running = false
             attemptStart()
         }
@@ -477,8 +484,8 @@ class McpService : Service() {
         // Nothing would be left able to answer silence_phone, so a ring that
         // outlived the server would have to be waited out.
         Sound.stop()
-        server?.stop()
-        server = null
+        mcpServer?.stop()
+        mcpServer = null
         webhookServer?.stop()
         webhookServer = null
         running = false

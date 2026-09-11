@@ -1,6 +1,7 @@
 package dev.ealang.phonemcp
 
 import android.content.Context
+import dev.ealang.phonemcp.webhook.PebbleWebhookServer
 import java.security.SecureRandom
 
 /**
@@ -129,11 +130,11 @@ class Config(context: Context) {
 
     /**
      * The webhook listener's port. UI-only for now, same caveat as
-     * [featureEnabled]: the listener still binds McpServer.WEBHOOK_PORT until
-     * the wiring step lands.
+     * [featureEnabled]: the listener still binds PebbleWebhookServer.PORT
+     * until the wiring step lands.
      */
     var webhookPort: Int
-        get() = prefs.getInt(KEY_WEBHOOK_PORT, McpServer.WEBHOOK_PORT)
+        get() = prefs.getInt(KEY_WEBHOOK_PORT, PebbleWebhookServer.PORT)
         set(value) = prefs.edit().putInt(KEY_WEBHOOK_PORT, value).apply()
 
     /** Signature line appended to forwarded Telegram messages. UI-only for now. */

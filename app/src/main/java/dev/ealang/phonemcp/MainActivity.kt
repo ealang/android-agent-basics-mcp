@@ -18,8 +18,12 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.mutableIntStateOf
-import dev.ealang.phonemcp.telegram.TelegramEngine
+import dev.ealang.phonemcp.mcp.McpServer
+import dev.ealang.phonemcp.mcp.apps.Locator
 import dev.ealang.phonemcp.ui.PhoneMcpApp
+import dev.ealang.phonemcp.webhook.PipelineLog
+import dev.ealang.phonemcp.webhook.PebbleWebhookServer
+import dev.ealang.phonemcp.webhook.telegram.TelegramEngine
 import dev.ealang.phonemcp.ui.PhoneMcpTheme
 
 /**
@@ -176,7 +180,7 @@ class MainActivity : ComponentActivity() {
     }
 
     fun webhookUrl(): String =
-        "http://${McpServer.WEBHOOK_BIND}:${McpServer.WEBHOOK_PORT}${McpServer.WEBHOOK_PATH}"
+        "http://${PebbleWebhookServer.BIND}:${PebbleWebhookServer.PORT}${PebbleWebhookServer.PATH}"
 
     fun copyToClipboard(label: String, text: String) {
         getSystemService(ClipboardManager::class.java)

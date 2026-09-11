@@ -24,11 +24,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import dev.ealang.phonemcp.Clock
 import dev.ealang.phonemcp.EventLog
 import dev.ealang.phonemcp.LOG_DIALOG_LINES
-import dev.ealang.phonemcp.Locator
 import dev.ealang.phonemcp.MainActivity
+import dev.ealang.phonemcp.mcp.apps.Clock
+import dev.ealang.phonemcp.mcp.apps.Locator
 import dev.ealang.phonemcp.MediaListenerService
 import dev.ealang.phonemcp.RequestLog
 import kotlinx.coroutines.delay

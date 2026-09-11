@@ -36,9 +36,9 @@ import androidx.compose.ui.unit.dp
 import dev.ealang.phonemcp.LOG_DIALOG_LINES
 import dev.ealang.phonemcp.MainActivity
 import dev.ealang.phonemcp.McpService
-import dev.ealang.phonemcp.RecordingStore
-import dev.ealang.phonemcp.WebhookConfig
-import dev.ealang.phonemcp.telegram.TelegramEngine
+import dev.ealang.phonemcp.webhook.RecordingStore
+import dev.ealang.phonemcp.webhook.WebhookConfig
+import dev.ealang.phonemcp.webhook.telegram.TelegramEngine
 
 /**
  * Everything a watch button press flows into: the pipeline's queue, and one

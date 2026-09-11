@@ -27,9 +27,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.ealang.phonemcp.Config
 import dev.ealang.phonemcp.MainActivity
-import dev.ealang.phonemcp.McpServer
 import dev.ealang.phonemcp.McpService
 import dev.ealang.phonemcp.SecretStore
+import dev.ealang.phonemcp.mcp.McpServer
+import dev.ealang.phonemcp.webhook.PebbleWebhookServer
 
 /**
  * The two servers and the token they share — everything a client needs to be
@@ -87,7 +88,7 @@ fun ServersTab(activity: MainActivity) {
                 supportingText = {
                     Text(
                         "Saved, but not enforced yet — the listener still binds " +
-                            "${McpServer.WEBHOOK_PORT}.",
+                            "${PebbleWebhookServer.PORT}.",
                     )
                 },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
