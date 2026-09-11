@@ -229,6 +229,11 @@ class McpService : Service() {
             // un-blocks a waiting queue at the next wake, no restart needed.
             transcriber = OpenAiTranscriber { Config(this).openAiKey },
             telegramSender = delivery,
+            // Resolved per pickup, like the OpenAI key: flipping a destination
+            // switch re-routes whatever is still queued at the next wake.
+            destinationsFor = { trigger ->
+                dev.ealang.phonemcp.webhook.WebhookConfig.destinationsFor(Config(this), trigger)
+            },
             onDrainFinished = { report -> main.post { onDrainFinished(report) } },
         ).also {
             it.start()

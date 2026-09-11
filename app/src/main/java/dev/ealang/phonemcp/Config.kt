@@ -106,9 +106,9 @@ class Config(context: Context) {
      * whose key is off vanishes from tools/list and is refused at dispatch.
      * [FEATURE_WEBHOOK] gates the webhook listener socket: off means the
      * watch gets connection-refused, while the pipeline worker stays up and
-     * drains whatever was already accepted. The webhook *destination*
-     * switches are still UI-only: every configured destination stays active
-     * regardless, until their wiring lands.
+     * drains whatever was already accepted. The webhook destination keys
+     * ("telegram", "markdown") are read at pickup by
+     * WebhookConfig.destinationsFor, together with [buttonAssignment].
      *
      * Keys are namespaced with "feature_" so they can be enumerated later.
      */
@@ -120,9 +120,9 @@ class Config(context: Context) {
 
     /**
      * Which watch button presses a webhook destination should claim:
-     * "single", "double" or "both". UI-only, same caveat as [featureEnabled];
-     * today the recorder sends everything and the pipeline fans out to
-     * whatever is configured.
+     * "single", "double" or "both". Read at pickup by
+     * WebhookConfig.destinationsFor; a press fans out to every destination
+     * that claims it.
      */
     fun buttonAssignment(destination: String): String =
         prefs.getString("buttons_$destination", "both") ?: "both"

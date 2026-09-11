@@ -17,6 +17,11 @@ class PipelineWorker(
     private val noteWriter: NoteWriter,
     private val transcriber: Transcriber,
     private val telegramSender: TelegramSender,
+    /**
+     * The destinations a press fans out to, resolved fresh per pickup — a
+     * lambda so the worker stays constructible on the JVM without a Context.
+     */
+    private val destinationsFor: (Trigger) -> Set<Destination>,
     private val onDrainFinished: (DrainReport) -> Unit,
 ) {
 
@@ -72,26 +77,11 @@ class PipelineWorker(
         var blockedOn: String? = null
 
         for (item in store.pending()) {
-            // Handed off already: ask the destination what became of it.
-            // Whatever the answer, it does not block the items behind it —
-            // Pending here means TDLib's own outbox is still working.
-            if (item.processorState(PROCESSOR_TELEGRAM) != null) {
-                when (val settled = telegramSender.reconcile(item)) {
-                    is ReconcileResult.Delivered -> {
-                        completed++
-                        log.record(item.name, "completed")
-                        store.complete(item)
-                    }
-                    is ReconcileResult.Failed -> {
-                        newlyFailed++
-                        log.record(item.name, "failed", settled.why)
-                        store.fail(item, settled.why)
-                    }
-                    is ReconcileResult.Pending -> {}
-                }
-                continue
-            }
-
+            // process() is idempotent — the marker files make every done
+            // step a cheap skip — so it runs on every pass, even for items
+            // already handed off to Telegram. That is what lets a config
+            // change redirect queued items: enabling the note destination
+            // while a message sits in TDLib's outbox still writes the note.
             val result = try {
                 process(item)
             } catch (e: Exception) {
@@ -105,10 +95,23 @@ class PipelineWorker(
             when (result) {
                 is StepResult.Success -> {
                     if (item.processorState(PROCESSOR_TELEGRAM) != null) {
-                        // Handed off, not done: the item stays as the record
-                        // that TDLib owes a confirmation, and stops blocking
-                        // the queue (the skip at the top of this loop).
-                        // Deletion is the confirmation's job.
+                        // Handed off: the item stays as the record that TDLib
+                        // owes a confirmation, and does not block the items
+                        // behind it — Pending means the outbox is still
+                        // working. Deletion is the confirmation's job.
+                        when (val settled = telegramSender.reconcile(item)) {
+                            is ReconcileResult.Delivered -> {
+                                completed++
+                                log.record(item.name, "completed")
+                                store.complete(item)
+                            }
+                            is ReconcileResult.Failed -> {
+                                newlyFailed++
+                                log.record(item.name, "failed", settled.why)
+                                store.fail(item, settled.why)
+                            }
+                            is ReconcileResult.Pending -> {}
+                        }
                     } else {
                         completed++
                         log.record(item.name, "completed")
@@ -135,14 +138,28 @@ class PipelineWorker(
     }
 
     /**
-     * Advance one item through its remaining steps. The destination is
-     * resolved from config *now*, not at receipt — redefining the pipeline
-     * redirects queued items (§3).
+     * Advance one item through its remaining steps, idempotently. The
+     * destinations are resolved from config *now*, not at receipt —
+     * redefining the pipeline redirects queued items (§3) — and a press fans
+     * out to every destination that claims it. Each destination's marker
+     * file, not its output, is the record it ran: the user may move a
+     * written note wherever they like without buying a second copy.
      */
     private fun process(item: RecordingStore.Item): StepResult {
+        val destinations = destinationsFor(item.meta.trigger)
+        if (destinations.isEmpty()) {
+            // The user routed this press nowhere; completing it quietly is
+            // the configured outcome. (With a Telegram hand-off outstanding
+            // the caller still reconciles — this Success is not a delete.)
+            if (item.processorState(PROCESSOR_TELEGRAM) == null) {
+                log.record(item.name, "skipped", "no destination claims this press")
+            }
+            return StepResult.Success
+        }
+
         // Text, in order of preference: already transcribed (the marker file
         // makes this step idempotent), Pebble's own transcript, or OpenAI on
-        // the audio. Only then is the destination consulted.
+        // the audio. Only then are the destinations consulted.
         val text = item.transcript() ?: item.meta.pebbleTranscript ?: run {
             val audio = item.audio()
                 ?: return StepResult.Permanent("no audio and no transcript")
@@ -166,24 +183,42 @@ class PipelineWorker(
 
         val recordedAt = item.meta.recordedAtMs.takeIf { it > 0 } ?: item.meta.receivedAtMs
 
-        val destination = WebhookConfig.destinationFor(item.meta.trigger)
-        // Where the text came from and where it is going — the log line that
-        // answers "why does this note say what it says".
+        // Where the text came from — the log detail that answers "why does
+        // this note say what it says".
         val source = when {
             item.transcript() != null -> "OpenAI transcript"
             item.meta.pebbleTranscript != null -> "Pebble transcript"
             else -> "?"
         }
-        log.record(item.name, "delivering", "$source, ${text.length} chars → ${destination.name.lowercase()}")
 
-        return when (destination) {
-            Destination.NOTE -> noteWriter.write(text, recordedAt)
-            Destination.TELEGRAM -> telegramSender.send(item, text)
+        // The note first: it settles synchronously, so putting it before the
+        // Telegram hand-off means a note failure can never strand a message
+        // already in TDLib's outbox. A crash between the write and its
+        // marker re-runs the write next drain — NoteWriter's createNewFile
+        // naming turns that into a " (2).md", the at-least-once cost this
+        // pipeline accepts everywhere (same window as the transcript step).
+        if (Destination.NOTE in destinations && item.processorState(PROCESSOR_NOTE) == null) {
+            log.record(item.name, "delivering", "$source, ${text.length} chars → note")
+            val result = noteWriter.write(text, recordedAt)
+            if (result !is StepResult.Success) return result
+            store.writeProcessorState(
+                item,
+                PROCESSOR_NOTE,
+                org.json.JSONObject().put("writtenAtMs", System.currentTimeMillis()),
+            )
         }
+
+        if (Destination.TELEGRAM in destinations && item.processorState(PROCESSOR_TELEGRAM) == null) {
+            log.record(item.name, "delivering", "$source, ${text.length} chars → telegram")
+            return telegramSender.send(item, text)
+        }
+
+        return StepResult.Success
     }
 
     companion object {
         private const val TAG = "phone-mcp"
         const val PROCESSOR_TELEGRAM = "telegram"
+        const val PROCESSOR_NOTE = "note"
     }
 }

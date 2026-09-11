@@ -43,8 +43,9 @@ import dev.ealang.phonemcp.webhook.telegram.TelegramEngine
 /**
  * Everything a watch button press flows into: the pipeline's queue, and one
  * card per destination. Each destination card carries its own on/off switch
- * and a "which presses" selector — both saved but not yet enforced (the
- * pipeline still fans out to whatever is configured); see Config.featureEnabled.
+ * and a "which presses" selector; a press fans out to every destination that
+ * is on and claims it (WebhookConfig.destinationsFor), resolved at pickup —
+ * so a change here re-routes items still queued.
  */
 @Composable
 fun PebbleTab(activity: MainActivity) {
@@ -87,7 +88,7 @@ fun PebbleTab(activity: MainActivity) {
         SectionCard("Telegram forwarding") {
             SwitchRow(
                 title = "Forward recordings to Telegram",
-                supporting = "Saved, but not enforced yet — forwarding runs whenever a chat is configured.",
+                supporting = "Applies at pickup — recordings still queued follow the new setting.",
                 checked = config.featureEnabled("telegram"),
                 onChange = { config.setFeatureEnabled("telegram", it); activity.bump() },
             )
@@ -210,7 +211,7 @@ fun PebbleTab(activity: MainActivity) {
         SectionCard("Markdown notes") {
             SwitchRow(
                 title = "Write notes to a Markdown file",
-                supporting = "Saved, but not enforced yet — note recordings are always written.",
+                supporting = "Applies at pickup — recordings still queued follow the new setting.",
                 checked = config.featureEnabled("markdown"),
                 onChange = { config.setFeatureEnabled("markdown", it); activity.bump() },
             )
@@ -253,7 +254,10 @@ fun PebbleTab(activity: MainActivity) {
     }
 }
 
-/** Which watch presses this destination claims. Saved, not yet enforced. */
+/**
+ * Which watch presses this destination claims. A press fans out to every
+ * destination claiming it, so "Both" on two cards means both fire.
+ */
 @Composable
 private fun ButtonAssignmentRow(activity: MainActivity, destination: String) {
     val config = activity.config

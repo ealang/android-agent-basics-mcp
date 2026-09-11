@@ -1,5 +1,6 @@
 package dev.ealang.phonemcp.webhook
 
+import dev.ealang.phonemcp.Config
 import org.json.JSONObject
 
 /**
@@ -115,14 +116,34 @@ data class DrainReport(
 )
 
 /**
- * Stage 1's hardcoded policy, in one place so stage 3 (settings) is a
- * mechanical swap of constants for preferences.
+ * The pipeline's routing policy. Originally stage 1's hardcoded constants;
+ * the destination map now comes from settings, resolved fresh per pickup so
+ * a config change redirects queued items (§3).
  */
 object WebhookConfig {
 
-    fun destinationFor(trigger: Trigger): Destination = when (trigger) {
-        Trigger.DOUBLE_CLICK_HOLD -> Destination.NOTE
-        Trigger.SINGLE_CLICK_HOLD, Trigger.UNKNOWN -> Destination.TELEGRAM
+    /**
+     * Every destination this press fans out to: switched on *and* claiming
+     * the button. Fan-out, not one-of — a press configured for both writes
+     * the note and sends the message. Empty is a valid answer: the user has
+     * routed this press nowhere, and the item completes quietly.
+     */
+    fun destinationsFor(config: Config, trigger: Trigger): Set<Destination> =
+        Destination.entries.filterTo(mutableSetOf()) { destination ->
+            val key = key(destination)
+            config.featureEnabled(key) && claims(config.buttonAssignment(key), trigger)
+        }
+
+    /** The Config key for a destination — feature switch and button row alike. */
+    fun key(destination: Destination): String = when (destination) {
+        Destination.NOTE -> "markdown"
+        Destination.TELEGRAM -> "telegram"
+    }
+
+    private fun claims(assignment: String, trigger: Trigger): Boolean {
+        // UNKNOWN routes like a single click — the louder outcome (see Trigger).
+        val button = if (trigger == Trigger.DOUBLE_CLICK_HOLD) "double" else "single"
+        return assignment == "both" || assignment == button
     }
 
     /** Relative to the external-storage root, like the recorder's template. */
