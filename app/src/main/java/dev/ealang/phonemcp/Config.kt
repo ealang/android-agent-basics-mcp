@@ -118,6 +118,10 @@ class Config(context: Context) {
     fun setFeatureEnabled(key: String, value: Boolean) =
         prefs.edit().putBoolean("feature_$key", value).apply()
 
+    /** Whether any listener is switched on — no listener wanted, no service. */
+    fun anyServerEnabled(): Boolean =
+        featureEnabled(FEATURE_MCP) || featureEnabled(FEATURE_WEBHOOK)
+
     /**
      * Which watch button presses a webhook destination should claim:
      * "single", "double" or "both". Read at pickup by
@@ -175,8 +179,12 @@ class Config(context: Context) {
     companion object {
         const val DEFAULT_PORT = 8910
 
-        /** The whole webhook listener, as one feature key. */
+        /**
+         * Each listener as one feature key. The service runs while either is
+         * on; [anyServerEnabled] is the boot receiver's and the UI's question.
+         */
         const val FEATURE_WEBHOOK = "webhook_server"
+        const val FEATURE_MCP = "mcp_server"
 
         private const val KEY_PORT = "port"
         private const val KEY_BIND = "bind_address"

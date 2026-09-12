@@ -41,7 +41,10 @@ import dev.ealang.phonemcp.mcp.McpServer
 fun ServersTab(activity: MainActivity) {
     activity.tick.intValue // subscribe
     val config = activity.config
-    val running = McpService.running
+    // Two distinct facts: the service container being up (either listener
+    // switched on) and the MCP listener itself being bound.
+    val serviceUp = McpService.serviceRunning
+    val mcpBound = McpService.running
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
@@ -66,8 +69,8 @@ fun ServersTab(activity: MainActivity) {
             SwitchRow(
                 title = "Server",
                 supporting = if (webhookOn) {
-                    "Listens while the MCP service runs. Off stops intake only — " +
-                        "recordings already received still go out."
+                    "Off stops intake only — recordings already received " +
+                        "still go out."
                 } else {
                     "Off — the watch gets connection refused and retries later."
                 },
@@ -76,7 +79,7 @@ fun ServersTab(activity: MainActivity) {
             )
             StatusText(
                 "Receives at ${activity.webhookUrl()} — this phone only.",
-                warn = !running || !webhookOn,
+                warn = !serviceUp || !webhookOn,
             )
             OutlinedButton(onClick = {
                 activity.copyToClipboard("webhook URL", activity.webhookUrl())
@@ -99,18 +102,21 @@ fun ServersTab(activity: MainActivity) {
         }
 
         SectionCard("MCP server") {
+            val mcpOn = config.featureEnabled(Config.FEATURE_MCP)
             SwitchRow(
                 title = "Server",
-                supporting = if (running) "Running" else "Stopped",
-                checked = running,
-                onChange = { on ->
-                    if (on) activity.startServer() else {
-                        McpService.stop(activity)
-                        activity.bumpSoon()
-                    }
+                supporting = if (mcpOn) {
+                    if (mcpBound) "Running" else "Starting…"
+                } else {
+                    "Off — MCP clients get connection refused."
                 },
+                checked = mcpOn,
+                onChange = { activity.setMcpEnabled(it) },
             )
-            StatusText(serverStatusText(config, running), warn = !running)
+            StatusText(
+                if (mcpOn) serverStatusText(config, mcpBound) else "Off.",
+                warn = !mcpBound,
+            )
             OutlinedButton(onClick = {
                 val url = activity.mcpUrl()
                 if (url == null) {

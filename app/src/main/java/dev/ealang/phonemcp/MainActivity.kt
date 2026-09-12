@@ -108,7 +108,7 @@ class MainActivity : ComponentActivity() {
         // use. Being on screen is exactly that, so this is the moment it can
         // be claimed. Harmless when it isn't needed; the service treats a
         // repeat start as a no-op once the socket is up.
-        if (McpService.running && McpService.degraded) McpService.start(this)
+        if (McpService.serviceRunning && McpService.degraded) McpService.start(this)
     }
 
     override fun onStop() {
@@ -143,7 +143,7 @@ class MainActivity : ComponentActivity() {
         config.port = port
         config.bindAddress = bind
 
-        if (McpService.running) {
+        if (McpService.serviceRunning) {
             McpService.stop(this)
             handler.postDelayed({ startServer() }, 300)
         }
@@ -163,7 +163,7 @@ class MainActivity : ComponentActivity() {
     fun regenerateToken() {
         config.regenerateToken()
         bump()
-        if (McpService.running) startServer()
+        if (McpService.serviceRunning) startServer()
         toast("New token — update the client")
     }
 
@@ -182,12 +182,24 @@ class MainActivity : ComponentActivity() {
     fun webhookUrl(): String =
         "http://${PebbleWebhookServer.BIND}:${config.webhookPort}${PebbleWebhookServer.PATH}"
 
-    fun setWebhookEnabled(on: Boolean) {
-        config.setFeatureEnabled(Config.FEATURE_WEBHOOK, on)
-        // A stopped service reads the switch at its next start; a running one
-        // is told to bind or drop the listener in place — the pipeline worker
-        // is untouched either way.
-        if (McpService.running) McpService.applyWebhookToggle(this)
+    fun setWebhookEnabled(on: Boolean) = setServerEnabled(Config.FEATURE_WEBHOOK, on)
+
+    fun setMcpEnabled(on: Boolean) = setServerEnabled(Config.FEATURE_MCP, on)
+
+    /**
+     * The two listener switches share one shape: save the preference, then
+     * reconcile the service with it. Either switch on keeps the service (and
+     * the pipeline worker) alive; a running service adjusts its sockets in
+     * place; both off is the one case that stops the service itself.
+     */
+    private fun setServerEnabled(key: String, on: Boolean) {
+        config.setFeatureEnabled(key, on)
+        when {
+            !config.anyServerEnabled() ->
+                if (McpService.serviceRunning) McpService.stop(this)
+            McpService.serviceRunning -> McpService.applyServerToggles(this)
+            else -> startServer()
+        }
         bumpSoon()
     }
 
@@ -200,7 +212,7 @@ class MainActivity : ComponentActivity() {
         config.webhookPort = port
         // Same restart shape as saveNetwork: the listener binds its port at
         // service start, so a running service is bounced to pick it up.
-        if (McpService.running) {
+        if (McpService.serviceRunning) {
             McpService.stop(this)
             handler.postDelayed({ startServer() }, 300)
         }

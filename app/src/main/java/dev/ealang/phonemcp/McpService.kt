@@ -43,8 +43,8 @@ class McpService : Service() {
 
         const val ACTION_STOP = "dev.ealang.phonemcp.STOP"
 
-        /** Re-read [Config.FEATURE_WEBHOOK] and bind or stop the listener to match. */
-        private const val ACTION_APPLY_WEBHOOK = "dev.ealang.phonemcp.APPLY_WEBHOOK"
+        /** Re-read the two listener feature keys and bind or stop each to match. */
+        private const val ACTION_APPLY_TOGGLES = "dev.ealang.phonemcp.APPLY_TOGGLES"
 
         private const val INITIAL_RETRY_MS = 5_000L
         /** A capped once-a-minute retry costs nothing and never wakes a sleeping phone. */
@@ -52,8 +52,16 @@ class McpService : Service() {
         /** Broadcast whenever the server starts or stops, so the UI can refresh. */
         const val ACTION_STATE_CHANGED = "dev.ealang.phonemcp.STATE_CHANGED"
 
+        /** The MCP listener is bound. Narrower than [serviceRunning] since the
+         * listeners became independently switchable. */
         @Volatile
         var running: Boolean = false
+            private set
+
+        /** The service itself is up — pipeline worker included — regardless
+         * of which listeners are. */
+        @Volatile
+        var serviceRunning: Boolean = false
             private set
 
         /**
@@ -94,16 +102,16 @@ class McpService : Service() {
         }
 
         /**
-         * Tell a running service the webhook switch flipped. Intake only:
-         * off stops the listener socket, so the watch sees connection-refused
-         * and retries on its side, while the pipeline worker finishes draining
-         * whatever was already accepted and then idles. Callers guard with
-         * [running] — on a stopped service the config value alone is enough,
-         * the next start reads it.
+         * Tell a running service a listener switch flipped. Intake only:
+         * off stops that listener's socket — the webhook's watch sees
+         * connection-refused and retries on its side — while the pipeline
+         * worker finishes draining whatever was already accepted and then
+         * idles. Callers guard with [serviceRunning]: on a stopped service
+         * the config values alone are enough, the next start reads them.
          */
-        fun applyWebhookToggle(context: Context) {
+        fun applyServerToggles(context: Context) {
             context.startService(
-                Intent(context, McpService::class.java).setAction(ACTION_APPLY_WEBHOOK),
+                Intent(context, McpService::class.java).setAction(ACTION_APPLY_TOGGLES),
             )
         }
 
@@ -283,8 +291,8 @@ class McpService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_APPLY_WEBHOOK) {
-            applyWebhookToggle()
+        if (intent?.action == ACTION_APPLY_TOGGLES) {
+            applyServerToggles()
             return START_STICKY
         }
 
@@ -296,6 +304,7 @@ class McpService : Service() {
         }
 
         Config(this).enabled = true
+        serviceRunning = true
 
         // Started before the first bind attempt: the five-second foreground
         // deadline must be met even if binding waits on Tailscale.
@@ -447,7 +456,8 @@ class McpService : Service() {
         }
 
         val listeningOn = config.bindAddress.ifBlank { "every interface" }
-        if (mcpServer == null) {
+        val mcpWanted = config.featureEnabled(Config.FEATURE_MCP)
+        if (mcpServer == null && mcpWanted) {
             val instance = McpServer(
                 applicationContext,
                 config.bindAddress,
@@ -463,7 +473,6 @@ class McpService : Service() {
                 retryDelayMs = INITIAL_RETRY_MS
                 EventLog.record("listening on $listeningOn:${config.port}")
                 baseText = "Listening on $listeningOn:${config.port}"
-                notify(baseText)
                 Log.i(TAG, "Listening on $listeningOn port ${config.port}")
             } catch (e: Exception) {
                 Log.w(TAG, "Could not bind $listeningOn port ${config.port}; will retry", e)
@@ -472,15 +481,18 @@ class McpService : Service() {
                         "(${e.message ?: e::class.java.simpleName}); retry in ${retryDelayMs / 1000}s",
                 )
                 baseText = "Waiting to bind $listeningOn:${config.port}"
-                notify(baseText)
-                main.postDelayed(retry, retryDelayMs)
-                retryDelayMs = (retryDelayMs * 2).coerceAtMost(MAX_RETRY_MS)
             }
+        } else if (mcpServer == null) {
+            // Off by choice; the notification should not read as a failure.
+            baseText = "MCP server off" +
+                if (webhookServer != null) "; webhook listening" else ""
         }
+        notify(baseText)
 
-        if (webhookServer == null && webhookWanted && mcpServer != null) {
-            // The MCP bind succeeded so its catch armed no retry; the webhook
-            // still needs one.
+        // One retry serves both listeners: each pass skips whatever is
+        // already up, so an armed retry is just "something wanted is still
+        // missing". A listener that is off by choice never counts.
+        if ((webhookWanted && webhookServer == null) || (mcpWanted && mcpServer == null)) {
             main.postDelayed(retry, retryDelayMs)
             retryDelayMs = (retryDelayMs * 2).coerceAtMost(MAX_RETRY_MS)
         }
@@ -503,21 +515,27 @@ class McpService : Service() {
     }
 
     /**
-     * The switch flipped while we were running. Off: stop the socket and
-     * nothing else — the worker keeps draining what was accepted, and any
-     * retry already scheduled for the MCP bind is left alone (its next
-     * attemptStart sees the switch and skips the webhook). On: attemptStart
-     * binds it, idempotently.
+     * A listener switch flipped while we were running. Off: stop that
+     * socket and nothing else — the worker keeps draining what was
+     * accepted. On: the closing attemptStart binds whatever is newly
+     * wanted, idempotently, and re-renders the notification either way.
+     * A retry already scheduled needs no cancelling here: its next pass
+     * re-reads the switches and skips what is off.
      */
-    private fun applyWebhookToggle() {
-        if (Config(this).featureEnabled(Config.FEATURE_WEBHOOK)) {
-            attemptStart()
-        } else if (webhookServer != null) {
+    private fun applyServerToggles() {
+        val config = Config(this)
+        if (!config.featureEnabled(Config.FEATURE_WEBHOOK) && webhookServer != null) {
             webhookServer?.stop()
             webhookServer = null
             EventLog.record("webhook listener switched off")
-            sendBroadcast(Intent(ACTION_STATE_CHANGED).setPackage(packageName))
         }
+        if (!config.featureEnabled(Config.FEATURE_MCP) && mcpServer != null) {
+            mcpServer?.stop()
+            mcpServer = null
+            running = false
+            EventLog.record("MCP listener switched off")
+        }
+        attemptStart()
     }
 
     private fun onWebhookServerDied() {
@@ -541,6 +559,7 @@ class McpService : Service() {
         webhookServer?.stop()
         webhookServer = null
         running = false
+        serviceRunning = false
         degraded = false
         sendBroadcast(Intent(ACTION_STATE_CHANGED).setPackage(packageName))
         Log.i(TAG, "Stopped")
