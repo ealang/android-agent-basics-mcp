@@ -67,6 +67,22 @@ android {
     }
 }
 
+composeCompiler {
+    // The whole UI hangs off one invariant: bumping MainActivity.tick
+    // recomposes everything, and composables re-read live state (Config,
+    // service statics) as they run. Strong skipping — the default since
+    // Kotlin 2.0.20 — breaks that: it skips a composable whose arguments
+    // are reference-equal and memoizes content lambdas even over unstable
+    // captures, so a row whose inputs are `activity` and a constant never
+    // re-ran and its switch sat stale after a toggle. Seen on-device on the
+    // MCP and Pebble tabs. Turning the feature off restores "a bump repaints
+    // everything" as a global guarantee instead of a per-callsite audit.
+    featureFlags.add(
+        org.jetbrains.kotlin.compose.compiler.gradle.ComposeFeatureFlag
+            .StrongSkipping.disabled(),
+    )
+}
+
 dependencies {
     // org.json is in the Android framework already.
     implementation("org.nanohttpd:nanohttpd:2.3.1")
