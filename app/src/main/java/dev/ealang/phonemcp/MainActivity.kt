@@ -200,6 +200,10 @@ class MainActivity : ComponentActivity() {
             McpService.serviceRunning -> McpService.applyServerToggles(this)
             else -> startServer()
         }
+        // The switch itself reads the preference, which changed just now — an
+        // immediate bump moves it; the delayed one catches the service's
+        // reaction (bind, teardown) landing a beat later.
+        bump()
         bumpSoon()
     }
 
