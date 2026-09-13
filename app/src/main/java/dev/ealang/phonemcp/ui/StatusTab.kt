@@ -20,6 +20,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material.icons.filled.Watch
+import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -134,13 +135,14 @@ fun StatusTab(activity: MainActivity) {
                 "Requests since app start: ${RequestLog.count()}\n" +
                     "Accept failures since app start: ${EventLog.acceptFailureCount()}",
             )
+            // Events is what a person checks; the raw request log is plumbing.
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = {
+                    logDialog = "Events" to EventLog.tail(LOG_DIALOG_LINES)
+                }) { Text("Events") }
                 OutlinedButton(onClick = {
-                    logDialog = "Requests" to RequestLog.tail(LOG_DIALOG_LINES)
-                }) { Text("Requests") }
-                OutlinedButton(onClick = {
-                    logDialog = "Server events" to EventLog.tail(LOG_DIALOG_LINES)
-                }) { Text("Server events") }
+                    logDialog = "Server log" to RequestLog.tail(LOG_DIALOG_LINES)
+                }) { Text("Server log") }
             }
         }
 

@@ -2,6 +2,7 @@ package dev.ealang.phonemcp.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,6 +18,7 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,13 +49,13 @@ fun PebbleTab(activity: MainActivity) {
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        SectionCard("Telegram forwarding") {
-            SwitchRow(
-                title = "Forward recordings to Telegram",
-                supporting = "Applies at pickup — recordings still queued follow the new setting.",
-                checked = config.featureEnabled("telegram"),
-                onChange = { config.setFeatureEnabled("telegram", it); activity.bump() },
-            )
+        FeatureCard(
+            activity,
+            title = "Telegram forwarding",
+            switchTitle = "Forward recordings to Telegram",
+            supporting = "Applies at pickup — recordings still queued follow the new setting.",
+            featureKey = "telegram",
+        ) {
             ButtonAssignmentRow(activity, "telegram")
 
             HorizontalDivider()
@@ -170,15 +172,48 @@ fun PebbleTab(activity: MainActivity) {
             }) { Text("Save signature") }
         }
 
-        SectionCard("Markdown notes") {
-            SwitchRow(
-                title = "Write notes to a Markdown file",
-                supporting = "Applies at pickup — recordings still queued follow the new setting.",
-                checked = config.featureEnabled("markdown"),
-                onChange = { config.setFeatureEnabled("markdown", it); activity.bump() },
-            )
+        FeatureCard(
+            activity,
+            title = "Markdown notes",
+            switchTitle = "Write notes to a Markdown file",
+            supporting = "Applies at pickup — recordings still queued follow the new setting.",
+            featureKey = "markdown",
+        ) {
             ButtonAssignmentRow(activity, "markdown")
             StatusText("Notes are written to ${WebhookConfig.NOTES_DIR}.")
+        }
+    }
+}
+
+/**
+ * A destination card whose settings collapse when the feature is off — the
+ * whole body is inert then, and hiding it says so louder than dimming
+ * would. A peek link keeps the options browsable before enabling; flipping
+ * the switch resets the peek (remember is keyed on the switch).
+ */
+@Composable
+private fun FeatureCard(
+    activity: MainActivity,
+    title: String,
+    switchTitle: String,
+    supporting: String?,
+    featureKey: String,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val config = activity.config
+    val on = config.featureEnabled(featureKey)
+    SectionCard(title) {
+        SwitchRow(
+            title = switchTitle,
+            supporting = supporting,
+            checked = on,
+            onChange = { config.setFeatureEnabled(featureKey, it); activity.bump() },
+        )
+        var peek by remember(on) { mutableStateOf(false) }
+        if (on || peek) {
+            content()
+        } else {
+            TextButton(onClick = { peek = true }) { Text("Show settings") }
         }
     }
 }
