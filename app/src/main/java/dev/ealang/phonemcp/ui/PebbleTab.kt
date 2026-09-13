@@ -1,10 +1,5 @@
 package dev.ealang.phonemcp.ui
 
-import android.content.Intent
-import android.net.Uri
-import android.os.Build
-import android.os.Environment
-import android.provider.Settings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,7 +9,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -33,58 +27,26 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import dev.ealang.phonemcp.LOG_DIALOG_LINES
 import dev.ealang.phonemcp.MainActivity
-import dev.ealang.phonemcp.McpService
-import dev.ealang.phonemcp.webhook.RecordingStore
 import dev.ealang.phonemcp.webhook.WebhookConfig
 import dev.ealang.phonemcp.webhook.telegram.TelegramEngine
 
 /**
- * Everything a watch button press flows into: the pipeline's queue, and one
- * card per destination. Each destination card carries its own on/off switch
- * and a "which presses" selector; a press fans out to every destination that
- * is on and claims it (WebhookConfig.destinationsFor), resolved at pickup —
- * so a change here re-routes items still queued.
+ * One card per destination a watch button press flows into. Each carries its
+ * own on/off switch and a "which presses" selector; a press fans out to every
+ * destination that is on and claims it (WebhookConfig.destinationsFor),
+ * resolved at pickup — so a change here re-routes items still queued. The
+ * pipeline's queue and the file-access grant live on the Status tab.
  */
 @Composable
 fun PebbleTab(activity: MainActivity) {
     activity.tick.intValue // subscribe
     val config = activity.config
 
-    var pipelineDialog by remember { mutableStateOf(false) }
-
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        SectionCard("Pipeline") {
-            // Reads the queue directly when the service is down — safe,
-            // because a stopped service means no worker is writing.
-            val (pending, failed) = McpService.pipelineSnapshot()
-                ?: RecordingStore(activity.filesDir).let { it.pending().size to it.failed() }
-
-            StatusText("Queued: $pending   Failed: ${failed.size}")
-
-            for (item in failed) {
-                HorizontalDivider()
-                Text(item.name, style = MaterialTheme.typography.bodyMedium)
-                StatusText(item.failureReason() ?: "(no reason recorded)")
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = {
-                        McpService.retryFailed(activity, item.name)
-                        activity.bumpSoon()
-                    }) { Text("Retry") }
-                    OutlinedButton(onClick = {
-                        McpService.discardFailed(activity, item.name)
-                        activity.bumpSoon()
-                    }) { Text("Discard") }
-                }
-            }
-
-            OutlinedButton(onClick = { pipelineDialog = true }) { Text("View pipeline log") }
-        }
-
         SectionCard("Telegram forwarding") {
             SwitchRow(
                 title = "Forward recordings to Telegram",
@@ -216,41 +178,8 @@ fun PebbleTab(activity: MainActivity) {
                 onChange = { config.setFeatureEnabled("markdown", it); activity.bump() },
             )
             ButtonAssignmentRow(activity, "markdown")
-
-            HorizontalDivider()
-
-            val notesOk = Build.VERSION.SDK_INT < Build.VERSION_CODES.R ||
-                Environment.isExternalStorageManager()
-            StatusText(
-                if (notesOk) {
-                    "Can write notes to ${WebhookConfig.NOTES_DIR}."
-                } else {
-                    "All files access is not granted, so note recordings will " +
-                        "fail. Grant it below."
-                },
-                warn = !notesOk,
-            )
-            Button(onClick = {
-                // For writing notes into a top-level folder, which scoped
-                // storage cannot address. Settings-screen grant, like overlay.
-                activity.startActivity(
-                    Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
-                        .setData(Uri.parse("package:${activity.packageName}")),
-                )
-            }) { Text("Allow all files access") }
+            StatusText("Notes are written to ${WebhookConfig.NOTES_DIR}.")
         }
-    }
-
-    if (pipelineDialog) {
-        LogDialog(
-            title = "Pipeline log",
-            lines = activity.pipelineLog.tail(LOG_DIALOG_LINES),
-            onDismiss = { pipelineDialog = false },
-            onClear = {
-                activity.pipelineLog.clear()
-                activity.toast("Log cleared")
-            },
-        )
     }
 }
 

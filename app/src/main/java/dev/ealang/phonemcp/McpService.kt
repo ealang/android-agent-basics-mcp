@@ -58,6 +58,11 @@ class McpService : Service() {
         var running: Boolean = false
             private set
 
+        /** The webhook listener is bound; the webhook twin of [running]. */
+        @Volatile
+        var webhookRunning: Boolean = false
+            private set
+
         /** The service itself is up — pipeline worker included — regardless
          * of which listeners are. */
         @Volatile
@@ -441,6 +446,7 @@ class McpService : Service() {
             try {
                 instance.start(NanoTimeouts.SOCKET_READ_MS, false)
                 webhookServer = instance
+                webhookRunning = true
                 EventLog.record(
                     "webhook listening on ${PebbleWebhookServer.BIND}:$webhookPort",
                 )
@@ -527,6 +533,7 @@ class McpService : Service() {
         if (!config.featureEnabled(Config.FEATURE_WEBHOOK) && webhookServer != null) {
             webhookServer?.stop()
             webhookServer = null
+            webhookRunning = false
             EventLog.record("webhook listener switched off")
         }
         if (!config.featureEnabled(Config.FEATURE_MCP) && mcpServer != null) {
@@ -544,6 +551,7 @@ class McpService : Service() {
             EventLog.record("webhook listener restarting after socket death")
             webhookServer?.stop()
             webhookServer = null
+            webhookRunning = false
             attemptStart()
         }
     }
@@ -559,6 +567,7 @@ class McpService : Service() {
         webhookServer?.stop()
         webhookServer = null
         running = false
+        webhookRunning = false
         serviceRunning = false
         degraded = false
         sendBroadcast(Intent(ACTION_STATE_CHANGED).setPackage(packageName))

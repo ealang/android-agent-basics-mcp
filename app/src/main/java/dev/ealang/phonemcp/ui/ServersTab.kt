@@ -32,24 +32,22 @@ import dev.ealang.phonemcp.SecretStore
 import dev.ealang.phonemcp.mcp.McpServer
 
 /**
- * The two servers and the token they share — everything a client needs to be
- * pointed at this phone, and nothing else; logs and permissions live on the
- * Status tab. Token first because both server cards refer to it; then the
- * cards in the tabs' own order, Pebble before MCP.
+ * Pure configuration for the two servers: the token they share, ports,
+ * addresses — everything a client needs to be pointed at this phone, set
+ * once and rarely revisited. Whether a server is on, and whether it is
+ * actually listening, lives on the Status tab; this tab carries no status.
  */
 @Composable
 fun ServersTab(activity: MainActivity) {
     activity.tick.intValue // subscribe
     val config = activity.config
-    // Two distinct facts: the service container being up (either listener
-    // switched on) and the MCP listener itself being bound.
-    val serviceUp = McpService.serviceRunning
-    val mcpBound = McpService.running
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        StatusText("The on/off switches live on the Status tab.")
+
         SectionCard("Bearer token") {
             StatusText("Both servers require it, in an Authorization: Bearer header.")
             Text(
@@ -65,22 +63,7 @@ fun ServersTab(activity: MainActivity) {
         }
 
         SectionCard("Pebble webhook server") {
-            val webhookOn = config.featureEnabled(Config.FEATURE_WEBHOOK)
-            SwitchRow(
-                title = "Server",
-                supporting = if (webhookOn) {
-                    "Off stops intake only — recordings already received " +
-                        "still go out."
-                } else {
-                    "Off — the watch gets connection refused and retries later."
-                },
-                checked = webhookOn,
-                onChange = { activity.setWebhookEnabled(it) },
-            )
-            StatusText(
-                "Receives at ${activity.webhookUrl()} — this phone only.",
-                warn = !serviceUp || !webhookOn,
-            )
+            StatusText("Receives at ${activity.webhookUrl()} — this phone only.")
             OutlinedButton(onClick = {
                 activity.copyToClipboard("webhook URL", activity.webhookUrl())
             }) { Text("Copy webhook URL") }
@@ -102,21 +85,7 @@ fun ServersTab(activity: MainActivity) {
         }
 
         SectionCard("MCP server") {
-            val mcpOn = config.featureEnabled(Config.FEATURE_MCP)
-            SwitchRow(
-                title = "Server",
-                supporting = if (mcpOn) {
-                    if (mcpBound) "Running" else "Starting…"
-                } else {
-                    "Off — MCP clients get connection refused."
-                },
-                checked = mcpOn,
-                onChange = { activity.setMcpEnabled(it) },
-            )
-            StatusText(
-                if (mcpOn) serverStatusText(config, mcpBound) else "Off.",
-                warn = !mcpBound,
-            )
+            StatusText(mcpAddressText(config))
             OutlinedButton(onClick = {
                 val url = activity.mcpUrl()
                 if (url == null) {
@@ -153,19 +122,22 @@ fun ServersTab(activity: MainActivity) {
     }
 }
 
-internal fun serverStatusText(config: Config, running: Boolean): String {
-    if (!running) return "Stopped."
+/**
+ * Where the MCP server is (or would be) reachable, from config alone — no
+ * claim about whether it is listening, which is the Status tab's business.
+ */
+private fun mcpAddressText(config: Config): String {
     val bind = config.bindAddress
     return if (bind.isNotEmpty()) {
         // Bound to one address, so the other interfaces are not reachable and
         // listing them would misrepresent the server.
-        "Running, reachable only on $bind.\n\n" +
+        "Reachable only on $bind:\n\n" +
             "http://$bind:${config.port}${McpServer.MCP_PATH}"
     } else {
         val urls = McpService.localAddresses().joinToString("\n") {
             "http://${it.substringBefore(' ')}:${config.port}${McpServer.MCP_PATH}  ${it.substringAfter(' ')}"
         }
-        "Running on every interface, this phone's LAN included.\n\n" +
+        "Bound to every interface, this phone's LAN included:\n\n" +
             urls.ifEmpty { "(no network interface found)" }
     }
 }

@@ -99,6 +99,9 @@ dependencies {
     // artifacts to versions tested together; only it carries a version.
     implementation(platform("androidx.compose:compose-bom:2024.09.03"))
     implementation("androidx.compose.material3:material3")
+    // Only for the Watch and Smartphone glyphs; the core icon set has neither.
+    // R8 strips the rest in release builds.
+    implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.activity:activity-compose:1.9.2")
 
     // Unit tests only cover logic that needs no device — the time parser being
