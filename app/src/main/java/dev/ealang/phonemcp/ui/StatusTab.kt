@@ -47,7 +47,9 @@ import dev.ealang.phonemcp.MediaListenerService
 import dev.ealang.phonemcp.RequestLog
 import dev.ealang.phonemcp.mcp.apps.Clock
 import dev.ealang.phonemcp.mcp.apps.Locator
+import dev.ealang.phonemcp.webhook.PebbleWebhookServer
 import dev.ealang.phonemcp.webhook.RecordingStore
+import dev.ealang.phonemcp.webhook.telegram.TelegramEngine
 import kotlinx.coroutines.delay
 
 /**
@@ -83,7 +85,8 @@ fun StatusTab(activity: MainActivity) {
                 on = config.featureEnabled(Config.FEATURE_WEBHOOK),
                 bound = McpService.webhookRunning,
                 offText = "Off — the watch gets connection refused and retries later.",
-                boundText = "Listening — this phone only.",
+                boundText = "Listening on " +
+                    "${PebbleWebhookServer.BIND}:${config.webhookPort} — this phone only.",
                 failingText = "Switched on but not listening — see server events.",
                 onChange = { activity.setWebhookEnabled(it) },
             )
@@ -214,6 +217,22 @@ fun StatusTab(activity: MainActivity) {
                                 .setData(Uri.parse("package:${activity.packageName}")),
                         )
                     }) { Text("Allow all files access") }
+                }
+                // A destination that is on but cannot deliver is a to-do
+                // like a missing grant — the config lives on the Pebble tab,
+                // so this entry just names the missing step.
+                val telegramReady = TelegramEngine.stage == TelegramEngine.Stage.READY
+                if (config.featureEnabled("telegram") &&
+                    !(telegramReady && config.telegramChatId != null)
+                ) add {
+                    StatusText(
+                        "Telegram forwarding is on but not configured — " +
+                            if (!telegramReady) {
+                                "log in on the Pebble tab."
+                            } else {
+                                "choose a destination chat on the Pebble tab."
+                            },
+                    )
                 }
                 if (!batteryOk) add {
                     StatusText(

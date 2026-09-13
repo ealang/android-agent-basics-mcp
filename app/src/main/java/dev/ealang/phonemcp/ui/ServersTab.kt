@@ -81,7 +81,7 @@ fun ServersTab(activity: MainActivity) {
             )
             OutlinedButton(onClick = {
                 activity.saveWebhookPort(portText)
-            }) { Text("Save and restart") }
+            }) { Text("Save and apply") }
         }
 
         SectionCard("MCP server") {
@@ -116,7 +116,7 @@ fun ServersTab(activity: MainActivity) {
                 modifier = Modifier.fillMaxWidth(),
             )
             Button(onClick = { activity.saveNetwork(portText, bindText) }) {
-                Text("Save and restart")
+                Text("Save and apply")
             }
         }
     }

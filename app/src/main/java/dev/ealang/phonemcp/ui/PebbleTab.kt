@@ -49,12 +49,20 @@ fun PebbleTab(activity: MainActivity) {
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        val telegramReady = TelegramEngine.stage == TelegramEngine.Stage.READY
+        val telegramChatSet = config.telegramChatId != null
         FeatureCard(
             activity,
             title = "Telegram forwarding",
             switchTitle = "Forward recordings to Telegram",
             supporting = "Applies at pickup — recordings still queued follow the new setting.",
             featureKey = "telegram",
+            status = when {
+                !telegramReady -> "Not configured — not logged in to Telegram."
+                !telegramChatSet -> "Not configured — no destination chat chosen."
+                else -> "Configured — logged in, destination chat set."
+            },
+            statusWarn = !(telegramReady && telegramChatSet),
         ) {
             ButtonAssignmentRow(activity, "telegram")
 
@@ -178,18 +186,20 @@ fun PebbleTab(activity: MainActivity) {
             switchTitle = "Write notes to a Markdown file",
             supporting = "Applies at pickup — recordings still queued follow the new setting.",
             featureKey = "markdown",
+            status = "Notes are written to ${WebhookConfig.NOTES_DIR}.",
         ) {
             ButtonAssignmentRow(activity, "markdown")
-            StatusText("Notes are written to ${WebhookConfig.NOTES_DIR}.")
         }
     }
 }
 
 /**
- * A destination card whose settings collapse when the feature is off — the
- * whole body is inert then, and hiding it says so louder than dimming
- * would. A peek link keeps the options browsable before enabling; flipping
- * the switch resets the peek (remember is keyed on the switch).
+ * A destination card whose settings collapse behind a Show/Hide link.
+ * Flipping the switch resets the fold to match it (remember is keyed on
+ * the switch): off collapses — the body is inert then, and hiding it says
+ * so louder than dimming would — and on expands, ready to configure. The
+ * [status] line stays visible either way, so a collapsed card still says
+ * whether the destination is actually ready to receive.
  */
 @Composable
 private fun FeatureCard(
@@ -198,6 +208,8 @@ private fun FeatureCard(
     switchTitle: String,
     supporting: String?,
     featureKey: String,
+    status: String? = null,
+    statusWarn: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val config = activity.config
@@ -209,11 +221,11 @@ private fun FeatureCard(
             checked = on,
             onChange = { config.setFeatureEnabled(featureKey, it); activity.bump() },
         )
-        var peek by remember(on) { mutableStateOf(false) }
-        if (on || peek) {
-            content()
-        } else {
-            TextButton(onClick = { peek = true }) { Text("Show settings") }
+        status?.let { StatusText(it, warn = statusWarn) }
+        var expanded by remember(on) { mutableStateOf(on) }
+        if (expanded) content()
+        TextButton(onClick = { expanded = !expanded }) {
+            Text(if (expanded) "Hide settings" else "Show settings")
         }
     }
 }
