@@ -11,12 +11,15 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Watch
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -200,34 +203,28 @@ fun WebhookTab(activity: MainActivity) {
                 activity.bump()
             }) { Text("Save credentials") }
 
-            var login by remember { mutableStateOf("") }
-            val stage = TelegramEngine.stage
-            OutlinedTextField(
-                value = login,
-                onValueChange = { login = it },
-                label = { Text("Login") },
-                placeholder = {
-                    Text(
-                        when (stage) {
-                            TelegramEngine.Stage.PHONE -> "+1…"
-                            TelegramEngine.Stage.CODE -> "login code"
-                            TelegramEngine.Stage.PASSWORD -> "two-step password"
-                            else -> "(no input needed right now)"
-                        },
-                    )
-                },
-                visualTransformation = if (stage == TelegramEngine.Stage.PASSWORD) {
-                    PasswordVisualTransformation()
-                } else {
-                    VisualTransformation.None
-                },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedButton(onClick = {
-                TelegramEngine.submitAuthInput(login)
-                login = ""
-            }) { Text("Submit") }
+            // Login lives in a dialog now, not an
+            // always-there field: Log in whenever anything short of a
+            // session exists — a stale login included, per the owner's
+            // simplification — and Log out when connected. Closing the
+            // dialog early loses nothing: the stage is TDLib's, and
+            // reopening resumes wherever it waits.
+            var loginDialog by remember { mutableStateOf(false) }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (health == TelegramEngine.Health.NOT_AUTHENTICATED) {
+                    OutlinedButton(onClick = { loginDialog = true }) { Text("Log in") }
+                }
+                if (TelegramEngine.stage == TelegramEngine.Stage.READY) {
+                    OutlinedButton(onClick = { TelegramEngine.logOut() }) { Text("Log out") }
+                }
+            }
+            if (loginDialog) {
+                LoginDialog(
+                    stage = TelegramEngine.stage,
+                    status = TelegramEngine.statusLine(),
+                    onDismiss = { loginDialog = false },
+                )
+            }
 
             var chat by remember { mutableStateOf(config.telegramChatId?.toString() ?: "") }
             OutlinedTextField(
@@ -285,4 +282,70 @@ fun WebhookTab(activity: MainActivity) {
             },
         )
     }
+}
+
+/**
+ * The whole login in one dialog: a single field whose meaning follows
+ * the stage TDLib is waiting in (phone → code → password when two-step
+ * is on), and a status line carrying TDLib's own error when a step is
+ * rejected. Closes itself once the session is up. Deliberately owns no
+ * wizard state (keep it simple) — the stage lives in
+ * TDLib, so Close and reopen resumes in place, never restarts.
+ */
+@Composable
+private fun LoginDialog(
+    stage: TelegramEngine.Stage,
+    status: String,
+    onDismiss: () -> Unit,
+) {
+    var input by remember { mutableStateOf("") }
+
+    LaunchedEffect(stage) {
+        if (stage == TelegramEngine.Stage.READY) onDismiss()
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Log in to Telegram") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                StatusText(status)
+                OutlinedTextField(
+                    value = input,
+                    onValueChange = { input = it },
+                    label = {
+                        Text(
+                            when (stage) {
+                                TelegramEngine.Stage.PHONE -> "Phone number (+1…)"
+                                TelegramEngine.Stage.CODE -> "Login code"
+                                TelegramEngine.Stage.PASSWORD -> "Two-step password"
+                                else -> "(no input needed right now)"
+                            },
+                        )
+                    },
+                    visualTransformation = if (stage == TelegramEngine.Stage.PASSWORD) {
+                        PasswordVisualTransformation()
+                    } else {
+                        VisualTransformation.None
+                    },
+                    keyboardOptions = when (stage) {
+                        TelegramEngine.Stage.PHONE ->
+                            KeyboardOptions(keyboardType = KeyboardType.Phone)
+                        TelegramEngine.Stage.CODE ->
+                            KeyboardOptions(keyboardType = KeyboardType.Number)
+                        else -> KeyboardOptions.Default
+                    },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                TelegramEngine.submitAuthInput(input)
+                input = ""
+            }) { Text("Submit") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+    )
 }

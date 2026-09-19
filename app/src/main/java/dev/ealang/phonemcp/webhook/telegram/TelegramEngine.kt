@@ -166,6 +166,25 @@ object TelegramEngine {
     }
 
     /**
+     * End the session, server-side and locally — TDLib deletes its database
+     * and closes. Closed is no longer an end state (see [handleAuth]): a
+     * fresh client comes up immediately and parks at WaitPhoneNumber, so
+     * the next login needs no app restart.
+     */
+    fun logOut() {
+        val tdClient = client ?: return
+        lastProblem = null
+        tdClient.send(TdApi.LogOut()) { result ->
+            if (result is TdApi.Error) {
+                main.post {
+                    lastProblem = result.message
+                    changed()
+                }
+            }
+        }
+    }
+
+    /**
      * Resolve a manually-entered numeric chat id to its title, as the UI's
      * "does this id reach the right place" check. Local cache first (free —
      * LoadChats primed it at login); on a miss, the server request that suits
@@ -299,7 +318,9 @@ object TelegramEngine {
             Stage.PHONE -> "Enter your phone number, with country code (+1…).$problem"
             Stage.CODE -> "Telegram sent a login code — enter it below.$problem"
             Stage.PASSWORD -> "Enter your two-step verification password.$problem"
-            Stage.CLOSED -> "Telegram client closed; restart the app.$problem"
+            // Normally invisible — Closed restarts the client at once — so
+            // seeing it means the restart could not run.
+            Stage.CLOSED -> "Telegram client closed; reopen the app.$problem"
             Stage.READY -> {
                 val who = accountLabel?.let { "Connected as $it" } ?: "Connected"
                 val conn = connectionLabel
@@ -394,7 +415,17 @@ object TelegramEngine {
                 }
             }
 
-            is TdApi.AuthorizationStateClosed -> client = null
+            is TdApi.AuthorizationStateClosed -> {
+                // Not an end state (2026-09-19, for the logout flow): tear
+                // down and bring a fresh client straight up, which lands at
+                // WaitPhoneNumber ready for the next login. Before this,
+                // Closed meant "restart the app".
+                client = null
+                authState = null
+                accountLabel = null
+                appContext?.let { ensureStarted(it) }
+                return
+            }
 
             else -> Unit
         }
