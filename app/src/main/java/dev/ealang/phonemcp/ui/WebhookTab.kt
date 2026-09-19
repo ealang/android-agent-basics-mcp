@@ -193,12 +193,20 @@ fun WebhookTab(activity: MainActivity) {
             // always-there field: Log in whenever anything short of a
             // session exists — a stale login included, per the owner's
             // simplification — and Log out when connected. Closing the
-            // dialog early loses nothing: the stage is TDLib's, and
-            // reopening resumes wherever it waits.
+            // dialog abandons the attempt; reopening starts a new one.
             var loginDialog by remember { mutableStateOf(false) }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (health == TelegramEngine.Health.NOT_AUTHENTICATED) {
-                    OutlinedButton(onClick = { loginDialog = true }) { Text("Log in") }
+                    OutlinedButton(onClick = {
+                        // Always from the phone number.
+                        // Resuming mid-flight sounded considerate and was a
+                        // trap: a login code that never arrives left the
+                        // dialog stuck at "enter the code" forever.
+                        if (TelegramEngine.stage != TelegramEngine.Stage.PHONE) {
+                            TelegramEngine.restartLogin()
+                        }
+                        loginDialog = true
+                    }) { Text("Log in") }
                 }
                 if (TelegramEngine.stage == TelegramEngine.Stage.READY) {
                     OutlinedButton(onClick = { TelegramEngine.logOut() }) { Text("Log out") }
@@ -273,7 +281,9 @@ fun WebhookTab(activity: MainActivity) {
  * is on), and a status line carrying TDLib's own error when a step is
  * rejected. Closes itself once the session is up. Deliberately owns no
  * wizard state (keep it simple) — the stage lives in
- * TDLib, so Close and reopen resumes in place, never restarts.
+ * TDLib, and the Log in button resets it before opening this, so there is
+ * never a half-finished attempt to resume into and no Back button to
+ * build. Close is therefore a real cancel, not a pause.
  */
 @Composable
 private fun LoginDialog(
@@ -379,16 +389,24 @@ private fun ChatPickerDialog(
         title = { Text("Choose destination chat") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                // Say what is being searched (the bare
+                // field read like it might search the whole of Telegram,
+                // and picking an unknown stranger as the destination is
+                // exactly the mistake worth making impossible to worry
+                // about). "Your chats" rather than "recent chats" because
+                // recency is not the filter — TDLib matches the names of
+                // every chat the account already has, however old.
+                Text(
+                    "Searches your existing Telegram chats by name.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
-                    label = { Text("Search by name") },
+                    label = { Text("Search") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                // Telegram matches names, never message text, and only
-                // chats the account already has — so a channel never
-                // opened will not appear here however it is spelled.
                 note?.let { StatusText(it) }
                 Column(
                     Modifier.heightIn(max = 280.dp).verticalScroll(rememberScrollState()),

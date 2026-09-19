@@ -189,6 +189,39 @@ object TelegramEngine {
         }
     }
 
+    /**
+     * Throw away a half-finished login and park back at the phone prompt.
+     *
+     * TDLib owns the auth stage, which is what made the login dialog
+     * stateless and resumable — and also what trapped anyone whose code
+     * never arrived: reopening the
+     * dialog returned to WaitCode with no way back to the number. Rather
+     * than add a Back button and the stage-shuffling that implies, the Log
+     * in button now always begins at the beginning.
+     *
+     * `Destroy` is the call for it — "destroying all local data without a
+     * proper logout … can be called before authorization" — and it lands
+     * on AuthorizationStateClosed, so the restart machinery written for
+     * logout does the rest. At this point in the flow there is no session
+     * and nothing in the database worth keeping, so destroying it costs
+     * nothing. (`ResendAuthenticationCode` exists and would be the
+     * narrower fix, but it is only legal at WaitCode once a server
+     * timeout has passed — a second thing to explain, for a case starting
+     * over already covers.)
+     */
+    fun restartLogin() {
+        val tdClient = client ?: return
+        lastProblem = null
+        tdClient.send(TdApi.Destroy()) { result ->
+            if (result is TdApi.Error) {
+                main.post {
+                    lastProblem = result.message
+                    changed()
+                }
+            }
+        }
+    }
+
     /** One search result: what the picker shows, and what it stores. */
     data class ChatHit(val id: Long, val title: String)
 
@@ -457,7 +490,24 @@ object TelegramEngine {
                 client = null
                 authState = null
                 accountLabel = null
-                appContext?.let { ensureStarted(it) }
+                // The destination goes with it. Every route to Closed —
+                // LogOut, Destroy, a session revoked from another device —
+                // is documented as destroying all local data, so TDLib's
+                // chat database is now empty and the stored chat id names
+                // something it has never heard of. The owner found this on the
+                // device (2026-09-19): after a logout and login the old
+                // destination queued messages that only went out once he
+                // re-picked the same chat, which put it back in the cache.
+                // Clearing here rather than on the logout button because
+                // this is the one point every wipe passes through, and the
+                // card already shows "no destination chosen" as a to-do.
+                appContext?.let {
+                    Config(it).apply {
+                        telegramChatId = null
+                        telegramChatTitle = ""
+                    }
+                    ensureStarted(it)
+                }
                 return
             }
 
