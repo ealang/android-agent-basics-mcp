@@ -12,6 +12,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -131,8 +132,39 @@ fun WebhookTab(activity: MainActivity) {
             }
         }
 
-        CollapsibleCard("Telegram forwarding") {
-            StatusText(TelegramEngine.statusLine())
+        // Health is three states, not seven: everything
+        // short of a logged-in client is "not authenticated", offline is
+        // visible but not a failure. The warning icon shows through the
+        // collapsed card for the states that need the user — a dead login,
+        // or no destination chat, either of which quietly queues every
+        // message (found in testing: only the Test button revealed why).
+        val health = TelegramEngine.health
+        val noChat = config.telegramChatId == null
+        CollapsibleCard(
+            "Telegram forwarding",
+            warn = health == TelegramEngine.Health.NOT_AUTHENTICATED ||
+                (health == TelegramEngine.Health.HEALTHY && noChat),
+        ) {
+            // The one-liner at the top of the open card. Theme colors, not
+            // literal green/red: tertiary for fine, error for needs-you.
+            val detail = TelegramEngine.statusLine().replaceFirstChar { it.lowercase() }
+            val (line, fine) = when {
+                health == TelegramEngine.Health.NOT_AUTHENTICATED ->
+                    "Not authenticated — $detail" to false
+                health == TelegramEngine.Health.OFFLINE ->
+                    "Offline — no network; reconnects on its own, messages queue." to false
+                noChat -> "Connected, but no destination chat is set below." to false
+                else -> "Healthy — $detail" to true
+            }
+            Text(
+                line,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (fine) {
+                    MaterialTheme.colorScheme.tertiary
+                } else {
+                    MaterialTheme.colorScheme.error
+                },
+            )
 
             var apiId by remember { mutableStateOf(config.telegramApiId?.toString() ?: "") }
             var apiHash by remember { mutableStateOf(config.telegramApiHash ?: "") }
