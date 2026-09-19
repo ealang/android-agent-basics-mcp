@@ -73,14 +73,13 @@ fun WebhookTab(activity: MainActivity) {
             // start, rejections included so an auth failure doesn't read as
             // a message that vanished), then what became of the messages.
             // Queued/failed are live from the store and survive a restart
-            // the way the counters do not; dropped appears only once it has
-            // happened.
-            val dropped = Logs.webhook.count("dropped")
+            // the way the counters do not. Every state always shows, zeros
+            // included — one fixed shape, only the numbers move.
             StatusText(
                 requestsLine(Logs.webhook) + "\n" +
-                    "Message status: queued: $pending   sent: " +
-                    "${Logs.webhook.count("sent")}   failed: ${failed.size}" +
-                    (if (dropped > 0) "   dropped: $dropped" else ""),
+                    "Message status — queued: $pending   sent: " +
+                    "${Logs.webhook.count("sent")}   failed: ${failed.size}   " +
+                    "dropped: ${Logs.webhook.count("dropped")}",
             )
 
             for (item in failed) {

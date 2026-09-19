@@ -82,12 +82,12 @@ fun McpTab(activity: MainActivity) {
         SetupCard(activity, MCP_GRANTS)
 
         SectionCard("Logs") {
-            // "Tool calls failed", not "failed": these are tools that ran
-            // and returned an error, a different thing from a request
-            // rejected at the door — those are in the requests line.
+            // "Tool calls — failed", not plain "Failed": these are tools
+            // that ran and returned an error, a different thing from a
+            // request rejected at the door — those are in the line above.
             StatusText(
                 requestsLine(Logs.mcp) + "\n" +
-                    "Tool calls failed: ${Logs.mcp.count("failures")}",
+                    "Tool calls — failed: ${Logs.mcp.count("failures")}",
             )
             OutlinedButton(onClick = { logDialog = true }) { Text("View server log") }
         }
