@@ -246,7 +246,8 @@ object TelegramEngine {
      * Two round trips, because every chat-returning call yields ids alone:
      * the search, then GetChat per id. Those land out of order, so titles
      * are collected by id and re-read in the order the search returned —
-     * that order is Telegram's own ranking and is worth preserving. A chat
+     * TDLib documents that as main-chat-list order, so it is roughly
+     * "chats you use most" and is worth preserving. A chat
      * whose GetChat fails is dropped rather than shown untitled; the search
      * just put it in TDLib's cache, so failure here means something is
      * wrong enough that offering it as a destination would be a lie.
@@ -257,7 +258,11 @@ object TelegramEngine {
             onResult(Result.failure(IllegalStateException("Telegram is not connected.")))
             return
         }
-        tdClient.send(TdApi.SearchChatsOnServer(query, SEARCH_RESULT_LIMIT)) { found ->
+        // The null is a SearchChatTypeFilter, added in the TDLib bump of
+        // 2026-09-19 and documented as "pass null to search for chats of
+        // all types" — which is what the picker wants: a destination can
+        // be a person, a group or a channel.
+        tdClient.send(TdApi.SearchChatsOnServer(query, null, SEARCH_RESULT_LIMIT)) { found ->
             if (found !is TdApi.Chats) {
                 val why = (found as? TdApi.Error)?.message ?: "unexpected TDLib response"
                 main.post { onResult(Result.failure(IllegalStateException(why))) }

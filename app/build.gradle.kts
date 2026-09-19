@@ -45,10 +45,6 @@ android {
         versionCode = 1
         versionName = "0.1"
 
-        // TDLib ships as a prebuilt arm64 .so (lifted from agent-voice-gateway);
-        // limiting the ABI set keeps the build from producing splits that lack it.
-        ndk { abiFilters += "arm64-v8a" }
-
         buildConfigField("int", "TELEGRAM_API_ID", "$telegramApiId")
         buildConfigField("String", "TELEGRAM_API_HASH", "\"$telegramApiHash\"")
     }
