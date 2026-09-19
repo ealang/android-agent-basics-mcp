@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- API 26–30. allowBackup="false" already opts out; these rules exist so
+     that even a path that ignores the flag (adb backup on old builds, an
+     OEM's transfer tool honouring only the rules) finds nothing listed. -->
+<full-backup-content>
+    <exclude domain="root" path="." />
+    <exclude domain="file" path="." />
+    <exclude domain="database" path="." />
+    <exclude domain="sharedpref" path="." />
+    <exclude domain="external" path="." />
+</full-backup-content>

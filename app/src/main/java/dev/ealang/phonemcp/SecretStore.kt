@@ -19,11 +19,12 @@ import javax.crypto.spec.GCMParameterSpec
  * Secrets at rest: AES-GCM under a key that lives in the Android Keystore.
  *
  * The point is not to defend against another app — app-private prefs already
- * do that, by uid — but against the data leaving the phone. `allowBackup` is
- * on, so plain prefs are swept into cloud backups and device-to-device
- * copies. A Keystore key cannot be exported or backed up (it sits in the
- * TEE; the OS itself only gets to *use* it), so what a backup carries is
- * ciphertext whose key is stranded in this phone's hardware.
+ * do that, by uid — but against the data leaving the phone in a backup or a
+ * device-to-device copy. A Keystore key cannot be exported or backed up (it
+ * sits in the TEE; the OS itself only gets to *use* it), so anything such a
+ * copy carries is ciphertext whose key is stranded in this phone's hardware.
+ * Backups are now off outright (`allowBackup="false"` plus exclusion rules,
+ * 2026-09-18), which makes this the second layer rather than the only one.
  *
  * This is the same construction Jetpack's EncryptedSharedPreferences used;
  * that wrapper was deprecated in 2024 with the advice to do exactly this

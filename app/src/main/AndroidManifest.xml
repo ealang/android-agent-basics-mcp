@@ -57,8 +57,16 @@
         </intent>
     </queries>
 
+    <!-- No backups, and belt-and-braces exclusion rules besides. Everything
+         here is either a secret (SecretStore blobs, TDLib's session database),
+         queued user audio, or state that regenerates — and the SecretStore
+         key is stranded in this phone's Keystore, so a restored copy is
+         unreadable anyway. fullBackupContent covers API 26–30,
+         dataExtractionRules covers 31+ including device-to-device transfer. -->
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:label="Phone MCP"
         android:icon="@mipmap/ic_launcher"
         android:supportsRtl="true"
