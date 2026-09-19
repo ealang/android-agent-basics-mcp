@@ -109,9 +109,10 @@ class PipelineWorker(
                     // Deleted like a completion, but not one: nothing was
                     // sent, so no completed++ and no gate reset. Its own
                     // counter, though — a press that vanished without trace
-                    // read as a lost message until the UI could say "dropped".
+                    // read as a lost message until the UI could say "dropped"
+                    // — and the log line is the item's only remaining record.
                     log.bump("dropped")
-                    log.info("dropped empty recording", item = item.name)
+                    log.info("dropped", result.why, item.name)
                     store.complete(item)
                 }
                 is StepResult.Permanent -> {
@@ -146,13 +147,14 @@ class PipelineWorker(
         // transcript to null — so null covers both absent and empty.
         val text = item.meta.pebbleTranscript
         if (text == null) {
+            // No text, no send — dropped either way. Audio-only items were
+            // briefly parked in failed/ instead, but a Retry can never
+            // conjure the missing transcript, so failed/ was just a shelf
+            // for dead items; the log line keeps the distinction.
             return if (item.audio() != null) {
-                // Speech was recorded but never transcribed. Terminal: the
-                // item parks in failed/ with its audio intact.
-                StepResult.Permanent("no transcript attached")
+                StepResult.Dropped("recording only — no transcript attached")
             } else {
-                // Nothing at all — a pocket press or silence.
-                StepResult.Dropped
+                StepResult.Dropped("empty — a pocket press or silence")
             }
         }
 

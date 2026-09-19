@@ -137,12 +137,15 @@ class McpService : Service() {
             return store.pending().size to store.failed()
         }
 
-        fun retryFailed(context: Context, name: String) {
-            onPipeline(context) { store -> store.failed().find { it.name == name }?.let(store::retry) }
-        }
-
-        fun discardFailed(context: Context, name: String) {
-            onPipeline(context) { store -> store.failed().find { it.name == name }?.let(store::discard) }
+        /**
+         * Everything in failed/ back into the queue. All-or-nothing on
+         * purpose (2026-09-18): per-item Retry/Discard buttons existed and
+         * were overkill — with unprocessable items now dropped instead of
+         * parked, what fails is delivery, and a fixed delivery problem is
+         * fixed for every item at once.
+         */
+        fun retryAllFailed(context: Context) {
+            onPipeline(context) { store -> store.failed().forEach(store::retry) }
         }
 
         /**

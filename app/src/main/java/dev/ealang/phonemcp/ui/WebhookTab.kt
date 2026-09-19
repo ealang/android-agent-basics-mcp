@@ -12,7 +12,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -82,26 +81,19 @@ fun WebhookTab(activity: MainActivity) {
                     "dropped: ${Logs.webhook.count("dropped")}",
             )
 
-            for (item in failed) {
-                HorizontalDivider()
-                Text(item.name, style = MaterialTheme.typography.bodyMedium)
-                StatusText(item.failureReason() ?: "(no reason recorded)")
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = {
-                        McpService.retryFailed(activity, item.name)
-                        activity.bumpSoon()
-                    }) { Text("Retry") }
-                    OutlinedButton(onClick = {
-                        McpService.discardFailed(activity, item.name)
-                        activity.bumpSoon()
-                    }) { Text("Discard") }
-                }
-            }
-
+            // No per-item list: individual Retry/Discard was overkill.
+            // Failures are counted above and explained
+            // in the log; the controls are bulk — Retry re-queues every
+            // failed item, Clear discards everything queued and failed.
+            // Each appears only when it has something to act on.
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = { pipelineDialog = true }) { Text("View server log") }
-                // Only when there is something to clear: on a healthy idle
-                // pipeline the button would just invite an accident.
+                if (failed.isNotEmpty()) {
+                    OutlinedButton(onClick = {
+                        McpService.retryAllFailed(activity)
+                        activity.bumpSoon()
+                    }) { Text("Retry") }
+                }
                 if (pending > 0 || failed.isNotEmpty()) {
                     OutlinedButton(onClick = {
                         McpService.clearMessages(activity)

@@ -74,11 +74,14 @@ sealed interface StepResult {
     data object Success : StepResult
 
     /**
-     * Nothing to send — a pocket press or silence. Deleted like Success,
-     * but counted nowhere: the user sent nothing, so nothing was queued,
-     * failed, or sent.
+     * Not processable, by its nature rather than by any fault — no
+     * transcript to send (2026-09-18: originally only the pocket-press
+     * case; the owner widened it the same night to audio without a transcript
+     * too, which had parked in `failed/` where no Retry could ever
+     * conjure the missing text). Deleted like Success, counted only in
+     * the dropped counter; [why] goes to the log as the item's one trace.
      */
-    data object Dropped : StepResult
+    data class Dropped(val why: String) : StepResult
 
     /** Will succeed later — the item stays at the head and blocks the queue. */
     data class Transient(val why: String) : StepResult
