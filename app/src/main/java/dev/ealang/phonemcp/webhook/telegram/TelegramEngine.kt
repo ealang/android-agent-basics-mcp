@@ -22,8 +22,9 @@ import java.util.concurrent.atomic.AtomicBoolean
  * client per database directory, and both the activity (the auth UI) and the
  * service (delivery, later) need the same one. Trimmed from
  * agent-voice-gateway's TelegramTdlibClient, which is where the non-obvious
- * moves (LoadChats priming the GetChat cache, the supergroup id offset) were
- * learned.
+ * moves (the network-type kick, the two-layer chat search) were learned —
+ * though only the server layer of that search survived here; see
+ * [searchChats] for why this app needs no local chat cache at all.
  *
  * Threading: TDLib delivers results on its own daemon thread; every handler
  * here posts to main, all mutable state is main-thread-confined, and public
@@ -188,42 +189,67 @@ object TelegramEngine {
         }
     }
 
+    /** One search result: what the picker shows, and what it stores. */
+    data class ChatHit(val id: Long, val title: String)
+
     /**
-     * Resolve a manually-entered numeric chat id to its title, as the UI's
-     * "does this id reach the right place" check. Local cache first (free —
-     * LoadChats primed it at login); on a miss, the server request that suits
-     * the id's kind. The id forms: positive = a user, below the supergroup
-     * offset = a supergroup/channel, other negatives = a basic group, which
-     * only GetChat can answer.
+     * Find chats by name, for the destination picker.
+     *
+     * Server-side only, deliberately. The obvious
+     * alternative — LoadChats at login, then GetChats for a recents list —
+     * was removed with the manual id field it existed to serve. TDLib's own
+     * docs push you further than that: GetChats is "for informational
+     * purposes only. Use loadChats and updates processing instead to
+     * maintain chat lists in a consistent state", i.e. a correct recents
+     * list means keeping a chat-list model fed by UpdateChatPosition. That
+     * is a permanent subscription in service of a screen opened once.
+     *
+     * SearchChatsOnServer matches "the title and username of already known
+     * chats" — never message text, so a busy inbox cannot bury the group
+     * being looked for. "Already known" is the one real limit: a public
+     * channel never opened is not in the account's chat list and will not
+     * be found. Open it once in Telegram and it is.
+     *
+     * Two round trips, because every chat-returning call yields ids alone:
+     * the search, then GetChat per id. Those land out of order, so titles
+     * are collected by id and re-read in the order the search returned —
+     * that order is Telegram's own ranking and is worth preserving. A chat
+     * whose GetChat fails is dropped rather than shown untitled; the search
+     * just put it in TDLib's cache, so failure here means something is
+     * wrong enough that offering it as a destination would be a lie.
      */
-    fun checkChat(chatId: Long, onResult: (String) -> Unit) {
+    fun searchChats(query: String, onResult: (Result<List<ChatHit>>) -> Unit) {
         val tdClient = client
         if (tdClient == null || stage != Stage.READY) {
-            onResult("FAILED: Telegram is not connected yet.")
+            onResult(Result.failure(IllegalStateException("Telegram is not connected.")))
             return
         }
-        val report = Client.ResultHandler { result ->
-            main.post {
-                onResult(
-                    when (result) {
-                        is TdApi.Chat ->
-                            "Resolved: ${result.title.ifBlank { "(untitled chat)" }}"
-                        is TdApi.Error -> "FAILED: ${result.message}"
-                        else -> "FAILED: unexpected TDLib response"
-                    },
-                )
+        tdClient.send(TdApi.SearchChatsOnServer(query, SEARCH_RESULT_LIMIT)) { found ->
+            if (found !is TdApi.Chats) {
+                val why = (found as? TdApi.Error)?.message ?: "unexpected TDLib response"
+                main.post { onResult(Result.failure(IllegalStateException(why))) }
+                return@send
             }
-        }
-        tdClient.send(TdApi.GetChat(chatId)) { cached ->
-            when {
-                cached is TdApi.Chat -> report.onResult(cached)
-                chatId < -SUPERGROUP_ID_OFFSET ->
-                    tdClient.send(
-                        TdApi.CreateSupergroupChat(-chatId - SUPERGROUP_ID_OFFSET, false),
-                        report,
-                    )
-                chatId > 0 -> tdClient.send(TdApi.CreatePrivateChat(chatId, false), report)
-                else -> report.onResult(cached) // GetChat's own error is the answer
+            val ids = found.chatIds
+            if (ids.isEmpty()) {
+                main.post { onResult(Result.success(emptyList())) }
+                return@send
+            }
+            val titles = HashMap<Long, String>()
+            var outstanding = ids.size
+            for (id in ids) {
+                tdClient.send(TdApi.GetChat(id)) { chat ->
+                    main.post {
+                        if (chat is TdApi.Chat) {
+                            titles[id] = chat.title.ifBlank { "(untitled chat)" }
+                        }
+                        if (--outstanding == 0) {
+                            onResult(Result.success(ids.toList().mapNotNull { got ->
+                                titles[got]?.let { ChatHit(got, it) }
+                            }))
+                        }
+                    }
+                }
             }
         }
     }
@@ -417,14 +443,10 @@ object TelegramEngine {
                         }
                     }
                 }
-                // Prime the local chat cache so a typed-in numeric id can
-                // resolve without a server round-trip. Error 404 just means
-                // "no more chats" and is fine (gateway finding).
-                tdClient.send(TdApi.LoadChats(TdApi.ChatListMain(), CHAT_LIST_LOAD_LIMIT)) { result ->
-                    if (result is TdApi.Error && result.code != 404) {
-                        Log.w(TAG, "LoadChats failed: ${result.message}")
-                    }
-                }
+                // Nothing primes the chat cache any more (2026-09-19). A
+                // LoadChats(main, 500) used to run here so a hand-typed id
+                // could resolve locally; the picker replaced the typing,
+                // and it asks the server directly. See [searchChats].
             }
 
             is TdApi.AuthorizationStateClosed -> {
@@ -511,12 +533,10 @@ object TelegramEngine {
     /** Main-thread; the dedupe for [pushNetworkType]. */
     private var lastNetworkType: Class<*>? = null
 
-    /** How many chats to pull into the cache at login; the gateway's number. */
-    private const val CHAT_LIST_LOAD_LIMIT = 500
-
     /**
-     * TDLib computes a supergroup/channel chat id as
-     * -1_000_000_000_000 - supergroupId; anything below the offset is one.
+     * Enough that a reasonable name finds its chat, few enough that the
+     * follow-up GetChat per result stays cheap. Nobody scrolls a picker
+     * looking for something they can retype more precisely.
      */
-    private const val SUPERGROUP_ID_OFFSET = 1_000_000_000_000L
+    private const val SEARCH_RESULT_LIMIT = 30
 }
