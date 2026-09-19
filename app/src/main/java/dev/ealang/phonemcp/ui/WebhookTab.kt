@@ -31,6 +31,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import dev.ealang.phonemcp.Config
 import dev.ealang.phonemcp.LOG_DIALOG_LINES
 import dev.ealang.phonemcp.Logs
@@ -251,7 +252,7 @@ fun WebhookTab(activity: MainActivity) {
             OutlinedTextField(
                 value = signature,
                 onValueChange = { signature = it },
-                label = { Text("Signature (appended to forwarded messages)") },
+                label = { Text("Signature (appended to messages)") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -299,6 +300,12 @@ private fun LoginDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        // Only Close (or Back) ends this, never a stray tap outside the
+        // dialog. Cancelling is destructive here —
+        // restartLogin() wipes the attempt, so reopening means retyping
+        // the number and waiting for a second code — and the moment you
+        // are most likely to fumble a tap is while reaching for the code.
+        properties = DialogProperties(dismissOnClickOutside = false),
         title = { Text("Log in to Telegram") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
