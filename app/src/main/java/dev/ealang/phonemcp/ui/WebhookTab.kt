@@ -148,25 +148,31 @@ fun WebhookTab(activity: MainActivity) {
             warn = health == TelegramEngine.Health.NOT_AUTHENTICATED ||
                 (health == TelegramEngine.Health.HEALTHY && noChat),
         ) {
-            // The one-liner at the top of the open card. Theme colors, not
-            // literal green/red: tertiary for fine, error for needs-you.
-            val detail = TelegramEngine.statusLine().replaceFirstChar { it.lowercase() }
+            // The one-liner at the top of the open card. It says what state
+            // we are in and what to do about it — never what step of a login
+            // is pending, which is the dialog's job (the
+            // card telling you to enter your phone number was redundant with
+            // the dialog that then asks for it, and unclear about how to get
+            // there). Offline claims nothing else: an unreachable server
+            // cannot confirm the session is still good, so "connected as …"
+            // alongside "offline" was a contradiction, not extra detail.
             val (line, fine) = when {
+                TelegramEngine.stage == TelegramEngine.Stage.OFF ->
+                    "Not configured — save an API ID and hash below." to false
                 health == TelegramEngine.Health.NOT_AUTHENTICATED ->
-                    "Not authenticated — $detail" to false
+                    "Not authenticated — log in below." to false
                 health == TelegramEngine.Health.OFFLINE ->
-                    "Offline — no network; reconnects on its own, messages queue." to false
+                    "Offline — messages queue until the network is back." to false
                 noChat -> "Connected, but no destination chat is set below." to false
-                else -> "Healthy — $detail" to true
+                else -> {
+                    val who = TelegramEngine.account?.let { " as $it" } ?: ""
+                    "Healthy — connected$who." to true
+                }
             }
             Text(
                 line,
                 style = MaterialTheme.typography.bodySmall,
-                color = if (fine) {
-                    MaterialTheme.colorScheme.tertiary
-                } else {
-                    MaterialTheme.colorScheme.error
-                },
+                color = if (fine) okGreen else MaterialTheme.colorScheme.error,
             )
 
             var apiId by remember { mutableStateOf(config.telegramApiId?.toString() ?: "") }

@@ -65,6 +65,9 @@ object TelegramEngine {
     private var connectionLabel: String? = null
     private var accountLabel: String? = null
 
+    /** Who we are logged in as, once GetMe has answered; null before that. */
+    val account: String? get() = accountLabel
+
     /**
      * The last thing that went wrong, shown under the status line until the
      * next successful step. TDLib's auth errors ("PHONE_CODE_INVALID") are
@@ -309,7 +312,13 @@ object TelegramEngine {
         }
     }
 
-    /** One line for the UI, composed from auth stage, connection, and account. */
+    /**
+     * The login dialog's line: which step is waiting, and TDLib's own
+     * complaint when one is rejected. Step-level prose belongs only here
+     * (2026-09-19) — the card outside states the condition and points at
+     * the dialog, rather than repeating the instruction the dialog is
+     * about to give.
+     */
     fun statusLine(): String {
         val problem = lastProblem?.let { "\nProblem: $it" } ?: ""
         return when (stage) {

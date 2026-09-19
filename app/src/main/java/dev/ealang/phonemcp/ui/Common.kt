@@ -1,5 +1,6 @@
 package dev.ealang.phonemcp.ui
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,6 +31,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -141,6 +143,17 @@ fun StatusText(text: String, warn: Boolean = false) {
         },
     )
 }
+
+/**
+ * The "this is fine" green for status text, beside [StatusText]'s red.
+ * Deliberately not a theme slot: the app uses Material You dynamic
+ * color, so `tertiary` is derived from the user's wallpaper — it came
+ * out red on the test phone (2026-09-19), which read as an alarm on a
+ * healthy line. A palette position carries no meaning; only a literal
+ * color does. Two shades so it stays legible on either background.
+ */
+val okGreen: Color
+    @Composable get() = if (isSystemInDarkTheme()) Color(0xFF7BC67E) else Color(0xFF2E7D32)
 
 /** A ring-buffer log in a dialog, monospace, scrolling on its own. */
 @Composable

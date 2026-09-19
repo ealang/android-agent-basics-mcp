@@ -37,9 +37,13 @@ class TelegramDelivery(
 
         // Signature read at pickup like the chat id, so editing it applies to
         // anything still queued. Its own line: it marks provenance, not prose.
+        // The only marking there is: a "[voice via Pebble]" prefix was
+        // inherited from the Python gateway and carried until 2026-09-19,
+        // when the owner found the app was stamping messages twice — one hidden
+        // prefix, one signature he had configured himself. The configurable
+        // one won.
         val signature = config.telegramSignature
-        val message = MESSAGE_TEMPLATE.replace("{text}", text) +
-            if (signature.isEmpty()) "" else "\n$signature"
+        val message = text + if (signature.isEmpty()) "" else "\n$signature"
         var messageId: Long? = null
         var problem: String? = null
         val latch = CountDownLatch(1)
@@ -146,9 +150,6 @@ class TelegramDelivery(
     }
 
     companion object {
-        /** The Python gateway's default; provenance for the agent reading it. */
-        private const val MESSAGE_TEMPLATE = "[voice via Pebble] {text}"
-
         /** Generous — the answer is a local round-trip into TDLib, not the network. */
         private const val ANSWER_TIMEOUT_S = 20L
     }
