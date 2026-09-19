@@ -176,18 +176,22 @@ val MCP_GRANTS = listOf(
     BATTERY_GRANT,
 )
 
-/** The bearer token, shown inside each server's settings card. */
+/**
+ * A server's own bearer token, shown inside its settings card. Each server
+ * has its own (split 2026-09-18): which one this block shows and regenerates
+ * is the caller's choice, and regenerating one leaves the other alone.
+ */
 @Composable
-fun TokenBlock(activity: MainActivity) {
+fun TokenBlock(activity: MainActivity, token: () -> String, regenerate: () -> Unit) {
     StatusText("Clients send it in an Authorization: Bearer header.")
     Text(
-        if (SecretStore.ready) activity.config.token else "unlocking…",
+        if (SecretStore.ready) token() else "unlocking…",
         style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp),
     )
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedButton(onClick = {
-            activity.copyToClipboard("token", activity.config.token)
+            activity.copyToClipboard("token", token())
         }) { Text("Copy") }
-        OutlinedButton(onClick = { activity.regenerateToken() }) { Text("Regenerate") }
+        OutlinedButton(onClick = regenerate) { Text("Regenerate") }
     }
 }

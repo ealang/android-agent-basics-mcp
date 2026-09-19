@@ -157,8 +157,12 @@ class MainActivity : ComponentActivity() {
         bump()
     }
 
-    fun regenerateToken() {
-        config.regenerateToken()
+    fun regenerateMcpToken() = tokenRegenerated { config.regenerateMcpToken() }
+
+    fun regenerateWebhookToken() = tokenRegenerated { config.regenerateWebhookToken() }
+
+    private fun tokenRegenerated(regenerate: () -> Unit) {
+        regenerate()
         bump()
         if (McpService.serviceRunning) startServer()
         toast("New token — update the client")

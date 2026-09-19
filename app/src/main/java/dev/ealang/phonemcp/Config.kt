@@ -40,7 +40,16 @@ class Config(context: Context) {
         get() = prefs.getString(KEY_BIND, "") ?: ""
         set(value) = prefs.edit().putString(KEY_BIND, value.trim()).apply()
 
-    var token: String
+    /**
+     * Per-server bearer tokens (split 2026-09-18; before that one token
+     * covered both listeners). The MCP token keeps the original secret name,
+     * so existing MCP clients survive the split without an edit. The webhook
+     * token seeds itself from the MCP token on first read rather than
+     * generating fresh — the watch gateway was configured with the shared
+     * token, and a silent regeneration would have broken it on update. The
+     * two diverge the first time either is regenerated.
+     */
+    var mcpToken: String
         get() {
             secrets.get(KEY_TOKEN)?.let { return it }
             // Installed before the SecretStore existed: lift the plaintext
@@ -55,6 +64,15 @@ class Config(context: Context) {
             return fresh
         }
         set(value) = secrets.put(KEY_TOKEN, value)
+
+    var webhookToken: String
+        get() {
+            secrets.get(KEY_WEBHOOK_TOKEN)?.let { return it }
+            val seeded = mcpToken
+            secrets.put(KEY_WEBHOOK_TOKEN, seeded)
+            return seeded
+        }
+        set(value) = secrets.put(KEY_WEBHOOK_TOKEN, value)
 
     /**
      * Telegram application credentials, from my.telegram.org. These identify
@@ -149,7 +167,9 @@ class Config(context: Context) {
         get() = prefs.getString(KEY_START_FAILURE, null)
         set(value) = prefs.edit().putString(KEY_START_FAILURE, value).apply()
 
-    fun regenerateToken(): String = generateToken().also { token = it }
+    fun regenerateMcpToken(): String = generateToken().also { mcpToken = it }
+
+    fun regenerateWebhookToken(): String = generateToken().also { webhookToken = it }
 
     private fun generateToken(): String {
         val bytes = ByteArray(24)
@@ -170,6 +190,7 @@ class Config(context: Context) {
         private const val KEY_PORT = "port"
         private const val KEY_BIND = "bind_address"
         private const val KEY_TOKEN = "token"
+        private const val KEY_WEBHOOK_TOKEN = "webhook_token"
         private const val KEY_ENABLED = "enabled"
         private const val KEY_START_FAILURE = "last_start_failure"
         private const val KEY_TG_API_ID = "telegram_api_id"

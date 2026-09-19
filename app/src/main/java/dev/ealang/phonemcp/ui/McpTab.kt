@@ -90,7 +90,11 @@ fun McpTab(activity: MainActivity) {
         }
 
         CollapsibleCard("Server settings") {
-            TokenBlock(activity)
+            TokenBlock(
+                activity,
+                token = { activity.config.mcpToken },
+                regenerate = { activity.regenerateMcpToken() },
+            )
 
             HorizontalDivider()
 

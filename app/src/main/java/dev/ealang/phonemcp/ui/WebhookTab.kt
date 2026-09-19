@@ -98,7 +98,11 @@ fun WebhookTab(activity: MainActivity) {
         }
 
         CollapsibleCard("Server settings") {
-            TokenBlock(activity)
+            TokenBlock(
+                activity,
+                token = { activity.config.webhookToken },
+                regenerate = { activity.regenerateWebhookToken() },
+            )
 
             HorizontalDivider()
 

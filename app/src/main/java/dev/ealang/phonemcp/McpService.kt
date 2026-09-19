@@ -411,7 +411,7 @@ class McpService : Service() {
             val webhookPort = config.webhookPort
             val instance = PebbleWebhookServer(
                 webhookPort,
-                config.token,
+                config.webhookToken,
                 onDied = ::onWebhookServerDied,
                 log = Logs.webhook,
                 // Runs on NanoHTTPD's request thread. enqueue is thread-safe
@@ -449,7 +449,7 @@ class McpService : Service() {
                 applicationContext,
                 config.bindAddress,
                 config.port,
-                config.token,
+                config.mcpToken,
                 onDied = ::onServerDied,
                 log = Logs.mcp,
             )
