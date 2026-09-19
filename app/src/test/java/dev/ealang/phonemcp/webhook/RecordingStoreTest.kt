@@ -136,16 +136,6 @@ class RecordingStoreTest {
     }
 
     @Test
-    fun `transcript marker makes the step idempotent`() {
-        val store = RecordingStore(temp.root)
-        val item = store.enqueue(null, meta())
-
-        assertNull(item.transcript())
-        store.writeTranscript(item, "typed on the phone")
-        assertEquals("typed on the phone", store.pending()[0].transcript())
-    }
-
-    @Test
     fun `two enqueues in the same millisecond get distinct names`() {
         val store = RecordingStore(temp.root)
         val a = store.enqueue(null, meta(1_700_000_000_000L))

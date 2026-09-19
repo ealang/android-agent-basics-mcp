@@ -73,6 +73,13 @@ data class Meta(
 sealed interface StepResult {
     data object Success : StepResult
 
+    /**
+     * Nothing to send — a pocket press or silence. Deleted like Success,
+     * but counted nowhere: the user sent nothing, so nothing was queued,
+     * failed, or sent.
+     */
+    data object Dropped : StepResult
+
     /** Will succeed later — the item stays at the head and blocks the queue. */
     data class Transient(val why: String) : StepResult
 

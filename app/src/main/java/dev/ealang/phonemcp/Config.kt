@@ -56,11 +56,6 @@ class Config(context: Context) {
         }
         set(value) = secrets.put(KEY_TOKEN, value)
 
-    /** The OpenAI API key for transcription, or null while unset. */
-    var openAiKey: String?
-        get() = secrets.get(KEY_OPENAI)
-        set(value) = secrets.put(KEY_OPENAI, value?.trim()?.ifBlank { null })
-
     /**
      * Telegram application credentials, from my.telegram.org. These identify
      * the *application*, not the user — every install of a distributed
@@ -177,7 +172,6 @@ class Config(context: Context) {
         private const val KEY_TOKEN = "token"
         private const val KEY_ENABLED = "enabled"
         private const val KEY_START_FAILURE = "last_start_failure"
-        private const val KEY_OPENAI = "openai_key"
         private const val KEY_TG_API_ID = "telegram_api_id"
         private const val KEY_TG_API_HASH = "telegram_api_hash"
         private const val KEY_TG_CHAT = "telegram_chat_id"

@@ -59,9 +59,6 @@ class RecordingStore(root: File) {
 
         fun audio(): File? = File(dir, AUDIO).takeIf { it.exists() }
 
-        fun transcript(): String? =
-            File(dir, TRANSCRIPT).takeIf { it.exists() }?.readText()
-
         /**
          * The named processor's own state file, opaque to everyone else —
          * `telegram.json` today. Present means the item was handed off and
@@ -109,10 +106,6 @@ class RecordingStore(root: File) {
     fun failed(): List<Item> = itemDirs(failedDir).sortedBy { it.name }.map { Item(it) }
 
     // ------------------------- steps (worker only) -------------------------
-
-    @Throws(IOException::class)
-    fun writeTranscript(item: Item, text: String) =
-        writeSynced(File(item.dir, TRANSCRIPT), text.toByteArray())
 
     @Throws(IOException::class)
     fun writeProcessorState(item: Item, processor: String, state: JSONObject) =
@@ -186,7 +179,6 @@ class RecordingStore(root: File) {
         private const val TAG = "phone-mcp"
         private const val META = "meta.json"
         private const val AUDIO = "audio.m4a"
-        private const val TRANSCRIPT = "transcript.txt"
         private const val REASON = "reason.txt"
     }
 }

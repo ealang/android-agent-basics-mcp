@@ -15,7 +15,6 @@ import dev.ealang.phonemcp.ServerLog
 class PipelineWorker(
     private val store: RecordingStore,
     private val log: ServerLog,
-    private val transcriber: Transcriber,
     private val telegramSender: TelegramSender,
     private val onDrainFinished: (DrainReport) -> Unit,
 ) {
@@ -27,12 +26,6 @@ class PipelineWorker(
 
         /** What became of an item [send] already handed off. */
         fun reconcile(item: RecordingStore.Item): ReconcileResult
-    }
-
-    /** The transcription step, behind an interface so tests need no network. */
-    interface Transcriber {
-        /** Blocking. May take minutes; the worker's thread is for exactly this. */
-        fun transcribe(audio: java.io.File): TranscribeResult
     }
 
     private val thread = HandlerThread("webhook-pipeline")
@@ -112,6 +105,12 @@ class PipelineWorker(
                         store.complete(item)
                     }
                 }
+                is StepResult.Dropped -> {
+                    // Deleted like a completion, but not counted as one:
+                    // nothing was sent, so no counter and no gate reset.
+                    log.info("dropped empty recording", item = item.name)
+                    store.complete(item)
+                }
                 is StepResult.Permanent -> {
                     newlyFailed++
                     log.error("failed", result.why, item.name)
@@ -138,39 +137,24 @@ class PipelineWorker(
      * hand-off marker, not the delivery, is the record the send ran.
      */
     private fun process(item: RecordingStore.Item): StepResult {
-        // Text, in order of preference: already transcribed (the marker file
-        // makes this step idempotent), Pebble's own transcript, or OpenAI on
-        // the audio.
-        val text = item.transcript() ?: item.meta.pebbleTranscript ?: run {
-            val audio = item.audio()
-                ?: return StepResult.Permanent("no audio and no transcript")
-            when (val result = transcriber.transcribe(audio)) {
-                is TranscribeResult.Text -> {
-                    // Written before use: a crash between transcription and
-                    // delivery must not buy the same audio twice.
-                    store.writeTranscript(item, result.text)
-                    log.debug("transcribed", "${result.text.length} chars", item.name)
-                    result.text
-                }
-                is TranscribeResult.Failed -> return result.result
+        // The only text is what the watch transcribed; on-phone transcription
+        // was cut with the OpenAI dependency (2026-09-18). Note the blank
+        // case never reaches here from parsing — Meta coerces a blank
+        // transcript to null — so null covers both absent and empty.
+        val text = item.meta.pebbleTranscript
+        if (text == null) {
+            return if (item.audio() != null) {
+                // Speech was recorded but never transcribed. Terminal: the
+                // item parks in failed/ with its audio intact.
+                StepResult.Permanent("no transcript attached")
+            } else {
+                // Nothing at all — a pocket press or silence.
+                StepResult.Dropped
             }
-        }
-
-        if (text.isBlank()) {
-            // skip_empty: a pocket press or silence. Completing it quietly
-            // is the designed outcome, not an error.
-            return StepResult.Success
         }
 
         if (item.processorState(PROCESSOR_TELEGRAM) == null) {
-            // Where the text came from — the log detail that answers "why
-            // does this message say what it says".
-            val source = when {
-                item.transcript() != null -> "OpenAI transcript"
-                item.meta.pebbleTranscript != null -> "Pebble transcript"
-                else -> "?"
-            }
-            log.debug("delivering", "$source, ${text.length} chars → telegram", item.name)
+            log.debug("delivering", "${text.length} chars → telegram", item.name)
             return telegramSender.send(item, text)
         }
 
