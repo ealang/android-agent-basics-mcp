@@ -27,7 +27,7 @@ class McpServer(
     private val context: Context,
     bindAddress: String,
     port: Int,
-    token: String,
+    token: () -> String,
     onDied: () -> Unit,
     log: ServerLog,
 ) : AuthedHttpServer(bindAddress, port, token, onDied, log) {

@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.padding
 import dev.ealang.phonemcp.MainActivity
 import dev.ealang.phonemcp.MediaListenerService
 import dev.ealang.phonemcp.SecretStore
+import dev.ealang.phonemcp.ServerLog
 import dev.ealang.phonemcp.mcp.apps.Clock
 import dev.ealang.phonemcp.mcp.apps.Locator
 
@@ -175,6 +176,19 @@ val MCP_GRANTS = listOf(
     ),
     BATTERY_GRANT,
 )
+
+/**
+ * The HTTP counters line both tabs open with. Accepted and rejected are kept
+ * apart because an auth rejection still counts as a request — folding them
+ * together made a 401 look like a message that vanished. Rejected appears
+ * only once it has happened; zero would just be noise.
+ */
+fun requestsLine(log: ServerLog): String {
+    val rejected = log.count("rejected")
+    val accepted = log.count("requests") - rejected
+    return "Requests since app start: $accepted accepted" +
+        (if (rejected > 0) ", $rejected rejected" else "")
+}
 
 /**
  * A server's own bearer token, shown inside its settings card. Each server

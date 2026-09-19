@@ -164,8 +164,9 @@ class MainActivity : ComponentActivity() {
     private fun tokenRegenerated(regenerate: () -> Unit) {
         regenerate()
         bump()
-        if (McpService.serviceRunning) startServer()
-        toast("New token — update the client")
+        // No restart: the servers read the token per request, so the new one
+        // is live from this moment — unlike the port, which Save applies.
+        toast("New token, effective now — update the client")
     }
 
     /**

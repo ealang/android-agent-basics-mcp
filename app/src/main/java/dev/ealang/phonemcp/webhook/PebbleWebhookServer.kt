@@ -16,7 +16,7 @@ import java.io.File
 class PebbleWebhookServer(
     /** Read from Config at service start; changing it restarts the service. */
     port: Int,
-    token: String,
+    token: () -> String,
     onDied: () -> Unit,
     log: ServerLog,
     /**

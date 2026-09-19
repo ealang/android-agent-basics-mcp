@@ -106,8 +106,11 @@ class PipelineWorker(
                     }
                 }
                 is StepResult.Dropped -> {
-                    // Deleted like a completion, but not counted as one:
-                    // nothing was sent, so no counter and no gate reset.
+                    // Deleted like a completion, but not one: nothing was
+                    // sent, so no completed++ and no gate reset. Its own
+                    // counter, though — a press that vanished without trace
+                    // read as a lost message until the UI could say "dropped".
+                    log.bump("dropped")
                     log.info("dropped empty recording", item = item.name)
                     store.complete(item)
                 }

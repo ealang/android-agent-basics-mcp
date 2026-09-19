@@ -13,7 +13,13 @@ import org.json.JSONObject
 abstract class AuthedHttpServer(
     bindAddress: String,
     port: Int,
-    private val token: String,
+    /**
+     * Read per request, not captured at bind: pressing Regenerate must take
+     * effect on the very next request, without a server restart. The provider
+     * reads SecretStore's in-process cache, so this costs nothing on the
+     * request thread.
+     */
+    private val token: () -> String,
     onDied: () -> Unit,
     /** This server's log; the socket and every request line go here too. */
     protected val log: ServerLog,
@@ -64,6 +70,7 @@ abstract class AuthedHttpServer(
         }
 
         if (!authorized(session)) {
+            log.bump("rejected")
             log.warn("rejected an unauthorized request", "from ${session.remoteIpAddress}")
             return json(Response.Status.UNAUTHORIZED, JSONObject().put("error", "Unauthorized"))
         }
@@ -80,7 +87,7 @@ abstract class AuthedHttpServer(
     private fun authorized(session: IHTTPSession): Boolean {
         // NanoHTTPD lowercases header names.
         val header = session.headers["authorization"] ?: return false
-        return constantTimeEquals(header, "Bearer $token")
+        return constantTimeEquals(header, "Bearer ${token()}")
     }
 
     /**
