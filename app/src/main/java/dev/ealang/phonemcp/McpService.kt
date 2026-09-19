@@ -445,7 +445,6 @@ class McpService : Service() {
                 enqueue = { audio, meta ->
                     val item = store?.enqueue(audio, meta)
                         ?: throw IllegalStateException("pipeline not started")
-                    Logs.webhook.bump("received")
                     Logs.webhook.info("received", meta.trigger.name, item.name)
                     worker?.wake()
                 },

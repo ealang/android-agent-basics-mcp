@@ -78,12 +78,13 @@ fun WebhookTab(activity: MainActivity) {
             val (pending, failed) = McpService.pipelineSnapshot()
                 ?: RecordingStore(activity.filesDir).let { it.pending().size to it.failed() }
 
-            // Received/sent count since app start; queued/failed are live from
-            // the store, and survive a restart the way the counters do not.
+            // Requests/sent count since app start (same wording as the MCP
+            // tab); queued/failed are live from the store, and survive a
+            // restart the way the counters do not.
             StatusText(
-                "Received: ${Logs.webhook.count("received")}   " +
-                    "Sent: ${Logs.webhook.count("sent")}   " +
-                    "Queued: $pending   Failed: ${failed.size}",
+                "Requests since app start: ${Logs.webhook.count("requests")}\n" +
+                    "Queued: $pending   Failed: ${failed.size}   " +
+                    "Sent: ${Logs.webhook.count("sent")}",
             )
 
             for (item in failed) {

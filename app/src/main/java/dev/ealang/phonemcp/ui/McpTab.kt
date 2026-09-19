@@ -84,7 +84,7 @@ fun McpTab(activity: MainActivity) {
         SectionCard("Logs") {
             StatusText(
                 "Requests since app start: ${Logs.mcp.count("requests")}\n" +
-                    "Failed tool calls: ${Logs.mcp.count("failures")}",
+                    "Failed: ${Logs.mcp.count("failures")}",
             )
             OutlinedButton(onClick = { logDialog = true }) { Text("View server log") }
         }
