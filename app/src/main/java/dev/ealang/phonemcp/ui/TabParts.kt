@@ -178,16 +178,21 @@ val MCP_GRANTS = listOf(
 )
 
 /**
- * The HTTP counters line both tabs open with. Accepted and rejected are kept
- * apart because an auth rejection still counts as a request — folding them
- * together made a 401 look like a message that vanished. Rejected appears
- * only once it has happened; zero would just be noise.
+ * The HTTP counters line both tabs open with, counting since app start.
+ * Accepted and rejected are kept apart because an auth rejection still
+ * counts as a request — folding them together made a 401 look like a
+ * message that vanished. Each part appears only once it has happened
+ * ("0 accepted" on a fresh start read awkwardly); before anything has,
+ * the line is just "Request status: 0".
  */
 fun requestsLine(log: ServerLog): String {
     val rejected = log.count("rejected")
     val accepted = log.count("requests") - rejected
-    return "Requests since app start: $accepted accepted" +
-        (if (rejected > 0) ", $rejected rejected" else "")
+    val parts = listOfNotNull(
+        "$accepted accepted".takeIf { accepted > 0 },
+        "$rejected rejected".takeIf { rejected > 0 },
+    )
+    return "Request status: " + (parts.joinToString(", ").ifEmpty { "0" })
 }
 
 /**

@@ -146,6 +146,20 @@ class McpService : Service() {
         }
 
         /**
+         * Everything out, queued and failed alike — the escape hatch for a
+         * backlog nobody wants delivered (a logged-out Telegram quietly
+         * queues every send). Runs on the worker thread like the per-item
+         * buttons, so a drain in progress finishes its current item first
+         * and never sees a directory vanish under it.
+         */
+        fun clearMessages(context: Context) {
+            onPipeline(context) { store ->
+                store.pending().forEach(store::discard)
+                store.failed().forEach(store::discard)
+            }
+        }
+
+        /**
          * Runs the action on the worker thread when the service is up, else
          * directly on a fresh store — safe, because no worker means no other
          * writer exists.

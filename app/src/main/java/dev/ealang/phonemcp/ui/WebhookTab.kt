@@ -78,7 +78,7 @@ fun WebhookTab(activity: MainActivity) {
             val dropped = Logs.webhook.count("dropped")
             StatusText(
                 requestsLine(Logs.webhook) + "\n" +
-                    "Messages — queued: $pending   sent: " +
+                    "Message status: queued: $pending   sent: " +
                     "${Logs.webhook.count("sent")}   failed: ${failed.size}" +
                     (if (dropped > 0) "   dropped: $dropped" else ""),
             )
@@ -99,7 +99,17 @@ fun WebhookTab(activity: MainActivity) {
                 }
             }
 
-            OutlinedButton(onClick = { pipelineDialog = true }) { Text("View server log") }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { pipelineDialog = true }) { Text("View server log") }
+                // Only when there is something to clear: on a healthy idle
+                // pipeline the button would just invite an accident.
+                if (pending > 0 || failed.isNotEmpty()) {
+                    OutlinedButton(onClick = {
+                        McpService.clearMessages(activity)
+                        activity.bumpSoon()
+                    }) { Text("Clear messages") }
+                }
+            }
         }
 
         CollapsibleCard("Server settings") {
