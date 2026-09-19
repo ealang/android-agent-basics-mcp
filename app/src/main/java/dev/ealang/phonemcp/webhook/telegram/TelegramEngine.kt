@@ -10,6 +10,7 @@ import dev.ealang.phonemcp.Config
 import org.drinkless.tdlib.Client
 import org.drinkless.tdlib.TdApi
 import java.io.File
+import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -444,19 +445,31 @@ object TelegramEngine {
                     databaseDirectory = File(base, "db").apply { mkdirs() }.absolutePath
                     filesDirectory = File(base, "files").apply { mkdirs() }.absolutePath
                     databaseEncryptionKey = config.telegramDbKey
-                    useFileDatabase = true
-                    useChatInfoDatabase = true
+                    // These three are one decision, not three: TdApi documents
+                    // useMessageDatabase as implying useChatInfoDatabase, which
+                    // implies useFileDatabase. Spelled out anyway so nobody
+                    // "tidies up" the bottom two and changes behaviour.
+                    //
                     // The message database is what makes GetMessage answer for
                     // sends that outlived a restart — the reconcile sweep
-                    // (step 3) depends on it, so it is on from the start.
+                    // (step 3) depends on it, so it is on from the start. The
+                    // chat info database is what keeps the stored destination
+                    // resolvable across restarts; without it every cold start
+                    // reproduces the "Chat not found" the owner hit after a logout.
+                    useFileDatabase = true
+                    useChatInfoDatabase = true
                     useMessageDatabase = true
                     useSecretChats = false
                     apiId = BuildConfig.TELEGRAM_API_ID
                     apiHash = BuildConfig.TELEGRAM_API_HASH
-                    systemLanguageCode = "en-US"
+                    // Everything below shows in Telegram's own Devices list,
+                    // which is how the user recognises this session well
+                    // enough to revoke it. The version comes from the build so
+                    // the entry ages with the app instead of saying 0.1 for ever.
+                    systemLanguageCode = Locale.getDefault().toLanguageTag()
                     deviceModel = Build.MODEL ?: "Android"
                     systemVersion = "Android ${Build.VERSION.RELEASE ?: "unknown"}"
-                    applicationVersion = "0.1"
+                    applicationVersion = BuildConfig.VERSION_NAME
                 }
                 tdClient.send(request) { result ->
                     if (result is TdApi.Error) {
@@ -466,6 +479,7 @@ object TelegramEngine {
                         }
                     }
                 }
+                applySendOnlyOptions(tdClient)
             }
 
             is TdApi.AuthorizationStateReady -> {
@@ -519,6 +533,38 @@ object TelegramEngine {
             else -> Unit
         }
         changed()
+    }
+
+    /**
+     * Switch off the parts of TDLib a send-only client never reads
+     * (audit of 2026-09-19, docs/initial-release.md §3). TDLib defaults suit a
+     * full chat client: it keeps network statistics on disk for ever, saves
+     * the thumbnail the server attaches to every incoming message, and
+     * maintains a top-chats ranking. This app sends, and its picker orders by
+     * the main chat list rather than by top chats, so all three are pure cost
+     * on a phone.
+     *
+     * Set here rather than after login because options survive in the database
+     * but a fresh install has none, and there is no later point every start
+     * passes through. Failures are logged and ignored: an option TDLib no
+     * longer recognises is not a reason to fail a login.
+     *
+     * Deliberately *not* set: `ignore_background_updates`, which looks like it
+     * would cut the reconnect storm but is documented as doing nothing while
+     * a database is in use — and ours is load-bearing. Left alone as judgment
+     * calls for the owner: `disable_time_adjustment_protection` and
+     * `use_storage_optimizer`.
+     */
+    private fun applySendOnlyOptions(tdClient: Client) {
+        for (name in listOf(
+            "disable_persistent_network_statistics",
+            "ignore_inline_thumbnails",
+            "disable_top_chats",
+        )) {
+            tdClient.send(TdApi.SetOption(name, TdApi.OptionValueBoolean(true))) { result ->
+                if (result is TdApi.Error) Log.w(TAG, "SetOption $name: ${result.message}")
+            }
+        }
     }
 
     private fun changed() = onChanged()
