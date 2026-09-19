@@ -36,7 +36,7 @@ import dev.ealang.phonemcp.mcp.apps.Clock
 import dev.ealang.phonemcp.mcp.apps.Locator
 
 /**
- * MOCK-UP. Shared pieces of the two-tab layout: the server's own control at
+ * Shared pieces of the two-tab layout: the server's own control at
  * the top of its page, the missing-setup card that appears directly under
  * it, and the token block each server settings card carries.
  */

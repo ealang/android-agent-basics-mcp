@@ -20,7 +20,7 @@ import androidx.compose.ui.Modifier
 import dev.ealang.phonemcp.MainActivity
 
 /**
- * MOCK-UP shell: two tabs, one per half of the app. Each page is
+ * The app's shell: two tabs, one per half of the app. Each page is
  * self-contained — its server's switch on top, then its setup, its status,
  * its settings — so there is no shared status page to cross-reference and
  * no title bar needed to say which half you are looking at. The activity is

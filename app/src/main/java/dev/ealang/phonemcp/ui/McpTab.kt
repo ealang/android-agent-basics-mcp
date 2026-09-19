@@ -33,8 +33,8 @@ import kotlinx.coroutines.delay
 
 private data class Feature(val key: String, val title: String, val description: String)
 
-// One row per switch-off-able slice of the tool surface. MOCK-UP: only the
-// generic tier is shown; the app-specific switches are hidden, not removed.
+// One row per switch-off-able slice of the tool surface. Only the generic
+// tier is shown; the app-specific switches are hidden, not removed.
 private val GENERIC = listOf(
     Feature("intents", "Intents", "send_intent, intent_scan, intent_resolve — raw Android intents, sent exactly as given."),
     Feature("content_providers", "Content providers", "Reading other apps' automation surfaces, like the recorder's file list."),
@@ -43,7 +43,7 @@ private val GENERIC = listOf(
 )
 
 /**
- * MOCK-UP. The other half of the app on one page: the MCP server's switch,
+ * The other half of the app on one page: the MCP server's switch,
  * whatever setup is missing, its logs, its settings, and which tools it
  * offers. Tool switches take effect immediately — a switched-off tool
  * disappears from tools/list and is refused if called anyway.

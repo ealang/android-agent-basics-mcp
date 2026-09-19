@@ -123,16 +123,25 @@ data class DrainReport(
 object WebhookConfig {
 
     /**
-     * Every destination this press fans out to: switched on *and* claiming
-     * the button. Fan-out, not one-of — a press configured for both writes
-     * the note and sends the message. Empty is a valid answer: the user has
-     * routed this press nowhere, and the item completes quietly.
+     * Every destination this press fans out to. Telegram is policy, not
+     * preference: the release layout has no switch for it, so it is always
+     * on and claims every press — here, in the routing, not written into
+     * prefs by the UI (which would leave a fresh install routing nowhere
+     * until the tab was first drawn). The note destination is still
+     * config-driven, pending its removal from the release. Fan-out, not
+     * one-of — a press configured for both writes the note and sends the
+     * message.
      */
-    fun destinationsFor(config: Config, trigger: Trigger): Set<Destination> =
-        Destination.entries.filterTo(mutableSetOf()) { destination ->
-            val key = key(destination)
-            config.featureEnabled(key) && claims(config.buttonAssignment(key), trigger)
+    fun destinationsFor(config: Config, trigger: Trigger): Set<Destination> {
+        val destinations = mutableSetOf(Destination.TELEGRAM)
+        val noteKey = key(Destination.NOTE)
+        if (config.featureEnabled(noteKey) &&
+            claims(config.buttonAssignment(noteKey), trigger)
+        ) {
+            destinations.add(Destination.NOTE)
         }
+        return destinations
+    }
 
     /** The Config key for a destination — feature switch and button row alike. */
     fun key(destination: Destination): String = when (destination) {

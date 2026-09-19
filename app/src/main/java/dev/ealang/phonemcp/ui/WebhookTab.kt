@@ -17,7 +17,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,7 +36,7 @@ import dev.ealang.phonemcp.webhook.RecordingStore
 import dev.ealang.phonemcp.webhook.telegram.TelegramEngine
 
 /**
- * MOCK-UP. Half the app on one page: the webhook server's switch, whatever
+ * Half the app on one page: the webhook server's switch, whatever
  * setup is missing, how the pipeline is doing, the server's own settings,
  * and the single destination — Telegram, always on, taking every press.
  */
@@ -45,14 +44,6 @@ import dev.ealang.phonemcp.webhook.telegram.TelegramEngine
 fun WebhookTab(activity: MainActivity) {
     activity.tick.intValue // subscribe
     val config = activity.config
-
-    // The destination has no switch in this layout, so it is simply on and
-    // claims both buttons. Mock-up shortcut: written from the UI rather
-    // than changing what the pipeline reads.
-    LaunchedEffect(Unit) {
-        config.setFeatureEnabled("telegram", true)
-        config.setButtonAssignment("telegram", "both")
-    }
 
     var pipelineDialog by remember { mutableStateOf(false) }
 
