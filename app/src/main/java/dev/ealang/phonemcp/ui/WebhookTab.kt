@@ -157,8 +157,11 @@ fun WebhookTab(activity: MainActivity) {
             // cannot confirm the session is still good, so "connected as …"
             // alongside "offline" was a contradiction, not extra detail.
             val (line, fine) = when {
-                TelegramEngine.stage == TelegramEngine.Stage.OFF ->
-                    "Not configured — save an API ID and hash below." to false
+                // Only in a build made without credentials — nothing the
+                // user can fix on the phone, so it names the build, not a
+                // field that no longer exists.
+                !TelegramEngine.configured ->
+                    "This build has no Telegram credentials." to false
                 health == TelegramEngine.Health.NOT_AUTHENTICATED ->
                     "Not authenticated — log in below." to false
                 health == TelegramEngine.Health.OFFLINE ->
@@ -175,39 +178,11 @@ fun WebhookTab(activity: MainActivity) {
                 color = if (fine) okGreen else MaterialTheme.colorScheme.error,
             )
 
-            var apiId by remember { mutableStateOf(config.telegramApiId?.toString() ?: "") }
-            var apiHash by remember { mutableStateOf(config.telegramApiHash ?: "") }
-            OutlinedTextField(
-                value = apiId,
-                onValueChange = { apiId = it },
-                label = { Text("API ID (my.telegram.org)") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedTextField(
-                value = apiHash,
-                onValueChange = { apiHash = it },
-                label = { Text("API hash") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedButton(onClick = {
-                val id = apiId.trim().toIntOrNull()
-                if (id == null || id <= 0) {
-                    activity.toast("API ID must be a positive number")
-                    return@OutlinedButton
-                }
-                config.telegramApiId = id
-                config.telegramApiHash = apiHash
-                if (config.telegramApiHash == null) {
-                    activity.toast("API hash is empty")
-                    return@OutlinedButton
-                }
-                TelegramEngine.ensureStarted(activity)
-                activity.toast("Saved")
-                activity.bump()
-            }) { Text("Save credentials") }
+            // No API ID/hash fields: the pair is baked in at build time
+            // (2026-09-19). They identify the app rather than the account,
+            // so every install shares one pair and there was nothing for
+            // the user to decide — only a my.telegram.org errand standing
+            // between them and a working app.
 
             // Login lives in a dialog now, not an
             // always-there field: Log in whenever anything short of a

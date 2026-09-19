@@ -5,6 +5,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import dev.ealang.phonemcp.BuildConfig
 import dev.ealang.phonemcp.Config
 import org.drinkless.tdlib.Client
 import org.drinkless.tdlib.TdApi
@@ -116,19 +117,19 @@ object TelegramEngine {
             else -> Stage.STARTING
         }
 
+    /** Whether this build carries Telegram credentials at all. */
+    val configured: Boolean
+        get() = BuildConfig.TELEGRAM_API_ID > 0 && BuildConfig.TELEGRAM_API_HASH.isNotEmpty()
+
     /**
-     * Bring the client up if the credentials exist; a no-op when it already
-     * runs. Called from both the activity and the service — whichever gets
-     * there first wins, the other finds it running. Changing the api id/hash
-     * after the client exists needs a process restart (TDLib takes its
-     * parameters exactly once); saving new values while running just leaves
-     * the old client in place until then.
+     * Bring the client up if this build has credentials; a no-op when it
+     * already runs. Called from both the activity and the service — whichever
+     * gets there first wins, the other finds it running.
      */
     fun ensureStarted(context: Context) {
         appContext = context.applicationContext
         if (client != null) return
-        val config = Config(context)
-        if (config.telegramApiId == null || config.telegramApiHash == null) {
+        if (!configured) {
             changed()
             return
         }
@@ -322,7 +323,9 @@ object TelegramEngine {
     fun statusLine(): String {
         val problem = lastProblem?.let { "\nProblem: $it" } ?: ""
         return when (stage) {
-            Stage.OFF -> "Not configured — save an API ID and hash below."
+            // Only reachable in a build made without TELEGRAM_API_ID and
+            // TELEGRAM_API_HASH: nothing the user can fix on the phone.
+            Stage.OFF -> "This build has no Telegram credentials."
             Stage.STARTING -> "Starting…$problem"
             Stage.PHONE -> "Enter your phone number, with country code (+1…).$problem"
             Stage.CODE -> "Telegram sent a login code — enter it below.$problem"
@@ -384,8 +387,8 @@ object TelegramEngine {
                     // (step 3) depends on it, so it is on from the start.
                     useMessageDatabase = true
                     useSecretChats = false
-                    apiId = config.telegramApiId ?: 0
-                    apiHash = config.telegramApiHash.orEmpty()
+                    apiId = BuildConfig.TELEGRAM_API_ID
+                    apiHash = BuildConfig.TELEGRAM_API_HASH
                     systemLanguageCode = "en-US"
                     deviceModel = Build.MODEL ?: "Android"
                     systemVersion = "Android ${Build.VERSION.RELEASE ?: "unknown"}"
