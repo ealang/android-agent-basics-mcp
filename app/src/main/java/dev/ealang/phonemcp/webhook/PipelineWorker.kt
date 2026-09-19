@@ -3,6 +3,7 @@ package dev.ealang.phonemcp.webhook
 import android.os.Handler
 import android.os.HandlerThread
 import android.util.Log
+import dev.ealang.phonemcp.ServerLog
 
 /**
  * The one thread that mutates the queue past enqueue. Inbound surface:
@@ -13,7 +14,7 @@ import android.util.Log
  */
 class PipelineWorker(
     private val store: RecordingStore,
-    private val log: PipelineLog,
+    private val log: ServerLog,
     private val noteWriter: NoteWriter,
     private val transcriber: Transcriber,
     private val telegramSender: TelegramSender,
@@ -102,32 +103,34 @@ class PipelineWorker(
                         when (val settled = telegramSender.reconcile(item)) {
                             is ReconcileResult.Delivered -> {
                                 completed++
-                                log.record(item.name, "completed")
+                                log.bump("sent")
+                                log.info("completed", item = item.name)
                                 store.complete(item)
                             }
                             is ReconcileResult.Failed -> {
                                 newlyFailed++
-                                log.record(item.name, "failed", settled.why)
+                                log.error("failed", settled.why, item.name)
                                 store.fail(item, settled.why)
                             }
                             is ReconcileResult.Pending -> {}
                         }
                     } else {
                         completed++
-                        log.record(item.name, "completed")
+                        log.info("completed", item = item.name)
                         store.complete(item)
                     }
                 }
                 is StepResult.Permanent -> {
                     newlyFailed++
-                    log.record(item.name, "failed", result.why)
+                    log.error("failed", result.why, item.name)
                     store.fail(item, result.why)
                 }
                 is StepResult.Transient -> {
                     // Ordering: nothing behind this item may pass it. Stop —
                     // don't sleep — and let the orchestrator decide when to
-                    // wake us again.
-                    log.record(item.name, "waiting", result.why)
+                    // wake us again. Debug: this line repeats every drain
+                    // while blocked, and only the first would be news.
+                    log.debug("waiting", result.why, item.name)
                     blockedOn = "${item.name}: ${result.why}"
                     break
                 }
@@ -152,7 +155,7 @@ class PipelineWorker(
             // the configured outcome. (With a Telegram hand-off outstanding
             // the caller still reconciles — this Success is not a delete.)
             if (item.processorState(PROCESSOR_TELEGRAM) == null) {
-                log.record(item.name, "skipped", "no destination claims this press")
+                log.info("skipped", "no destination claims this press", item.name)
             }
             return StepResult.Success
         }
@@ -168,7 +171,7 @@ class PipelineWorker(
                     // Written before use: a crash between transcription and
                     // delivery must not buy the same audio twice.
                     store.writeTranscript(item, result.text)
-                    log.record(item.name, "transcribed", "${result.text.length} chars")
+                    log.debug("transcribed", "${result.text.length} chars", item.name)
                     result.text
                 }
                 is TranscribeResult.Failed -> return result.result
@@ -198,7 +201,7 @@ class PipelineWorker(
         // naming turns that into a " (2).md", the at-least-once cost this
         // pipeline accepts everywhere (same window as the transcript step).
         if (Destination.NOTE in destinations && item.processorState(PROCESSOR_NOTE) == null) {
-            log.record(item.name, "delivering", "$source, ${text.length} chars → note")
+            log.debug("delivering", "$source, ${text.length} chars → note", item.name)
             val result = noteWriter.write(text, recordedAt)
             if (result !is StepResult.Success) return result
             store.writeProcessorState(
@@ -209,7 +212,7 @@ class PipelineWorker(
         }
 
         if (Destination.TELEGRAM in destinations && item.processorState(PROCESSOR_TELEGRAM) == null) {
-            log.record(item.name, "delivering", "$source, ${text.length} chars → telegram")
+            log.debug("delivering", "$source, ${text.length} chars → telegram", item.name)
             return telegramSender.send(item, text)
         }
 

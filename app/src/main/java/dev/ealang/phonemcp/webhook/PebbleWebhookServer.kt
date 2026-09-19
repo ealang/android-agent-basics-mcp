@@ -2,6 +2,7 @@ package dev.ealang.phonemcp.webhook
 
 import android.util.Log
 import dev.ealang.phonemcp.AuthedHttpServer
+import dev.ealang.phonemcp.ServerLog
 import org.json.JSONObject
 import java.io.File
 
@@ -17,6 +18,7 @@ class PebbleWebhookServer(
     port: Int,
     token: String,
     onDied: () -> Unit,
+    log: ServerLog,
     /**
      * Durably admit one recording — the orchestrator's `store.enqueue` +
      * `worker.wake()`, handed in as a lambda so the server knows nothing
@@ -24,7 +26,7 @@ class PebbleWebhookServer(
      * 500 so the watch retries.
      */
     private val enqueue: (audio: File?, meta: Meta) -> Unit,
-) : AuthedHttpServer(BIND, port, token, onDied) {
+) : AuthedHttpServer(BIND, port, token, onDied, log) {
 
     companion object {
         private const val TAG = "PebbleWebhookServer"
@@ -102,6 +104,9 @@ class PebbleWebhookServer(
             json(Response.Status.OK, JSONObject().put("status", "queued"))
         } catch (e: Exception) {
             Log.e(TAG, "Could not enqueue a webhook recording", e)
+            // The high-level story owes a line either way; the success line is
+            // the orchestrator's enqueue, so the failure is written here.
+            log.error("message received but could not be queued", e.message ?: e::class.java.simpleName)
             json(
                 Response.Status.INTERNAL_ERROR,
                 JSONObject().put("error", "could not queue the recording"),

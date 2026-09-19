@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import dev.ealang.phonemcp.AuthedHttpServer
 import dev.ealang.phonemcp.Config
+import dev.ealang.phonemcp.ServerLog
 import dev.ealang.phonemcp.mcp.apps.AppTools
 import dev.ealang.phonemcp.mcp.generic.GenericTools
 import dev.ealang.phonemcp.mcp.pebble.PebbleTools
@@ -28,7 +29,8 @@ class McpServer(
     port: Int,
     token: String,
     onDied: () -> Unit,
-) : AuthedHttpServer(bindAddress, port, token, onDied) {
+    log: ServerLog,
+) : AuthedHttpServer(bindAddress, port, token, onDied, log) {
 
     /**
      * The whole tool surface, one [ToolSpec] per tool, in the order tools/list
@@ -55,6 +57,10 @@ class McpServer(
         private const val TAG = "PhoneMcpServer"
         private const val FALLBACK_PROTOCOL = "2025-11-25"
         const val MCP_PATH = "/mcp"
+
+        /** Argument names that identify a call's subject, most specific first. */
+        private val SUBJECT_KEYS =
+            listOf("action", "uri", "app", "package", "destination", "query")
     }
 
     override fun serves(uri: String): Boolean = uri == MCP_PATH
@@ -166,6 +172,18 @@ class McpServer(
                 } catch (t: Throwable) {
                     Log.w(TAG, "Tool $name threw", t)
                     "FAILED: ${t.javaClass.simpleName}: ${t.message ?: "no detail"}" to true
+                }
+                // The high-level line: which tool, on what — never the full
+                // payload. The subject is whichever argument names the thing
+                // acted on, and most tools have exactly one of these keys.
+                val subject = SUBJECT_KEYS.firstNotNullOfOrNull {
+                    args.optString(it).ifBlank { null }
+                }
+                if (isError) {
+                    log.bump("failures")
+                    log.warn("tool $name failed", text.take(120))
+                } else {
+                    log.info("tool $name", subject)
                 }
                 rpcOk(
                     id,

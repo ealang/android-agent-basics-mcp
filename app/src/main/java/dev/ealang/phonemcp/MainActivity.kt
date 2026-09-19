@@ -21,14 +21,13 @@ import androidx.compose.runtime.mutableIntStateOf
 import dev.ealang.phonemcp.mcp.McpServer
 import dev.ealang.phonemcp.mcp.apps.Locator
 import dev.ealang.phonemcp.ui.PhoneMcpApp
-import dev.ealang.phonemcp.webhook.PipelineLog
 import dev.ealang.phonemcp.webhook.PebbleWebhookServer
 import dev.ealang.phonemcp.webhook.telegram.TelegramEngine
 import dev.ealang.phonemcp.ui.PhoneMcpTheme
 
 /**
- * Three tabs on a bottom bar: Status (the servers, token, logs, permissions),
- * Pebble (the webhook pipeline and its destinations), MCP (the tool surface).
+ * Two tabs on a bottom bar: Webhook (the pipeline and its destinations) and
+ * MCP (the tool server) — one tab per server, like one log per server.
  *
  * The activity owns the non-UI glue — config, service calls, permission
  * requests — and one piece of state the whole UI hangs off: [tick], a counter
@@ -40,8 +39,6 @@ import dev.ealang.phonemcp.ui.PhoneMcpTheme
 class MainActivity : ComponentActivity() {
 
     lateinit var config: Config
-        private set
-    lateinit var pipelineLog: PipelineLog
         private set
 
     /** Bumped on any state change; every tab subscribes by reading it. */
@@ -65,7 +62,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         config = Config(this)
-        pipelineLog = PipelineLog(filesDir)
+        Logs.init(filesDir)
 
         // First contact with the Keystore can take seconds (it generates the
         // wrapping key on the very first launch), so it goes to a worker
@@ -78,10 +75,10 @@ class MainActivity : ComponentActivity() {
             bump()
         }
 
-        // A start that failed took the event log down with the process, so
-        // replay the surviving reason into it — otherwise the only symptom is
-        // a server that is silently not running.
-        config.lastStartFailure?.let { EventLog.record("earlier: $it") }
+        // A start that failed may have taken the process down before the logs
+        // could say so, so replay the surviving reason — otherwise the only
+        // symptom is a server that is silently not running.
+        config.lastStartFailure?.let { why -> Logs.both { it.warn("earlier", why) } }
 
         setContent {
             PhoneMcpTheme {
@@ -305,7 +302,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/** Matches the ring buffers' capacity — "everything we still have". */
+/** How much of a server log one dialog shows; the files keep more. */
 const val LOG_DIALOG_LINES = 50
 
 private val LITERAL_IPV4 =

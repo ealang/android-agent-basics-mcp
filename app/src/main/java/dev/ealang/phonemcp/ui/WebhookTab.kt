@@ -2,7 +2,6 @@ package dev.ealang.phonemcp.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -10,16 +9,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -29,45 +27,109 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import dev.ealang.phonemcp.Config
+import dev.ealang.phonemcp.LOG_DIALOG_LINES
+import dev.ealang.phonemcp.Logs
 import dev.ealang.phonemcp.MainActivity
-import dev.ealang.phonemcp.webhook.WebhookConfig
+import dev.ealang.phonemcp.McpService
+import dev.ealang.phonemcp.webhook.PebbleWebhookServer
+import dev.ealang.phonemcp.webhook.RecordingStore
 import dev.ealang.phonemcp.webhook.telegram.TelegramEngine
 
 /**
- * One card per destination a watch button press flows into. Each carries its
- * own on/off switch and a "which presses" selector; a press fans out to every
- * destination that is on and claims it (WebhookConfig.destinationsFor),
- * resolved at pickup — so a change here re-routes items still queued. The
- * pipeline's queue and the file-access grant live on the Status tab.
+ * MOCK-UP. Half the app on one page: the webhook server's switch, whatever
+ * setup is missing, how the pipeline is doing, the server's own settings,
+ * and the single destination — Telegram, always on, taking every press.
  */
 @Composable
-fun PebbleTab(activity: MainActivity) {
+fun WebhookTab(activity: MainActivity) {
     activity.tick.intValue // subscribe
     val config = activity.config
+
+    // The destination has no switch in this layout, so it is simply on and
+    // claims both buttons. Mock-up shortcut: written from the UI rather
+    // than changing what the pipeline reads.
+    LaunchedEffect(Unit) {
+        config.setFeatureEnabled("telegram", true)
+        config.setButtonAssignment("telegram", "both")
+    }
+
+    var pipelineDialog by remember { mutableStateOf(false) }
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        val telegramReady = TelegramEngine.stage == TelegramEngine.Stage.READY
-        val telegramChatSet = config.telegramChatId != null
-        FeatureCard(
-            activity,
-            title = "Telegram forwarding",
-            switchTitle = "Forward recordings to Telegram",
-            supporting = "Applies at pickup — recordings still queued follow the new setting.",
-            featureKey = "telegram",
-            status = when {
-                !telegramReady -> "Not configured — not logged in to Telegram."
-                !telegramChatSet -> "Not configured — no destination chat chosen."
-                else -> "Configured — logged in, destination chat set."
-            },
-            statusWarn = !(telegramReady && telegramChatSet),
-        ) {
-            ButtonAssignmentRow(activity, "telegram")
+        val on = config.featureEnabled(Config.FEATURE_WEBHOOK)
+        ServerHeader(
+            icon = Icons.Filled.Watch,
+            title = "Pebble webhook",
+            on = on,
+            bound = McpService.webhookRunning,
+            offText = "Off — the watch gets connection refused and retries later.",
+            boundText = "Listening on ${PebbleWebhookServer.BIND}:${config.webhookPort}.",
+            failingText = "On but not listening — see the server log.",
+            onChange = { activity.setWebhookEnabled(it) },
+        )
+
+        SetupCard(activity, listOf(BATTERY_GRANT))
+
+        SectionCard("Pipeline") {
+            val (pending, failed) = McpService.pipelineSnapshot()
+                ?: RecordingStore(activity.filesDir).let { it.pending().size to it.failed() }
+
+            // Received/sent count since app start; queued/failed are live from
+            // the store, and survive a restart the way the counters do not.
+            StatusText(
+                "Received: ${Logs.webhook.count("received")}   " +
+                    "Sent: ${Logs.webhook.count("sent")}   " +
+                    "Queued: $pending   Failed: ${failed.size}",
+            )
+
+            for (item in failed) {
+                HorizontalDivider()
+                Text(item.name, style = MaterialTheme.typography.bodyMedium)
+                StatusText(item.failureReason() ?: "(no reason recorded)")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = {
+                        McpService.retryFailed(activity, item.name)
+                        activity.bumpSoon()
+                    }) { Text("Retry") }
+                    OutlinedButton(onClick = {
+                        McpService.discardFailed(activity, item.name)
+                        activity.bumpSoon()
+                    }) { Text("Discard") }
+                }
+            }
+
+            OutlinedButton(onClick = { pipelineDialog = true }) { Text("View server log") }
+        }
+
+        CollapsibleCard("Server settings") {
+            TokenBlock(activity)
 
             HorizontalDivider()
 
+            StatusText("Receives at ${activity.webhookUrl()} — this phone only.")
+            OutlinedButton(onClick = {
+                activity.copyToClipboard("webhook URL", activity.webhookUrl())
+            }) { Text("Copy webhook URL") }
+
+            var portText by remember { mutableStateOf(config.webhookPort.toString()) }
+            OutlinedTextField(
+                value = portText,
+                onValueChange = { portText = it },
+                label = { Text("Port") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedButton(onClick = { activity.saveWebhookPort(portText) }) {
+                Text("Save and apply")
+            }
+        }
+
+        CollapsibleCard("Telegram forwarding") {
             StatusText(TelegramEngine.statusLine())
 
             var apiId by remember { mutableStateOf(config.telegramApiId?.toString() ?: "") }
@@ -99,8 +161,6 @@ fun PebbleTab(activity: MainActivity) {
                     activity.toast("API hash is empty")
                     return@OutlinedButton
                 }
-                // Takes effect now on first save; after that TDLib holds its
-                // parameters until the process restarts.
                 TelegramEngine.ensureStarted(activity)
                 activity.toast("Saved")
                 activity.bump()
@@ -122,7 +182,6 @@ fun PebbleTab(activity: MainActivity) {
                         },
                     )
                 },
-                // The code and password should not echo; the phone number is fine.
                 visualTransformation = if (stage == TelegramEngine.Stage.PASSWORD) {
                     PasswordVisualTransformation()
                 } else {
@@ -179,80 +238,17 @@ fun PebbleTab(activity: MainActivity) {
                 activity.toast("Saved — applies from the next forwarded message")
             }) { Text("Save signature") }
         }
-
-        FeatureCard(
-            activity,
-            title = "Markdown notes",
-            switchTitle = "Write notes to a Markdown file",
-            supporting = "Applies at pickup — recordings still queued follow the new setting.",
-            featureKey = "markdown",
-            status = "Notes are written to ${WebhookConfig.NOTES_DIR}.",
-        ) {
-            ButtonAssignmentRow(activity, "markdown")
-        }
     }
-}
 
-/**
- * A destination card whose settings collapse behind a Show/Hide link.
- * Flipping the switch resets the fold to match it (remember is keyed on
- * the switch): off collapses — the body is inert then, and hiding it says
- * so louder than dimming would — and on expands, ready to configure. The
- * [status] line stays visible either way, so a collapsed card still says
- * whether the destination is actually ready to receive.
- */
-@Composable
-private fun FeatureCard(
-    activity: MainActivity,
-    title: String,
-    switchTitle: String,
-    supporting: String?,
-    featureKey: String,
-    status: String? = null,
-    statusWarn: Boolean = false,
-    content: @Composable ColumnScope.() -> Unit,
-) {
-    val config = activity.config
-    val on = config.featureEnabled(featureKey)
-    SectionCard(title) {
-        SwitchRow(
-            title = switchTitle,
-            supporting = supporting,
-            checked = on,
-            onChange = { config.setFeatureEnabled(featureKey, it); activity.bump() },
+    if (pipelineDialog) {
+        LogDialog(
+            title = "Webhook server log",
+            lines = Logs.webhook.tail(LOG_DIALOG_LINES),
+            onDismiss = { pipelineDialog = false },
+            onClear = {
+                Logs.webhook.clear()
+                activity.toast("Log cleared")
+            },
         )
-        status?.let { StatusText(it, warn = statusWarn) }
-        var expanded by remember(on) { mutableStateOf(on) }
-        if (expanded) content()
-        TextButton(onClick = { expanded = !expanded }) {
-            Text(if (expanded) "Hide settings" else "Show settings")
-        }
-    }
-}
-
-/**
- * Which watch presses this destination claims. A press fans out to every
- * destination claiming it, so "Both" on two cards means both fire.
- */
-@Composable
-private fun ButtonAssignmentRow(activity: MainActivity, destination: String) {
-    val config = activity.config
-    val options = listOf("single" to "Single", "double" to "Double", "both" to "Both")
-    val current = config.buttonAssignment(destination)
-
-    Column {
-        Text("Watch button", style = MaterialTheme.typography.bodyMedium)
-        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-            options.forEachIndexed { index, (value, label) ->
-                SegmentedButton(
-                    selected = current == value,
-                    onClick = {
-                        config.setButtonAssignment(destination, value)
-                        activity.bump()
-                    },
-                    shape = SegmentedButtonDefaults.itemShape(index, options.size),
-                ) { Text(label) }
-            }
-        }
     }
 }

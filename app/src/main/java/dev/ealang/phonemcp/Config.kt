@@ -159,10 +159,10 @@ class Config(context: Context) {
     /**
      * Why the last attempt to bring the service up failed, or null.
      *
-     * Persisted rather than left to [EventLog] because the failures worth
-     * catching here are the ones that take the process with them — an
-     * in-memory log is empty by the time anyone can read it, and there is no
-     * adb on this phone.
+     * Persisted in its own right because the failures worth catching here
+     * are the ones that take the process with them — the reason has to
+     * outlive the crash so [MainActivity] can replay it into the logs, and
+     * there is no adb on this phone.
      */
     var lastStartFailure: String?
         get() = prefs.getString(KEY_START_FAILURE, null)

@@ -19,7 +19,6 @@ import dev.ealang.phonemcp.webhook.DrainReport
 import dev.ealang.phonemcp.webhook.NoteWriter
 import dev.ealang.phonemcp.webhook.OpenAiTranscriber
 import dev.ealang.phonemcp.webhook.PebbleWebhookServer
-import dev.ealang.phonemcp.webhook.PipelineLog
 import dev.ealang.phonemcp.webhook.PipelineWorker
 import dev.ealang.phonemcp.webhook.RecordingStore
 import dev.ealang.phonemcp.webhook.RetryGate
@@ -97,7 +96,9 @@ class McpService : Service() {
             } catch (e: Exception) {
                 val reason = "${e::class.java.simpleName}: ${e.message ?: "no detail"}"
                 Log.w(TAG, "Android refused to start the service", e)
-                EventLog.record("service start refused ($reason)")
+                // Container-level: neither server alone — both logs get it.
+                Logs.init(context.filesDir)
+                Logs.both { it.error("service start refused", reason) }
                 Config(context).lastStartFailure = "start refused — $reason"
             }
         }
@@ -201,7 +202,6 @@ class McpService : Service() {
     // confined except where noted.
 
     private var store: RecordingStore? = null
-    private var pipelineLog: PipelineLog? = null
     private var worker: PipelineWorker? = null
     private var gate: RetryGate? = null
 
@@ -220,7 +220,7 @@ class McpService : Service() {
         if (worker != null) return
 
         val store = RecordingStore(filesDir).also { store = it }
-        val log = PipelineLog(filesDir).also { pipelineLog = it }
+        val log = Logs.webhook
         gate = RetryGate(main) { worker?.wake() }
 
         val writer = NoteWriter(
@@ -290,10 +290,15 @@ class McpService : Service() {
         worker = null
         gate = null
         store = null
-        pipelineLog = null
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onCreate() {
+        super.onCreate()
+        // Idempotent; the activity does the same. Whoever runs first wins.
+        Logs.init(filesDir)
+    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_APPLY_TOGGLES) {
@@ -303,7 +308,7 @@ class McpService : Service() {
 
         if (intent?.action == ACTION_STOP) {
             Config(this).enabled = false
-            EventLog.record("stopped by user")
+            Logs.both { it.info("stopped by user") }
             stopSelf()
             return START_NOT_STICKY
         }
@@ -379,7 +384,7 @@ class McpService : Service() {
             ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
         try {
             startForeground(NOTIFICATION_ID, notification("Starting…"), full)
-            if (degraded) EventLog.record("location foreground type regained")
+            if (degraded) Logs.both { it.info("location foreground type regained") }
             degraded = false
             return true
         } catch (e: Exception) {
@@ -393,7 +398,7 @@ class McpService : Service() {
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
             )
             degraded = true
-            EventLog.record("started without location type; get_location may be limited")
+            Logs.both { it.warn("started without location type; get_location may be limited") }
             true
         } catch (e: Exception) {
             recordForegroundRefusal(e)
@@ -404,7 +409,7 @@ class McpService : Service() {
     private fun recordForegroundRefusal(e: Exception) {
         val reason = "${e::class.java.simpleName}: ${e.message ?: "no detail"}"
         Log.w(TAG, "Refused foreground status; not retrying", e)
-        EventLog.record("foreground start refused ($reason)")
+        Logs.both { it.error("foreground start refused", reason) }
         Config(this).lastStartFailure = "foreground start refused — $reason"
     }
 
@@ -433,13 +438,15 @@ class McpService : Service() {
                 webhookPort,
                 config.token,
                 onDied = ::onWebhookServerDied,
+                log = Logs.webhook,
                 // Runs on NanoHTTPD's request thread. enqueue is thread-safe
                 // (it only ever creates), wake is thread-safe by design; a
                 // throw here becomes the 500 that makes the watch retry.
                 enqueue = { audio, meta ->
                     val item = store?.enqueue(audio, meta)
                         ?: throw IllegalStateException("pipeline not started")
-                    pipelineLog?.record(item.name, "received", meta.trigger.name)
+                    Logs.webhook.bump("received")
+                    Logs.webhook.info("received", meta.trigger.name, item.name)
                     worker?.wake()
                 },
             )
@@ -447,16 +454,16 @@ class McpService : Service() {
                 instance.start(NanoTimeouts.SOCKET_READ_MS, false)
                 webhookServer = instance
                 webhookRunning = true
-                EventLog.record(
-                    "webhook listening on ${PebbleWebhookServer.BIND}:$webhookPort",
+                Logs.webhook.info(
+                    "listening on ${PebbleWebhookServer.BIND}:$webhookPort",
                 )
             } catch (e: Exception) {
                 // Only a port squatter can make loopback fail; the shared
                 // retry below picks it up.
                 Log.w(TAG, "Could not bind the webhook listener; will retry", e)
-                EventLog.record(
-                    "webhook bind ${PebbleWebhookServer.BIND}:$webhookPort failed " +
-                        "(${e.message ?: e::class.java.simpleName})",
+                Logs.webhook.warn(
+                    "bind ${PebbleWebhookServer.BIND}:$webhookPort failed",
+                    e.message ?: e::class.java.simpleName,
                 )
             }
         }
@@ -470,6 +477,7 @@ class McpService : Service() {
                 config.port,
                 config.token,
                 onDied = ::onServerDied,
+                log = Logs.mcp,
             )
             try {
                 // daemon=false: the socket should outlive the thread that made it.
@@ -477,14 +485,14 @@ class McpService : Service() {
                 mcpServer = instance
                 running = true
                 retryDelayMs = INITIAL_RETRY_MS
-                EventLog.record("listening on $listeningOn:${config.port}")
+                Logs.mcp.info("listening on $listeningOn:${config.port}")
                 baseText = "Listening on $listeningOn:${config.port}"
                 Log.i(TAG, "Listening on $listeningOn port ${config.port}")
             } catch (e: Exception) {
                 Log.w(TAG, "Could not bind $listeningOn port ${config.port}; will retry", e)
-                EventLog.record(
-                    "bind $listeningOn:${config.port} failed " +
-                        "(${e.message ?: e::class.java.simpleName}); retry in ${retryDelayMs / 1000}s",
+                Logs.mcp.warn(
+                    "bind $listeningOn:${config.port} failed",
+                    "${e.message ?: e::class.java.simpleName}; retry in ${retryDelayMs / 1000}s",
                 )
                 baseText = "Waiting to bind $listeningOn:${config.port}"
             }
@@ -512,7 +520,7 @@ class McpService : Service() {
     private fun onServerDied() {
         main.post {
             Log.w(TAG, "Server died underneath us; rebinding")
-            EventLog.record("server restarting after socket death")
+            Logs.mcp.warn("restarting after socket death")
             mcpServer?.stop()
             mcpServer = null
             running = false
@@ -534,13 +542,13 @@ class McpService : Service() {
             webhookServer?.stop()
             webhookServer = null
             webhookRunning = false
-            EventLog.record("webhook listener switched off")
+            Logs.webhook.info("listener switched off")
         }
         if (!config.featureEnabled(Config.FEATURE_MCP) && mcpServer != null) {
             mcpServer?.stop()
             mcpServer = null
             running = false
-            EventLog.record("MCP listener switched off")
+            Logs.mcp.info("listener switched off")
         }
         attemptStart()
     }
@@ -548,7 +556,7 @@ class McpService : Service() {
     private fun onWebhookServerDied() {
         main.post {
             Log.w(TAG, "Webhook listener died underneath us; rebinding")
-            EventLog.record("webhook listener restarting after socket death")
+            Logs.webhook.warn("restarting after socket death")
             webhookServer?.stop()
             webhookServer = null
             webhookRunning = false

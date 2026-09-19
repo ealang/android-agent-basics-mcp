@@ -2,6 +2,7 @@ package dev.ealang.phonemcp.webhook
 
 import android.content.Context
 import dev.ealang.phonemcp.Config
+import dev.ealang.phonemcp.ServerLog
 import dev.ealang.phonemcp.webhook.telegram.TelegramEngine
 import org.json.JSONObject
 import java.util.concurrent.CountDownLatch
@@ -22,7 +23,7 @@ import java.util.concurrent.TimeUnit
 class TelegramDelivery(
     context: Context,
     private val store: RecordingStore,
-    private val log: PipelineLog,
+    private val log: ServerLog,
 ) : PipelineWorker.TelegramSender {
 
     private val config = Config(context)
@@ -64,7 +65,7 @@ class TelegramDelivery(
                 .put("messageId", id)
                 .put("handedOffAtMs", System.currentTimeMillis()),
         )
-        log.record(item.name, "handed off", "message $id → chat $chatId")
+        log.info("handed off", "message $id → chat $chatId", item.name)
         return StepResult.Success
     }
 
@@ -95,7 +96,7 @@ class TelegramDelivery(
 
         return when (val seen = outcome) {
             is TelegramEngine.SendState.Delivered -> {
-                log.record(item.name, "delivered")
+                log.info("delivered", item = item.name)
                 ReconcileResult.Delivered
             }
             is TelegramEngine.SendState.Pending,
@@ -140,7 +141,7 @@ class TelegramDelivery(
                 .put("messageId", id)
                 .put("handedOffAtMs", System.currentTimeMillis()),
         )
-        log.record(item.name, "resent", "message $id → chat $chatId, after: $reason")
+        log.warn("resent", "message $id → chat $chatId, after: $reason", item.name)
         return ReconcileResult.Pending
     }
 

@@ -15,12 +15,14 @@ abstract class AuthedHttpServer(
     port: Int,
     private val token: String,
     onDied: () -> Unit,
+    /** This server's log; the socket and every request line go here too. */
+    protected val log: ServerLog,
     // A null hostname makes NanoHTTPD bind the wildcard address; anything else
     // binds that one address, which is how the server is kept off the LAN.
 ) : NanoHTTPD(bindAddress.ifBlank { null }, port) {
 
     init {
-        serverSocketFactory = ServerSocketFactory { ResilientServerSocket(onDied) }
+        serverSocketFactory = ServerSocketFactory { ResilientServerSocket(log, onDied) }
     }
 
     /**
@@ -33,11 +35,14 @@ abstract class AuthedHttpServer(
 
     final override fun serve(session: IHTTPSession): Response {
         detail.remove()
+        log.bump("requests")
         val response = handle(session)
         val what = detail.get()?.let { " $it" } ?: ""
-        RequestLog.record(
-            session.remoteIpAddress,
+        // Every request, at debug: the wire-level record underneath whatever
+        // higher-level line the handler wrote about the same exchange.
+        log.debug(
             "${session.method} ${session.uri}$what → ${response.status.description}",
+            "from ${session.remoteIpAddress}",
         )
         return response
     }
@@ -59,7 +64,7 @@ abstract class AuthedHttpServer(
         }
 
         if (!authorized(session)) {
-            android.util.Log.w(TAG, "Rejected an unauthorized request from ${session.remoteIpAddress}")
+            log.warn("rejected an unauthorized request", "from ${session.remoteIpAddress}")
             return json(Response.Status.UNAUTHORIZED, JSONObject().put("error", "Unauthorized"))
         }
 
@@ -95,8 +100,4 @@ abstract class AuthedHttpServer(
 
     protected fun json(status: Response.Status, body: JSONObject): Response =
         newFixedLengthResponse(status, "application/json", body.toString())
-
-    private companion object {
-        const val TAG = "PhoneMcpHttp"
-    }
 }
