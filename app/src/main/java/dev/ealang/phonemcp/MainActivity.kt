@@ -26,7 +26,7 @@ import dev.ealang.phonemcp.webhook.telegram.TelegramEngine
 import dev.ealang.phonemcp.ui.PhoneMcpTheme
 
 /**
- * Two tabs on a bottom bar: Webhook (the pipeline and its destinations) and
+ * Two tabs on a bottom bar: Webhook (the pipeline and its Telegram delivery) and
  * MCP (the tool server) — one tab per server, like one log per server.
  *
  * The activity owns the non-UI glue — config, service calls, permission

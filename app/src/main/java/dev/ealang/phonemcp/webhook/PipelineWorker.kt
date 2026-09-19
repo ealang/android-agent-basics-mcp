@@ -15,14 +15,8 @@ import dev.ealang.phonemcp.ServerLog
 class PipelineWorker(
     private val store: RecordingStore,
     private val log: ServerLog,
-    private val noteWriter: NoteWriter,
     private val transcriber: Transcriber,
     private val telegramSender: TelegramSender,
-    /**
-     * The destinations a press fans out to, resolved fresh per pickup — a
-     * lambda so the worker stays constructible on the JVM without a Context.
-     */
-    private val destinationsFor: (Trigger) -> Set<Destination>,
     private val onDrainFinished: (DrainReport) -> Unit,
 ) {
 
@@ -80,9 +74,7 @@ class PipelineWorker(
         for (item in store.pending()) {
             // process() is idempotent — the marker files make every done
             // step a cheap skip — so it runs on every pass, even for items
-            // already handed off to Telegram. That is what lets a config
-            // change redirect queued items: enabling the note destination
-            // while a message sits in TDLib's outbox still writes the note.
+            // already handed off to Telegram.
             val result = try {
                 process(item)
             } catch (e: Exception) {
@@ -141,28 +133,14 @@ class PipelineWorker(
     }
 
     /**
-     * Advance one item through its remaining steps, idempotently. The
-     * destinations are resolved from config *now*, not at receipt —
-     * redefining the pipeline redirects queued items (§3) — and a press fans
-     * out to every destination that claims it. Each destination's marker
-     * file, not its output, is the record it ran: the user may move a
-     * written note wherever they like without buying a second copy.
+     * Advance one item through its remaining steps, idempotently. Every
+     * press goes to Telegram — routing is fixed, not configured. The
+     * hand-off marker, not the delivery, is the record the send ran.
      */
     private fun process(item: RecordingStore.Item): StepResult {
-        val destinations = destinationsFor(item.meta.trigger)
-        if (destinations.isEmpty()) {
-            // The user routed this press nowhere; completing it quietly is
-            // the configured outcome. (With a Telegram hand-off outstanding
-            // the caller still reconciles — this Success is not a delete.)
-            if (item.processorState(PROCESSOR_TELEGRAM) == null) {
-                log.info("skipped", "no destination claims this press", item.name)
-            }
-            return StepResult.Success
-        }
-
         // Text, in order of preference: already transcribed (the marker file
         // makes this step idempotent), Pebble's own transcript, or OpenAI on
-        // the audio. Only then are the destinations consulted.
+        // the audio.
         val text = item.transcript() ?: item.meta.pebbleTranscript ?: run {
             val audio = item.audio()
                 ?: return StepResult.Permanent("no audio and no transcript")
@@ -184,34 +162,14 @@ class PipelineWorker(
             return StepResult.Success
         }
 
-        val recordedAt = item.meta.recordedAtMs.takeIf { it > 0 } ?: item.meta.receivedAtMs
-
-        // Where the text came from — the log detail that answers "why does
-        // this note say what it says".
-        val source = when {
-            item.transcript() != null -> "OpenAI transcript"
-            item.meta.pebbleTranscript != null -> "Pebble transcript"
-            else -> "?"
-        }
-
-        // The note first: it settles synchronously, so putting it before the
-        // Telegram hand-off means a note failure can never strand a message
-        // already in TDLib's outbox. A crash between the write and its
-        // marker re-runs the write next drain — NoteWriter's createNewFile
-        // naming turns that into a " (2).md", the at-least-once cost this
-        // pipeline accepts everywhere (same window as the transcript step).
-        if (Destination.NOTE in destinations && item.processorState(PROCESSOR_NOTE) == null) {
-            log.debug("delivering", "$source, ${text.length} chars → note", item.name)
-            val result = noteWriter.write(text, recordedAt)
-            if (result !is StepResult.Success) return result
-            store.writeProcessorState(
-                item,
-                PROCESSOR_NOTE,
-                org.json.JSONObject().put("writtenAtMs", System.currentTimeMillis()),
-            )
-        }
-
-        if (Destination.TELEGRAM in destinations && item.processorState(PROCESSOR_TELEGRAM) == null) {
+        if (item.processorState(PROCESSOR_TELEGRAM) == null) {
+            // Where the text came from — the log detail that answers "why
+            // does this message say what it says".
+            val source = when {
+                item.transcript() != null -> "OpenAI transcript"
+                item.meta.pebbleTranscript != null -> "Pebble transcript"
+                else -> "?"
+            }
             log.debug("delivering", "$source, ${text.length} chars → telegram", item.name)
             return telegramSender.send(item, text)
         }
@@ -222,6 +180,5 @@ class PipelineWorker(
     companion object {
         private const val TAG = "phone-mcp"
         const val PROCESSOR_TELEGRAM = "telegram"
-        const val PROCESSOR_NOTE = "note"
     }
 }

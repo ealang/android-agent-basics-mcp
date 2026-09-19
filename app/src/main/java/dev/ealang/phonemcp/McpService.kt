@@ -16,7 +16,6 @@ import android.util.Log
 import dev.ealang.phonemcp.mcp.McpServer
 import dev.ealang.phonemcp.mcp.apps.Sound
 import dev.ealang.phonemcp.webhook.DrainReport
-import dev.ealang.phonemcp.webhook.NoteWriter
 import dev.ealang.phonemcp.webhook.OpenAiTranscriber
 import dev.ealang.phonemcp.webhook.PebbleWebhookServer
 import dev.ealang.phonemcp.webhook.PipelineWorker
@@ -223,30 +222,15 @@ class McpService : Service() {
         val log = Logs.webhook
         gate = RetryGate(main) { worker?.wake() }
 
-        val writer = NoteWriter(
-            root = android.os.Environment.getExternalStorageDirectory(),
-            onWritten = { file ->
-                android.media.MediaScannerConnection.scanFile(
-                    this, arrayOf(file.absolutePath), null, null,
-                )
-            },
-        )
-
         val delivery = TelegramDelivery(this, store, log)
 
         worker = PipelineWorker(
             store = store,
             log = log,
-            noteWriter = writer,
             // The key is re-read per call, so pasting it in the activity
             // un-blocks a waiting queue at the next wake, no restart needed.
             transcriber = OpenAiTranscriber { Config(this).openAiKey },
             telegramSender = delivery,
-            // Resolved per pickup, like the OpenAI key: flipping a destination
-            // switch re-routes whatever is still queued at the next wake.
-            destinationsFor = { trigger ->
-                dev.ealang.phonemcp.webhook.WebhookConfig.destinationsFor(Config(this), trigger)
-            },
             onDrainFinished = { report -> main.post { onDrainFinished(report) } },
         ).also {
             it.start()

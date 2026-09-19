@@ -106,9 +106,7 @@ class Config(context: Context) {
      * whose key is off vanishes from tools/list and is refused at dispatch.
      * [FEATURE_WEBHOOK] gates the webhook listener socket: off means the
      * watch gets connection-refused, while the pipeline worker stays up and
-     * drains whatever was already accepted. The webhook destination keys
-     * ("telegram", "markdown") are read at pickup by
-     * WebhookConfig.destinationsFor, together with [buttonAssignment].
+     * drains whatever was already accepted.
      *
      * Keys are namespaced with "feature_" so they can be enumerated later.
      */
@@ -121,18 +119,6 @@ class Config(context: Context) {
     /** Whether any listener is switched on — no listener wanted, no service. */
     fun anyServerEnabled(): Boolean =
         featureEnabled(FEATURE_MCP) || featureEnabled(FEATURE_WEBHOOK)
-
-    /**
-     * Which watch button presses a webhook destination should claim:
-     * "single", "double" or "both". Read at pickup by
-     * WebhookConfig.destinationsFor; a press fans out to every destination
-     * that claims it.
-     */
-    fun buttonAssignment(destination: String): String =
-        prefs.getString("buttons_$destination", "both") ?: "both"
-
-    fun setButtonAssignment(destination: String, value: String) =
-        prefs.edit().putString("buttons_$destination", value).apply()
 
     /**
      * The webhook listener's port, bound at service start; the Save button

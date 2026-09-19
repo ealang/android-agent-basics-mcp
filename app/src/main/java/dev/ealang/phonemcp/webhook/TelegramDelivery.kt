@@ -31,7 +31,7 @@ class TelegramDelivery(
     /** Worker thread. Blocks on TDLib's synchronous answer — local and quick. */
     override fun send(item: RecordingStore.Item, text: String): StepResult {
         // Read at pickup, not at receipt: changing the chat id redirects
-        // queued items, the same rescue path every destination has (§3).
+        // anything still queued — the rescue path for a wrong id.
         val chatId = config.telegramChatId
             ?: return StepResult.Transient("no Telegram chat id is set — save one in the app")
 

@@ -30,14 +30,6 @@
          intent to the clock app is silently dropped. The user must grant it by
          hand in Settings. -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-    <!-- All files access, for the webhook pipeline's note destination: notes
-         land in an arbitrary top-level folder, which MediaStore
-         collections cannot address. Same permission, same reasoning, and the
-         same Settings-screen grant as the voice recorder. -->
-    <uses-permission
-        android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
-        tools:ignore="ScopedStorage" />
-
     <!-- The generic intent tools scan every installed app's automation
          surface — components, filters, permissions. Scoped <queries> entries
          cannot express "everything", so this is the one legitimate use of the

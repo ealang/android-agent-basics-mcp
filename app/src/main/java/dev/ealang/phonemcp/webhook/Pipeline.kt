@@ -1,6 +1,5 @@
 package dev.ealang.phonemcp.webhook
 
-import dev.ealang.phonemcp.Config
 import org.json.JSONObject
 
 /**
@@ -9,18 +8,17 @@ import org.json.JSONObject
  */
 
 /**
- * What the watch did, frozen at receipt. A fact, never policy: the
- * destination it routes to is looked up in [WebhookConfig] each time the
- * worker picks the item up, so a config change redirects queued items.
+ * What the watch did, frozen at receipt. A fact, kept in the metadata and
+ * the logs; every press routes to Telegram regardless, so this no longer
+ * drives routing — it says which button the user held, which is worth
+ * recording even when nothing branches on it yet.
  */
 enum class Trigger {
     SINGLE_CLICK_HOLD,
     DOUBLE_CLICK_HOLD,
 
     /**
-     * Absent or unrecognised. Routed like a single click — the louder
-     * outcome; a message the user didn't want beats a recording filed where
-     * they aren't looking. Genuinely occurs in the field: the watch's
+     * Absent or unrecognised. Genuinely occurs in the field: the watch's
      * retries of old recordings arrive without the header.
      */
     UNKNOWN,
@@ -35,12 +33,9 @@ enum class Trigger {
     }
 }
 
-enum class Destination { NOTE, TELEGRAM }
-
 /**
  * The facts of one webhook receipt — everything `meta.json` holds. No
- * policy: notably no destination (resolved at pickup) and no processing
- * state (that lives in the marker files).
+ * policy, and no processing state (that lives in the marker files).
  */
 data class Meta(
     val trigger: Trigger,
@@ -116,51 +111,10 @@ data class DrainReport(
 )
 
 /**
- * The pipeline's routing policy. Originally stage 1's hardcoded constants;
- * the destination map now comes from settings, resolved fresh per pickup so
- * a config change redirects queued items (§3).
+ * The pipeline's fixed limits. Routing needs no policy object anymore:
+ * every press goes to Telegram, decided in the worker, not in settings.
  */
 object WebhookConfig {
-
-    /**
-     * Every destination this press fans out to. Telegram is policy, not
-     * preference: the release layout has no switch for it, so it is always
-     * on and claims every press — here, in the routing, not written into
-     * prefs by the UI (which would leave a fresh install routing nowhere
-     * until the tab was first drawn). The note destination is still
-     * config-driven, pending its removal from the release. Fan-out, not
-     * one-of — a press configured for both writes the note and sends the
-     * message.
-     */
-    fun destinationsFor(config: Config, trigger: Trigger): Set<Destination> {
-        val destinations = mutableSetOf(Destination.TELEGRAM)
-        val noteKey = key(Destination.NOTE)
-        if (config.featureEnabled(noteKey) &&
-            claims(config.buttonAssignment(noteKey), trigger)
-        ) {
-            destinations.add(Destination.NOTE)
-        }
-        return destinations
-    }
-
-    /** The Config key for a destination — feature switch and button row alike. */
-    fun key(destination: Destination): String = when (destination) {
-        Destination.NOTE -> "markdown"
-        Destination.TELEGRAM -> "telegram"
-    }
-
-    private fun claims(assignment: String, trigger: Trigger): Boolean {
-        // UNKNOWN routes like a single click — the louder outcome (see Trigger).
-        val button = if (trigger == Trigger.DOUBLE_CLICK_HOLD) "double" else "single"
-        return assignment == "both" || assignment == button
-    }
-
-    /** Relative to the external-storage root, like the recorder's template. */
-    const val NOTES_DIR = "Notes"
-
-    /** Frontmatter tags on every note, matching the Python server's default. */
-    val NOTE_TAGS = listOf("autotag", "index")
-
     /** Reject request bodies past this; the watch sends ~100 KB. */
     const val MAX_BODY_BYTES = 25L * 1024 * 1024
 }
