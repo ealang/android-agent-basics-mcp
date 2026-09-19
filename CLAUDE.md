@@ -219,9 +219,16 @@ that first.
 
 It is a long build. `ABIS="arm64-v8a" ./scripts/build-tdlib.sh` cuts it to a
 quarter and is enough for any real phone; the full set is for release builds.
-Nothing in `app/build.gradle.kts` pins the ABI list, so a partial build simply
-produces an APK that runs on fewer devices — quietly. Check what is in
-`jniLibs/` before shipping one.
+A partial build simply produces an APK that runs on fewer devices — quietly —
+so check what is in `jniLibs/` before shipping one.
+
+Having all four built does mean a debug APK of 107 MB, since one APK carries
+every ABI present. `DEV_ABIS=arm64-v8a` in `local.properties` narrows what a
+**debug** build packages, without rebuilding TDLib: the other `.so` files stay
+on disk, they just stop riding along. That is the APK to install. It is
+debug-only by design — release packaging is an undecided question
+(`docs/initial-release.md` §11), and a properties file must not be able to
+answer it by accident.
 
 Bumping `TDLIB_COMMIT` regenerates `TdApi.java`, which is a 60k-line file the
 engine compiles against. Treat a bump as a code change: compile, then log in on

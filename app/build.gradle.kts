@@ -34,6 +34,21 @@ fun buildSetting(name: String): String? =
 val telegramApiId = buildSetting("TELEGRAM_API_ID")?.toIntOrNull() ?: 0
 val telegramApiHash = buildSetting("TELEGRAM_API_HASH").orEmpty()
 
+// Which ABIs a *debug* APK carries. TDLib is ~25 MB per architecture, so an
+// unfiltered debug build is 107 MB of which one architecture is usable on any
+// given phone; naming the one you install onto cuts it to about 30 MB.
+// Comma-separated, e.g. DEV_ABIS=arm64-v8a in local.properties.
+//
+// Debug only, on purpose: a release build must never be silently narrowed by a
+// line someone left in their properties file months ago. Release packaging is
+// a separate, deliberate decision (App Bundle or ABI splits) — see
+// docs/initial-release.md §11.
+val devAbis = buildSetting("DEV_ABIS")
+    ?.split(",")
+    ?.map { it.trim() }
+    ?.filter { it.isNotEmpty() }
+    .orEmpty()
+
 android {
     namespace = "dev.ealang.phonemcp"
     compileSdk = 35
@@ -63,6 +78,9 @@ android {
     buildTypes {
         getByName("debug") {
             isMinifyEnabled = false
+            if (devAbis.isNotEmpty()) {
+                ndk { abiFilters += devAbis }
+            }
         }
     }
 
