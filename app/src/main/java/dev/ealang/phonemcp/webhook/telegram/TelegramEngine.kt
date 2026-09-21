@@ -554,17 +554,24 @@ object TelegramEngine {
      * their last-seen, and that guarantee should be a line of code, not a
      * default someone has to know about.
      *
+     * Time-adjustment protection is a binlog write every 10 seconds while
+     * connected, guarding against a wall-clock change made while TDLib was
+     * off — a desktop problem a phone on network time does not have, so it
+     * is off. Mechanism in docs/initial-release.md §3.
+     *
      * Deliberately *not* set: `ignore_background_updates`, which looks like it
      * would cut the reconnect storm but is documented as doing nothing while
-     * a database is in use — and ours is load-bearing. Left alone as judgment
-     * calls for the owner: `disable_time_adjustment_protection` and
-     * `use_storage_optimizer`.
+     * a database is in use — and ours is load-bearing; and
+     * `use_storage_optimizer`, a daily LRU sweep over a file cache this
+     * client keeps empty — a growing cache here is a bug to see, not to
+     * silently vacuum.
      */
     private fun applySendOnlyOptions(tdClient: Client) {
         for ((name, value) in listOf(
             "disable_persistent_network_statistics" to true,
             "ignore_inline_thumbnails" to true,
             "disable_top_chats" to true,
+            "disable_time_adjustment_protection" to true,
             "online" to false,
         )) {
             tdClient.send(TdApi.SetOption(name, TdApi.OptionValueBoolean(value))) { result ->
