@@ -549,6 +549,11 @@ object TelegramEngine {
      * passes through. Failures are logged and ignored: an option TDLib no
      * longer recognises is not a reason to fail a login.
      *
+     * `online` is false by default, but stated anyway:
+     * this session must never show the user as online in Telegram or eat
+     * their last-seen, and that guarantee should be a line of code, not a
+     * default someone has to know about.
+     *
      * Deliberately *not* set: `ignore_background_updates`, which looks like it
      * would cut the reconnect storm but is documented as doing nothing while
      * a database is in use — and ours is load-bearing. Left alone as judgment
@@ -556,12 +561,13 @@ object TelegramEngine {
      * `use_storage_optimizer`.
      */
     private fun applySendOnlyOptions(tdClient: Client) {
-        for (name in listOf(
-            "disable_persistent_network_statistics",
-            "ignore_inline_thumbnails",
-            "disable_top_chats",
+        for ((name, value) in listOf(
+            "disable_persistent_network_statistics" to true,
+            "ignore_inline_thumbnails" to true,
+            "disable_top_chats" to true,
+            "online" to false,
         )) {
-            tdClient.send(TdApi.SetOption(name, TdApi.OptionValueBoolean(true))) { result ->
+            tdClient.send(TdApi.SetOption(name, TdApi.OptionValueBoolean(value))) { result ->
                 if (result is TdApi.Error) Log.w(TAG, "SetOption $name: ${result.message}")
             }
         }
