@@ -43,10 +43,8 @@ object PebbleTools {
                 .put("name", "launch_watch_app")
                 .put(
                     "description",
-                    "Open an app on the user's Pebble watch. The app takes over the " +
-                        "screen on their wrist. It starts in its default state — this " +
-                        "cannot set a duration or any other parameter, so to start a " +
-                        "countdown use set_watch_timer instead.",
+                    "Open an app on the user's Pebble watch. The app starts in its " +
+                        "default state; no parameters can be passed.",
                 )
                 .put("inputSchema", appArgument),
         ) { args ->
@@ -77,14 +75,8 @@ object PebbleTools {
                 .put(
                     "description",
                     "Start a countdown on the user's Pebble watch. The watch buzzes " +
-                        "on their wrist when it finishes, and keeps counting even if " +
-                        "the phone is elsewhere. Prefer set_timer when they are with " +
-                        "their phone and want the usual alarm sound; use this when " +
-                        "they say watch, wrist, or Pebble, or are away from the phone. " +
-                        "The watch holds several timers at once, so call this again to " +
-                        "add another rather than moving it to the phone. The timer app " +
-                        "is brought to the front of the watch, so this interrupts " +
-                        "whatever is on screen.",
+                        "when it finishes, and keeps counting even if the phone is " +
+                        "elsewhere. The watch holds several timers at once.",
                 )
                 .put(
                     "inputSchema",

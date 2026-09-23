@@ -27,10 +27,7 @@ object AppTools {
                 .put("name", "set_timer")
                 .put(
                     "description",
-                    "Start a timer in the clock app on the user's phone. It rings " +
-                        "with their usual alarm sound and appears alongside any timers " +
-                        "they set by hand. Use for 'remind me in N minutes' and " +
-                        "kitchen-timer style requests.",
+                    "Start a timer in the clock app on the user's phone.",
                 )
                 .put(
                     "inputSchema",
@@ -107,9 +104,8 @@ object AppTools {
                 .put(
                     "description",
                     "Cancel a running timer. Give the label it was set with; with no " +
-                        "label, cancels whichever timer is due to ring next. The phone's " +
-                        "timers cannot be listed, so a label that matches nothing cancels " +
-                        "nothing.",
+                        "label, cancels whichever timer is due to ring next. A label " +
+                        "that does not match anything is ignored.",
                 )
                 .put(
                     "inputSchema",
@@ -143,9 +139,7 @@ object AppTools {
                 .put(
                     "description",
                     "Where the user's phone is right now: coordinates, how accurate " +
-                        "the fix is, and a street address when one can be resolved. Use " +
-                        "for anything that depends on where they are — nearby places, " +
-                        "local weather, travel times, which timezone they are in.",
+                        "the fix is, and a street address when one can be resolved.",
                 )
                 .put(
                     "inputSchema",
@@ -159,9 +153,7 @@ object AppTools {
                                     .put(
                                         "description",
                                         "Accept a cached fix this old before waiting for a " +
-                                            "new one. Defaults to 120. Raise it when a rough " +
-                                            "area will do, since a fresh fix can take " +
-                                            "several seconds and wakes the GPS.",
+                                            "new one. Defaults to 120.",
                                     ),
                             ),
                         ),
@@ -216,10 +208,8 @@ object AppTools {
                 .put("name", "find_my_phone")
                 .put(
                     "description",
-                    "Make the phone ring loudly so the user can find it. Plays as an " +
-                        "alarm, so it sounds even if the phone is on silent or in Do " +
-                        "Not Disturb. Stops on its own. Use when the user has lost the " +
-                        "phone, not to get their attention for something else.",
+                    "Play an alarm on the phone to help the user find it; it sounds " +
+                        "even on silent or Do Not Disturb.",
                 )
                 .put(
                     "inputSchema",
@@ -240,11 +230,8 @@ object AppTools {
                                 JSONObject().put("type", "integer")
                                     .put(
                                         "description",
-                                        "Loudness, 1 to 100. Overrides the phone's alarm " +
-                                            "volume for the length of the ring and puts it " +
-                                            "back afterwards, so it works even when the " +
-                                            "alarm is turned all the way down. Omit to ring " +
-                                            "at whatever the user has it set to.",
+                                        "Loudness, 1 to 100. Omit to ring at the user's " +
+                                            "current alarm volume.",
                                     ),
                             ),
                         ),
@@ -274,8 +261,7 @@ object AppTools {
                 .put("name", "silence_phone")
                 .put(
                     "description",
-                    "Stop the find_my_phone ringing early, once the user says they have " +
-                        "found it.",
+                    "Stop the find_my_phone alarm early.",
                 )
                 .put(
                     "inputSchema",
@@ -297,9 +283,8 @@ object AppTools {
                 .put(
                     "description",
                     "Resume podcast playback in Pocket Casts on the phone, picking up " +
-                        "the episode the user was last listening to. Works whether or " +
-                        "not the phone is locked, and whether or not Pocket Casts is " +
-                        "already running. Cannot choose a specific show or episode.",
+                        "the episode the user was last listening to. Cannot choose a " +
+                        "specific show or episode.",
                 )
                 .put(
                     "inputSchema",
@@ -323,9 +308,7 @@ object AppTools {
                 .put(
                     "description",
                     "What Pocket Casts on the phone is playing or paused on: podcast, " +
-                        "episode title, position, and whether audio is running. Useful " +
-                        "before answering questions about \"this episode\" — the title " +
-                        "is enough to find its transcript or show notes on the web.",
+                        "episode title, position, and whether audio is running.",
                 )
                 .put(
                     "inputSchema",
