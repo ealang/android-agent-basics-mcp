@@ -1,7 +1,9 @@
 package dev.ealang.phonemcp.mcp.generic
 
 import android.content.Context
+import dev.ealang.phonemcp.mcp.Preflight
 import dev.ealang.phonemcp.mcp.ToolSpec
+import dev.ealang.phonemcp.mcp.blocked
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -231,9 +233,63 @@ object GenericTools {
             text to text.startsWith("FAILED:")
         }
 
+        val postNotification = ToolSpec(
+            name = "post_notification",
+            featureKey = "notifications",
+            definition = JSONObject()
+                .put("name", "post_notification")
+                .put("description", "Show a text notification in the phone's notification shade. Posting again with the same key replaces that notification in place, without sounding again. Tapping it opens the Phone MCP app.")
+                .put(
+                    "inputSchema",
+                    JSONObject().put("type", "object").put(
+                        "properties",
+                        JSONObject()
+                            .put("key", JSONObject().put("type", "string").put("description", "Identifies this notification. Reuse it to update or dismiss later."))
+                            .put("title", JSONObject().put("type", "string"))
+                            .put("text", JSONObject().put("type", "string"))
+                            .put("level", JSONObject().put("type", "string").put("description", "info (default) appears silently; alert makes a sound. Neither pops up over the screen.")),
+                    ).put("required", JSONArray().put("key").put("title").put("text")),
+                ),
+        ) { args ->
+            blocked(Preflight.notifications(context)) ?: run {
+                val key = args.optString("key").trim()
+                val level = args.optString("level").trim().ifEmpty { "info" }
+                when {
+                    key.isEmpty() -> "FAILED: key must not be empty." to true
+                    level != "info" && level != "alert" ->
+                        "FAILED: level must be info or alert." to true
+                    else -> Notifier.post(
+                        context,
+                        key,
+                        args.optString("title"),
+                        args.optString("text"),
+                        alert = level == "alert",
+                    )
+                }
+            }
+        }
+
+        val dismissNotification = ToolSpec(
+            name = "dismiss_notification",
+            featureKey = "notifications",
+            definition = JSONObject()
+                .put("name", "dismiss_notification")
+                .put("description", "Remove a notification posted with post_notification, by its key.")
+                .put(
+                    "inputSchema",
+                    JSONObject().put("type", "object").put(
+                        "properties",
+                        JSONObject().put("key", JSONObject().put("type", "string").put("description", "The key it was posted with.")),
+                    ).put("required", JSONArray().put("key")),
+                ),
+        ) { args ->
+            Notifier.dismiss(context, args.optString("key").trim())
+        }
+
         return listOf(
             mediaApps, mediaBrowse, mediaPlay, mediaCommand, mediaSearch,
             intentScan, intentResolve, sendIntent, providerQuery,
+            postNotification, dismissNotification,
         )
     }
 }

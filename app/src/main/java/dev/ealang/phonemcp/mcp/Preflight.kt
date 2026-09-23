@@ -148,6 +148,21 @@ object Preflight {
             names.joinToString(", ") + "."
     }
 
+    /**
+     * areNotificationsEnabled covers both ways posting can be off: the
+     * POST_NOTIFICATIONS runtime grant never given, and the user switching
+     * the app off in Settings later.
+     */
+    fun notifications(context: Context): String? =
+        if (!context.getSystemService(android.app.NotificationManager::class.java)
+                .areNotificationsEnabled()
+        ) {
+            "this app is not allowed to post notifications. Ask the user to open " +
+                "Phone MCP and allow notifications."
+        } else {
+            null
+        }
+
     private fun installed(context: Context, pkg: String): Boolean = try {
         context.packageManager.getPackageInfo(pkg, 0)
         true
