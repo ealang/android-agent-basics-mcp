@@ -144,14 +144,53 @@ val BATTERY_GRANT = Grant(
     open = settingsFor(Settings.ACTION_APPLICATION_DETAILS_SETTINGS),
 )
 
+/** Also serves the app-specific launchers (timers, podcasts, voice). */
+val OVERLAY_GRANT = Grant(
+    ask = "Grant \"Display over other apps\" so timers, podcasts and voice " +
+        "sessions can open their apps from the background.",
+    button = "Allow opening other apps",
+    granted = { Clock.canStartFromBackground(it) },
+    open = settingsFor(Settings.ACTION_MANAGE_OVERLAY_PERMISSION),
+)
+
+/** Also serves the app-specific podcast tools, not just the media_* family. */
+val MEDIA_GRANT = Grant(
+    ask = "Grant notification access so the podcast tools can control " +
+        "playback. It authorizes reading media sessions; no notifications " +
+        "are read.",
+    button = "Allow media control",
+    granted = {
+        it.getSystemService(NotificationManager::class.java)
+            .isNotificationListenerAccessGranted(
+                ComponentName(it, MediaListenerService::class.java),
+            )
+    },
+    open = { it.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) },
+)
+
+/**
+ * Posting to the shade — the notification tools' one grant. Not in
+ * [MCP_GRANTS]: it surfaces on the Notifications tool row instead, the
+ * first of the per-tool warnings.
+ */
+val NOTIFICATIONS_GRANT = Grant(
+    ask = "Notification permission missing.",
+    button = "Allow notifications",
+    granted = {
+        it.getSystemService(NotificationManager::class.java).areNotificationsEnabled()
+    },
+    open = { it.requestNotifications() },
+)
+
+/**
+ * The tab-top setup card's list. Overlay, location and media sit here
+ * rather than on tool rows because the tools they serve (timers,
+ * get_location, podcasts) have no rows yet — the Tools card shows only
+ * the generic tier. When the app-specific sections land, each moves to
+ * its row and this shrinks to just battery.
+ */
 val MCP_GRANTS = listOf(
-    Grant(
-        ask = "Grant \"Display over other apps\" so timers, podcasts and voice " +
-            "sessions can open their apps from the background.",
-        button = "Allow opening other apps",
-        granted = { Clock.canStartFromBackground(it) },
-        open = settingsFor(Settings.ACTION_MANAGE_OVERLAY_PERMISSION),
-    ),
+    OVERLAY_GRANT,
     Grant(
         ask = "Grant location, all the time, so get_location answers even when " +
             "the server started on its own after a reboot.",
@@ -161,19 +200,7 @@ val MCP_GRANTS = listOf(
             if (Locator.hasPermission(it)) it.requestBackgroundLocation() else it.requestLocation()
         },
     ),
-    Grant(
-        ask = "Grant notification access so the podcast tools can control " +
-            "playback. It authorizes reading media sessions; no notifications " +
-            "are read.",
-        button = "Allow media control",
-        granted = {
-            it.getSystemService(NotificationManager::class.java)
-                .isNotificationListenerAccessGranted(
-                    ComponentName(it, MediaListenerService::class.java),
-                )
-        },
-        open = { it.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) },
-    ),
+    MEDIA_GRANT,
     BATTERY_GRANT,
 )
 

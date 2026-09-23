@@ -297,6 +297,27 @@ class MainActivity : ComponentActivity() {
         requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
     }
 
+    /**
+     * The button path, same shape as [requestLocation]: the system dialog
+     * while it can still appear, the app's notification Settings screen
+     * otherwise — which also covers notifications switched off there after
+     * the grant, and phones older than the runtime permission.
+     */
+    fun requestNotifications() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED &&
+            shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)
+        ) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
+        } else {
+            startActivity(
+                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                    .putExtra(Settings.EXTRA_APP_PACKAGE, packageName),
+            )
+        }
+    }
+
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<String>,

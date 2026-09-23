@@ -31,16 +31,22 @@ import dev.ealang.phonemcp.McpService
 import dev.ealang.phonemcp.mcp.McpServer
 import kotlinx.coroutines.delay
 
-private data class Feature(val key: String, val title: String, val description: String)
+private data class Feature(
+    val key: String,
+    val title: String,
+    val description: String,
+    /** What these tools need granted; a missing one is flagged on the row. */
+    val grants: List<Grant> = emptyList(),
+)
 
 // One row per switch-off-able slice of the tool surface. Only the generic
 // tier is shown; the app-specific switches are hidden, not removed.
 private val GENERIC = listOf(
-    Feature("intents", "Intents", "send_intent, intent_scan, intent_resolve — raw Android intents, sent exactly as given."),
+    Feature("intents", "Intents", "send_intent, intent_scan, intent_resolve — raw Android intents, sent exactly as given.", listOf(OVERLAY_GRANT)),
     Feature("content_providers", "Content providers", "Reading other apps' automation surfaces, like the recorder's file list."),
-    Feature("media_control", "Media control", "The media_* family — sessions, playback, browse and search in any media app."),
+    Feature("media_control", "Media control", "The media_* family — sessions, playback, browse and search in any media app.", listOf(MEDIA_GRANT)),
     Feature("watch_control", "Pebble control", "launch_watch_app, stop_watch_app, send_watch_message — raw watchapp messaging."),
-    Feature("notifications", "Notifications", "post_notification, dismiss_notification — text notifications in the phone's shade."),
+    Feature("notifications", "Notifications", "post_notification, dismiss_notification — text notifications in the phone's shade.", listOf(NOTIFICATIONS_GRANT)),
 )
 
 /**
@@ -80,7 +86,15 @@ fun McpTab(activity: MainActivity) {
             onChange = { activity.setMcpEnabled(it) },
         )
 
-        SetupCard(activity, MCP_GRANTS)
+        // A grant already flagged on an enabled tool row below is not
+        // repeated up here — one visible ask per grant, and the row's is
+        // the more precisely placed. It reappears here if that tool is
+        // switched off, because the hidden app-specific tools may still
+        // want it.
+        val onRows = GENERIC
+            .filter { config.featureEnabled(it.key) }
+            .flatMap { it.grants }
+        SetupCard(activity, MCP_GRANTS.filterNot { it in onRows })
 
         SectionCard("Logs") {
             // "Tool calls — failed", not plain "Failed": these are tools
@@ -150,15 +164,27 @@ fun McpTab(activity: MainActivity) {
         CollapsibleCard("Tools") {
             GENERIC.forEachIndexed { i, feature ->
                 if (i > 0) HorizontalDivider()
+                val checked = config.featureEnabled(feature.key)
                 SwitchRow(
                     title = feature.title,
                     supporting = feature.description,
-                    checked = config.featureEnabled(feature.key),
+                    checked = checked,
                     onChange = {
                         config.setFeatureEnabled(feature.key, it)
                         activity.bump()
                     },
                 )
+                // A tool that is on but cannot work is flagged right here,
+                // on the row that was switched; grants for tools that are
+                // off nag nobody.
+                if (checked) {
+                    feature.grants.filterNot { it.granted(activity) }.forEach { grant ->
+                        StatusText(grant.ask, warn = true)
+                        OutlinedButton(onClick = { grant.open(activity) }) {
+                            Text(grant.button)
+                        }
+                    }
+                }
             }
         }
     }
