@@ -42,7 +42,7 @@ object MediaExplorer {
     private const val BROWSE_TIMEOUT_MS = 6_000L
 
     /** How long a play command gets before we read back the session state. */
-    private const val PLAY_SETTLE_MS = 3_000L
+    internal const val PLAY_SETTLE_MS = 3_000L
 
     private const val MAX_CHILDREN = 40
 
@@ -360,7 +360,7 @@ object MediaExplorer {
                 }
             }
             Log.i(TAG, "explore: ${app.pkg} $what")
-            main.postDelayed({ done(readBack(app, controller, described)) }, PLAY_SETTLE_MS)
+            main.postDelayed({ done(readBack(app.label, controller, described)) }, PLAY_SETTLE_MS)
         }
 
     /**
@@ -376,101 +376,141 @@ object MediaExplorer {
                 done("${app.label} accepted the connection but exposed no usable media session")
                 return@withBrowser
             }
-            val tc = controller.transportControls
-            // Built-ins matched loosely; anything else is a custom action id,
-            // passed exactly as given — those are case-sensitive.
-            when (action.trim().lowercase()) {
-                "next" -> tc.skipToNext()
-                "previous" -> tc.skipToPrevious()
-                "pause" -> tc.pause()
-                "play" -> tc.play()
-                "stop" -> tc.stop()
-                // The session's queue, for apps advertising skip_to_queue_item:
-                // "queue" lists it, "queue:<id>" jumps to an entry.
-                "queue" -> {
-                    val queue = controller.queue
-                    done(
-                        if (queue.isNullOrEmpty()) "${app.label} exposes no queue on its session"
-                        else "${app.label} queue, ${queue.size} items:\n" +
-                            queue.joinToString("\n") { "  ${it.queueId}: ${it.description.title}" },
-                    )
-                    return@withBrowser
-                }
-                else -> if (action.trim().lowercase().startsWith("queue:")) {
-                    val id = action.trim().substringAfter(":").trim().toLongOrNull()
-                    if (id == null) {
-                        done("queue:<id> needs the numeric id from the queue listing")
-                        return@withBrowser
-                    }
-                    tc.skipToQueueItem(id)
-                } else if (action.trim().lowercase().startsWith("speed:")) {
-                    val speed = action.trim().substringAfter(":").trim().toFloatOrNull()
-                    if (speed == null || speed <= 0f) {
-                        done("speed:<multiplier> needs a positive number, e.g. speed:1.5")
-                        return@withBrowser
-                    }
-                    tc.setPlaybackSpeed(speed)
-                } else if (action.trim().lowercase().startsWith("rate:")) {
-                    // Built against whatever rating scheme the session declares
-                    // (heart, thumbs, stars, percentage): up/down/clear, or a
-                    // number for star/percentage schemes.
-                    val spec = action.trim().substringAfter(":").trim().lowercase()
-                    val type = controller.ratingType
-                    val rating = when {
-                        spec == "clear" -> android.media.Rating.newUnratedRating(type)
-                        type == android.media.Rating.RATING_HEART ->
-                            android.media.Rating.newHeartRating(spec == "up")
-                        type == android.media.Rating.RATING_THUMB_UP_DOWN ->
-                            android.media.Rating.newThumbRating(spec == "up")
-                        type in android.media.Rating.RATING_3_STARS..android.media.Rating.RATING_5_STARS ->
-                            spec.toFloatOrNull()?.let { android.media.Rating.newStarRating(type, it) }
-                        type == android.media.Rating.RATING_PERCENTAGE ->
-                            spec.toFloatOrNull()?.let { android.media.Rating.newPercentageRating(it) }
-                        else -> null
-                    }
-                    if (rating == null) {
-                        done(
-                            "this session's rating type is $type — use rate:up, rate:down, " +
-                                "rate:clear, or rate:<number> for star/percentage types",
-                        )
-                        return@withBrowser
-                    }
-                    tc.setRating(rating)
-                } else if (action.trim().lowercase().startsWith("uri:")) {
-                    // playFromUri, for apps advertising play_from_uri: the
-                    // rest of the action is the URI, passed verbatim (so no
-                    // lowercasing — URLs are case-sensitive past the host).
-                    val uri = action.trim().substringAfter(":").trim()
-                    if (uri.isEmpty()) {
-                        done("uri:<uri> needs the URI to play")
-                        return@withBrowser
-                    }
-                    tc.playFromUri(android.net.Uri.parse(uri), null)
-                } else if (action.trim().lowercase().startsWith("seek:")) {
-                    // seek:<seconds> absolute, seek:+30 / seek:-30 relative to
-                    // the session's reported position.
-                    val spec = action.trim().substringAfter(":").trim()
-                    val amount = spec.toLongOrNull()
-                    if (amount == null) {
-                        done("seek:<seconds> needs a number — absolute, or +N/-N for relative")
-                        return@withBrowser
-                    }
-                    val targetMs = if (spec.startsWith("+") || spec.startsWith("-")) {
-                        val pos = controller.playbackState?.position ?: 0L
-                        (pos + amount * 1000L).coerceAtLeast(0L)
-                    } else {
-                        amount * 1000L
-                    }
-                    tc.seekTo(targetMs)
-                } else {
-                    tc.sendCustomAction(action.trim(), null)
-                }
-            }
+            if (applyAction(app.label, controller, action, done)) return@withBrowser
             Log.i(TAG, "explore: ${app.pkg} $action")
-            main.postDelayed({ done(readBack(app, controller, action)) }, PLAY_SETTLE_MS)
+            main.postDelayed({ done(readBack(app.label, controller, action)) }, PLAY_SETTLE_MS)
         }
 
-    private fun readBack(app: MediaApp, controller: MediaController, described: String): String {
+    /**
+     * The transport-command grammar, factored out because it acts on a bare
+     * [MediaController] and so serves both connection routes: the browser
+     * session above and an active session grabbed through the
+     * notification-listener grant ([SessionExplorer]). Returns true when the
+     * action answered on the spot (a listing, or a parse problem) — the
+     * caller schedules the settle-and-read-back only when it gets false.
+     */
+    internal fun applyAction(
+        label: String,
+        controller: MediaController,
+        action: String,
+        done: (String) -> Unit,
+    ): Boolean {
+        val tc = controller.transportControls
+        // Built-ins matched loosely; anything else is a custom action id,
+        // passed exactly as given — those are case-sensitive.
+        when (action.trim().lowercase()) {
+            "next" -> tc.skipToNext()
+            "previous" -> tc.skipToPrevious()
+            "pause" -> tc.pause()
+            "play" -> tc.play()
+            "stop" -> tc.stop()
+            // The session's queue, for apps advertising skip_to_queue_item:
+            // "queue" lists it, "queue:<id>" jumps to an entry.
+            "queue" -> {
+                val queue = controller.queue
+                done(
+                    if (queue.isNullOrEmpty()) "$label exposes no queue on its session"
+                    else "$label queue, ${queue.size} items:\n" +
+                        queue.joinToString("\n") { "  ${it.queueId}: ${it.description.title}" },
+                )
+                return true
+            }
+            else -> if (action.trim().lowercase().startsWith("queue:")) {
+                val id = action.trim().substringAfter(":").trim().toLongOrNull()
+                if (id == null) {
+                    done("queue:<id> needs the numeric id from the queue listing")
+                    return true
+                }
+                tc.skipToQueueItem(id)
+            } else if (action.trim().lowercase().startsWith("speed:")) {
+                val speed = action.trim().substringAfter(":").trim().toFloatOrNull()
+                if (speed == null || speed <= 0f) {
+                    done("speed:<multiplier> needs a positive number, e.g. speed:1.5")
+                    return true
+                }
+                tc.setPlaybackSpeed(speed)
+            } else if (action.trim().lowercase().startsWith("rate:")) {
+                // Built against whatever rating scheme the session declares
+                // (heart, thumbs, stars, percentage): up/down/clear, or a
+                // number for star/percentage schemes.
+                val spec = action.trim().substringAfter(":").trim().lowercase()
+                val type = controller.ratingType
+                val rating = when {
+                    spec == "clear" -> android.media.Rating.newUnratedRating(type)
+                    type == android.media.Rating.RATING_HEART ->
+                        android.media.Rating.newHeartRating(spec == "up")
+                    type == android.media.Rating.RATING_THUMB_UP_DOWN ->
+                        android.media.Rating.newThumbRating(spec == "up")
+                    type in android.media.Rating.RATING_3_STARS..android.media.Rating.RATING_5_STARS ->
+                        spec.toFloatOrNull()?.let { android.media.Rating.newStarRating(type, it) }
+                    type == android.media.Rating.RATING_PERCENTAGE ->
+                        spec.toFloatOrNull()?.let { android.media.Rating.newPercentageRating(it) }
+                    else -> null
+                }
+                if (rating == null) {
+                    done(
+                        "this session's rating type is $type — use rate:up, rate:down, " +
+                            "rate:clear, or rate:<number> for star/percentage types",
+                    )
+                    return true
+                }
+                tc.setRating(rating)
+            } else if (action.trim().lowercase().startsWith("uri:")) {
+                // playFromUri, for apps advertising play_from_uri: the
+                // rest of the action is the URI, passed verbatim (so no
+                // lowercasing — URLs are case-sensitive past the host).
+                val uri = action.trim().substringAfter(":").trim()
+                if (uri.isEmpty()) {
+                    done("uri:<uri> needs the URI to play")
+                    return true
+                }
+                tc.playFromUri(android.net.Uri.parse(uri), null)
+            } else if (action.trim().lowercase().startsWith("search:")) {
+                // playFromSearch through the command grammar, so the session
+                // route can try it too — on a live session of an app whose
+                // browser service refuses us, this is the only search-play.
+                val query = action.trim().substringAfter(":").trim()
+                if (query.isEmpty()) {
+                    done("search:<query> needs the text to play")
+                    return true
+                }
+                tc.playFromSearch(query, null)
+            } else if (action.trim().lowercase().startsWith("media:")) {
+                val id = action.trim().substringAfter(":").trim()
+                if (id.isEmpty()) {
+                    done("media:<id> needs a media id")
+                    return true
+                }
+                tc.playFromMediaId(id, null)
+            } else if (action.trim().lowercase().startsWith("seek:")) {
+                // seek:<seconds> absolute, seek:+30 / seek:-30 relative to
+                // the session's reported position.
+                val spec = action.trim().substringAfter(":").trim()
+                val amount = spec.toLongOrNull()
+                if (amount == null) {
+                    done("seek:<seconds> needs a number — absolute, or +N/-N for relative")
+                    return true
+                }
+                val targetMs = if (spec.startsWith("+") || spec.startsWith("-")) {
+                    val pos = controller.playbackState?.position ?: 0L
+                    (pos + amount * 1000L).coerceAtLeast(0L)
+                } else {
+                    amount * 1000L
+                }
+                tc.seekTo(targetMs)
+            } else {
+                tc.sendCustomAction(action.trim(), null)
+            }
+        }
+        return false
+    }
+
+    internal fun readBack(label: String, controller: MediaController, described: String): String =
+        "Sent $label $described. ${PLAY_SETTLE_MS / 1000}s later the " +
+            "session reports: " + sessionState(controller)
+
+    /** One session's state as prose — shared by the read-backs and listings. */
+    internal fun sessionState(controller: MediaController): String {
         val state = try {
             controller.playbackState
         } catch (e: Exception) {
@@ -511,8 +551,7 @@ object MediaExplorer {
             android.media.Rating.RATING_PERCENTAGE -> " Rating type: percentage."
             else -> ""
         }
-        return "Sent ${app.label} $described. ${PLAY_SETTLE_MS / 1000}s later the " +
-            "session reports: $stateName.$playing$position$speed$ratingType${advertised(state)}"
+        return "$stateName.$playing$position$speed$ratingType${advertised(state)}"
     }
 
     /**

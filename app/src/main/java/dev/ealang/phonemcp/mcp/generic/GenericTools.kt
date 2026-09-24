@@ -90,27 +90,67 @@ object GenericTools {
             featureKey = "media_control",
             definition = JSONObject()
                 .put("name", "media_command")
-                .put("description", "EXPERIMENTAL: send a media app a transport command: next, previous, pause, play, stop, queue, queue:<id>, seek:<seconds> (absolute, or +N/-N relative), speed:<multiplier>, rate:up/down/clear/<number>, uri:<uri>, queue_add:<id>, queue_add:<pos>:<id>, queue_remove:<id>, or a custom action id verbatim. Reads back the session state, position, and advertised actions after a beat.")
+                .put("description", "EXPERIMENTAL: send a media app a transport command: next, previous, pause, play, stop, queue, queue:<id>, seek:<seconds> (absolute, or +N/-N relative), speed:<multiplier>, rate:up/down/clear/<number>, uri:<uri>, search:<query>, media:<id>, queue_add:<id>, queue_add:<pos>:<id>, queue_remove:<id>, or a custom action id verbatim. Reads back the session state, position, and advertised actions after a beat.")
                 .put(
                     "inputSchema",
                     JSONObject().put("type", "object").put(
                         "properties",
                         JSONObject()
                             .put("app", JSONObject().put("type", "string").put("description", "App name or package, fuzzy matched."))
-                            .put("action", JSONObject().put("type", "string").put("description", "next, previous, pause, play, stop, queue, queue:<id>, seek:<seconds>, seek:+N, seek:-N, speed:<multiplier>, rate:up/down/clear/<number>, uri:<uri>, queue_add:<id>, queue_add:<pos>:<id>, queue_remove:<id>, or a custom action id.")),
+                            .put("action", JSONObject().put("type", "string").put("description", "next, previous, pause, play, stop, queue, queue:<id>, seek:<seconds>, seek:+N, seek:-N, speed:<multiplier>, rate:up/down/clear/<number>, uri:<uri>, search:<query>, media:<id>, queue_add:<id>, queue_add:<pos>:<id>, queue_remove:<id>, or a custom action id."))
+                            .put("route", JSONObject().put("type", "string").put("description", "browser (default) connects the app's MediaBrowserService. session drives the app's live media session instead — reaches apps whose browser service refuses the connection, but only while they are playing or paused, and cannot cold-start anything. Needs notification access. Queue edits are browser-only.")),
                     ).put("required", JSONArray().put("app").put("action")),
                 ),
         ) { args ->
-            val (app, problem) = MediaExplorer.resolve(context, args.optString("app"))
             val action = args.optString("action")
-            if (app == null) "FAILED: $problem" to true
-            // Queue edits ride the compat protocol, so they take a different
-            // connection path from the rest of the commands.
-            else if (action.trim().startsWith("queue_add:") || action.trim().startsWith("queue_remove:")) {
-                MediaExplorer.queueEdit(context, app, action.trim()) to false
-            } else {
-                MediaExplorer.command(context, app, action) to false
+            when (val route = args.optString("route").trim().lowercase().ifEmpty { "browser" }) {
+                "session" -> {
+                    val text = SessionExplorer.command(context, args.optString("app"), action)
+                    text to text.startsWith("FAILED:")
+                }
+                "browser" -> {
+                    val (app, problem) = MediaExplorer.resolve(context, args.optString("app"))
+                    if (app == null) "FAILED: $problem" to true
+                    // Queue edits ride the compat protocol, so they take a different
+                    // connection path from the rest of the commands.
+                    else if (action.trim().startsWith("queue_add:") || action.trim().startsWith("queue_remove:")) {
+                        MediaExplorer.queueEdit(context, app, action.trim()) to false
+                    } else {
+                        MediaExplorer.command(context, app, action) to false
+                    }
+                }
+                else -> "FAILED: route must be browser or session, not \"$route\"." to true
             }
+        }
+
+        val mediaSessions = ToolSpec(
+            name = "media_sessions",
+            featureKey = "media_control",
+            definition = JSONObject()
+                .put("name", "media_sessions")
+                .put("description", "EXPERIMENTAL: list the phone's active media sessions — every app currently playing or paused-but-alive, whatever it is, with state, title, position, and advertised actions. Sees apps media_browse cannot connect to. Needs notification access.")
+                .put("inputSchema", JSONObject().put("type", "object").put("properties", JSONObject())),
+        ) { _ ->
+            val text = SessionExplorer.list(context)
+            text to text.startsWith("FAILED:")
+        }
+
+        val mediaKey = ToolSpec(
+            name = "media_key",
+            featureKey = "media_control",
+            definition = JSONObject()
+                .put("name", "media_key")
+                .put("description", "EXPERIMENTAL: press a system media button — the mechanism a car or headset uses. Takes no target: Android routes the press to the most recent media app, which may restart that app even when it is fully closed. Keys: play, pause, play_pause, next, previous, stop, fast_forward, rewind. Reads back the active sessions after a beat. Audible on the phone.")
+                .put(
+                    "inputSchema",
+                    JSONObject().put("type", "object").put(
+                        "properties",
+                        JSONObject().put("key", JSONObject().put("type", "string").put("description", "play, pause, play_pause, next, previous, stop, fast_forward, or rewind.")),
+                    ).put("required", JSONArray().put("key")),
+                ),
+        ) { args ->
+            val text = SessionExplorer.key(context, args.optString("key"))
+            text to text.startsWith("FAILED:")
         }
 
         val mediaSearch = ToolSpec(
@@ -288,6 +328,7 @@ object GenericTools {
 
         return listOf(
             mediaApps, mediaBrowse, mediaPlay, mediaCommand, mediaSearch,
+            mediaSessions, mediaKey,
             intentScan, intentResolve, sendIntent, providerQuery,
             postNotification, dismissNotification,
         )
