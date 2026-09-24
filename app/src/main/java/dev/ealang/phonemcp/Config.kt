@@ -130,13 +130,17 @@ class Config(context: Context) {
         prefs.edit().putBoolean("feature_$key", value).apply()
 
     /**
-     * Whether the POST_NOTIFICATIONS dialog has ever been shown. Needed
-     * because the platform cannot distinguish never-asked from
-     * don't-ask-again, and the two lead to different screens.
+     * Whether a runtime permission's system dialog has ever been shown,
+     * one flag per permission group. Needed because the platform cannot
+     * distinguish never-asked from don't-ask-again — rationale is false
+     * for both — and the two lead to different screens. Only dialog
+     * permissions (notifications, location) have a flag; Settings-only
+     * grants (overlay, media, battery) have no dialog to track.
      */
-    var notificationsAsked: Boolean
-        get() = prefs.getBoolean("notifications_asked", false)
-        set(value) = prefs.edit().putBoolean("notifications_asked", value).apply()
+    fun permissionAsked(key: String): Boolean = prefs.getBoolean("asked_$key", false)
+
+    fun setPermissionAsked(key: String) =
+        prefs.edit().putBoolean("asked_$key", true).apply()
 
     /** Whether any listener is switched on — no listener wanted, no service. */
     fun anyServerEnabled(): Boolean =

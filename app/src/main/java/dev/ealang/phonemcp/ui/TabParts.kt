@@ -93,11 +93,21 @@ fun ServerHeader(
  * Whatever still needs granting, and nothing when nothing does — the card
  * disappears entirely rather than reporting success. Each page asks only
  * for the grants its own half of the app needs.
+ *
+ * [pointers] are one-line referrals for problems whose ask-and-button
+ * live on another card lower on the page (a tool row's grant, the
+ * Telegram login). The top card still announces them — it is the page's
+ * one "something needs you" summary — but it points
+ * instead of duplicating, so each fix has exactly one button.
  */
 @Composable
-fun SetupCard(activity: MainActivity, needs: List<Grant>) {
+fun SetupCard(
+    activity: MainActivity,
+    needs: List<Grant>,
+    pointers: List<String> = emptyList(),
+) {
     val missing = needs.filterNot { it.granted(activity) }
-    if (missing.isEmpty()) return
+    if (missing.isEmpty() && pointers.isEmpty()) return
 
     Card(
         Modifier.fillMaxWidth(),
@@ -114,6 +124,10 @@ fun SetupCard(activity: MainActivity, needs: List<Grant>) {
                 if (i > 0) HorizontalDivider()
                 Text(grant.ask, style = MaterialTheme.typography.bodySmall)
                 OutlinedButton(onClick = { grant.open(activity) }) { Text(grant.button) }
+            }
+            pointers.forEachIndexed { i, line ->
+                if (i > 0 || missing.isNotEmpty()) HorizontalDivider()
+                Text(line, style = MaterialTheme.typography.bodySmall)
             }
         }
     }

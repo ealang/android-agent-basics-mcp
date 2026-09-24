@@ -234,16 +234,44 @@ class MainActivity : ComponentActivity() {
 
     fun toast(text: String) = Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
 
+    /**
+     * The one routing rule behind every permission button whose grant has
+     * a system dialog (same mechanism for all of them):
+     * show the dialog while it can still appear, deep-link to [settings]
+     * once it cannot. "Cannot" means permanently denied, which the
+     * platform reports identically to never-asked — rationale false for
+     * both — so a per-permission asked-before flag supplies the missing
+     * bit. Grants that live only in Settings (overlay, media access,
+     * battery) have no dialog and no flag; their buttons deep-link
+     * unconditionally.
+     */
+    private fun requestPermissionOrSettings(
+        askedKey: String,
+        permissions: Array<String>,
+        requestCode: Int,
+        settings: Intent,
+    ) {
+        val dialogCanShow = !config.permissionAsked(askedKey) ||
+            permissions.any { shouldShowRequestPermissionRationale(it) }
+        if (dialogCanShow) {
+            config.setPermissionAsked(askedKey)
+            requestPermissions(permissions, requestCode)
+        } else {
+            startActivity(settings)
+        }
+    }
+
+    private fun appDetailsSettings(): Intent =
+        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+            .setData(Uri.parse("package:$packageName"))
+
     fun requestLocation() {
         if (Locator.hasPermission(this)) {
-            // Already granted, or granted then revoked in Settings —
-            // requestPermissions would do nothing visible either way.
-            startActivity(
-                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                    .setData(Uri.parse("package:$packageName")),
-            )
+            // Granted then switched off some other way — the dialog would
+            // do nothing visible, so Settings is the only lever left.
+            startActivity(appDetailsSettings())
         } else {
-            requestPermissions(Locator.PERMISSIONS, 2)
+            requestPermissionOrSettings("location", Locator.PERMISSIONS, 2, appDetailsSettings())
         }
     }
 
@@ -278,10 +306,7 @@ class MainActivity : ComponentActivity() {
                     "get_location silently returns nothing.",
             )
             .setPositiveButton("Open settings") { _, _ ->
-                startActivity(
-                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                        .setData(Uri.parse("package:$packageName")),
-                )
+                startActivity(appDetailsSettings())
             }
             .setNegativeButton("Not now", null)
             .show()
@@ -297,23 +322,22 @@ class MainActivity : ComponentActivity() {
      * warnings read as two systems disagreeing.
      */
     fun requestNotifications() {
-        // rationale=false means "never asked" as well as "don't ask again",
-        // so a first-ever tap needs the asked-before flag to still get the
-        // dialog rather than the Settings screen.
-        val dialogCanShow = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
-            PackageManager.PERMISSION_GRANTED &&
-            (
-                !config.notificationsAsked ||
-                    shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)
-                )
-        if (dialogCanShow) {
-            config.notificationsAsked = true
-            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
+        val notifSettings = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+            .putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            // No runtime permission on this Android, or held but
+            // notifications switched off in Settings afterwards — either
+            // way the dialog has nothing to offer.
+            startActivity(notifSettings)
         } else {
-            startActivity(
-                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-                    .putExtra(Settings.EXTRA_APP_PACKAGE, packageName),
+            requestPermissionOrSettings(
+                "notifications",
+                arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                1,
+                notifSettings,
             )
         }
     }

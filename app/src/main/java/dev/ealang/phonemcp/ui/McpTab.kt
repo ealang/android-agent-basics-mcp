@@ -89,13 +89,25 @@ fun McpTab(activity: MainActivity) {
 
         // A grant already flagged on an enabled tool row below is not
         // repeated up here — one visible ask per grant, and the row's is
-        // the more precisely placed. It reappears here if that tool is
-        // switched off, because the hidden app-specific tools may still
-        // want it.
+        // the more precisely placed; the card carries a pointer at the
+        // Tools card instead. A grant reappears here in full if its tool
+        // is switched off, because the hidden app-specific tools may
+        // still want it.
         val onRows = GENERIC
             .filter { config.featureEnabled(it.key) }
             .flatMap { it.grants }
-        SetupCard(activity, MCP_GRANTS.filterNot { it in onRows })
+        val toolNeedsGrant = GENERIC.any { f ->
+            config.featureEnabled(f.key) && f.grants.any { !it.granted(activity) }
+        }
+        SetupCard(
+            activity,
+            MCP_GRANTS.filterNot { it in onRows },
+            pointers = if (toolNeedsGrant) {
+                listOf("A tool is missing a permission — see the Tools card.")
+            } else {
+                emptyList()
+            },
+        )
 
         SectionCard("Logs") {
             // "Tool calls — failed", not plain "Failed": these are tools
@@ -165,10 +177,7 @@ fun McpTab(activity: MainActivity) {
         // The card-level icon repeats the row-level one so the signal
         // survives the card being folded shut — same reason the Telegram
         // forwarding card warns on its title.
-        val anyRowWarns = GENERIC.any { f ->
-            config.featureEnabled(f.key) && f.grants.any { !it.granted(activity) }
-        }
-        CollapsibleCard("Tools", warn = anyRowWarns) {
+        CollapsibleCard("Tools", warn = toolNeedsGrant) {
             GENERIC.forEachIndexed { i, feature ->
                 if (i > 0) HorizontalDivider()
                 val checked = config.featureEnabled(feature.key)

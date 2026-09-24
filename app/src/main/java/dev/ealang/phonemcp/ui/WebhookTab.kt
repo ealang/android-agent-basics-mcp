@@ -72,7 +72,27 @@ fun WebhookTab(activity: MainActivity) {
             onChange = { activity.setWebhookEnabled(it) },
         )
 
-        SetupCard(activity, listOf(BATTERY_GRANT))
+        // Health is three states, not seven: everything
+        // short of a logged-in client is "not authenticated", offline is
+        // visible but not a failure. The states that need the user — a
+        // dead login, or no destination chat, either of which quietly
+        // queues every message (found in testing: only the Test button
+        // revealed why) — warn on the forwarding card's title and get a
+        // pointer in the setup card, whose buttons stay down there.
+        val health = TelegramEngine.health
+        val noChat = config.telegramChatId == null
+        val telegramNeedsSetup = health == TelegramEngine.Health.NOT_AUTHENTICATED ||
+            (health == TelegramEngine.Health.HEALTHY && noChat)
+
+        SetupCard(
+            activity,
+            listOf(BATTERY_GRANT),
+            pointers = if (telegramNeedsSetup) {
+                listOf("Telegram forwarding needs setup — see its card below.")
+            } else {
+                emptyList()
+            },
+        )
 
         SectionCard("Pipeline") {
             val (pending, failed) = McpService.pipelineSnapshot()
@@ -141,19 +161,7 @@ fun WebhookTab(activity: MainActivity) {
             }
         }
 
-        // Health is three states, not seven: everything
-        // short of a logged-in client is "not authenticated", offline is
-        // visible but not a failure. The warning icon shows through the
-        // collapsed card for the states that need the user — a dead login,
-        // or no destination chat, either of which quietly queues every
-        // message (found in testing: only the Test button revealed why).
-        val health = TelegramEngine.health
-        val noChat = config.telegramChatId == null
-        CollapsibleCard(
-            "Telegram forwarding",
-            warn = health == TelegramEngine.Health.NOT_AUTHENTICATED ||
-                (health == TelegramEngine.Health.HEALTHY && noChat),
-        ) {
+        CollapsibleCard("Telegram forwarding", warn = telegramNeedsSetup) {
             // The one-liner at the top of the open card. It says what state
             // we are in and what to do about it — never what step of a login
             // is pending, which is the dialog's job (the
