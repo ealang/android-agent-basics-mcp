@@ -85,8 +85,6 @@ class MainActivity : ComponentActivity() {
                 PhoneMcpApp(this)
             }
         }
-
-        requestNotificationPermission()
     }
 
     override fun onStart() {
@@ -289,26 +287,28 @@ class MainActivity : ComponentActivity() {
             .show()
     }
 
-    private fun requestNotificationPermission() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
-        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
-            PackageManager.PERMISSION_GRANTED
-        ) return
-        requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
-    }
-
     /**
      * The button path, same shape as [requestLocation]: the system dialog
      * while it can still appear, the app's notification Settings screen
      * otherwise — which also covers notifications switched off there after
-     * the grant, and phones older than the runtime permission.
+     * the grant, and phones older than the runtime permission. This button
+     * is the only place the app asks; the launch-time auto-prompt is gone
+     * because an unprompted dialog beside per-tool
+     * warnings read as two systems disagreeing.
      */
     fun requestNotifications() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+        // rationale=false means "never asked" as well as "don't ask again",
+        // so a first-ever tap needs the asked-before flag to still get the
+        // dialog rather than the Settings screen.
+        val dialogCanShow = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
             PackageManager.PERMISSION_GRANTED &&
-            shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)
-        ) {
+            (
+                !config.notificationsAsked ||
+                    shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)
+                )
+        if (dialogCanShow) {
+            config.notificationsAsked = true
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
         } else {
             startActivity(

@@ -47,6 +47,7 @@ private val GENERIC = listOf(
     Feature("media_control", "Media control", "The media_* family — sessions, playback, browse and search in any media app.", listOf(MEDIA_GRANT)),
     Feature("watch_control", "Pebble control", "launch_watch_app, stop_watch_app, send_watch_message — raw watchapp messaging."),
     Feature("notifications", "Notifications", "post_notification, dismiss_notification — text notifications in the phone's shade.", listOf(NOTIFICATIONS_GRANT)),
+    Feature("location", "Location", "get_location — the phone's position.", listOf(LOCATION_GRANT)),
 )
 
 /**
@@ -161,24 +162,32 @@ fun McpTab(activity: MainActivity) {
             }
         }
 
-        CollapsibleCard("Tools") {
+        // The card-level icon repeats the row-level one so the signal
+        // survives the card being folded shut — same reason the Telegram
+        // forwarding card warns on its title.
+        val anyRowWarns = GENERIC.any { f ->
+            config.featureEnabled(f.key) && f.grants.any { !it.granted(activity) }
+        }
+        CollapsibleCard("Tools", warn = anyRowWarns) {
             GENERIC.forEachIndexed { i, feature ->
                 if (i > 0) HorizontalDivider()
                 val checked = config.featureEnabled(feature.key)
+                // A tool that is on but cannot work is flagged right here,
+                // on the row that was switched; grants for tools that are
+                // off nag nobody.
+                val missing = feature.grants.filterNot { it.granted(activity) }
                 SwitchRow(
                     title = feature.title,
                     supporting = feature.description,
                     checked = checked,
+                    warn = checked && missing.isNotEmpty(),
                     onChange = {
                         config.setFeatureEnabled(feature.key, it)
                         activity.bump()
                     },
                 )
-                // A tool that is on but cannot work is flagged right here,
-                // on the row that was switched; grants for tools that are
-                // off nag nobody.
                 if (checked) {
-                    feature.grants.filterNot { it.granted(activity) }.forEach { grant ->
+                    missing.forEach { grant ->
                         StatusText(grant.ask, warn = true)
                         OutlinedButton(onClick = { grant.open(activity) }) {
                             Text(grant.button)

@@ -183,23 +183,28 @@ val NOTIFICATIONS_GRANT = Grant(
 )
 
 /**
- * The tab-top setup card's list. Overlay, location and media sit here
- * rather than on tool rows because the tools they serve (timers,
- * get_location, podcasts) have no rows yet — the Tools card shows only
- * the generic tier. When the app-specific sections land, each moves to
- * its row and this shrinks to just battery.
+ * Location, all the time: the "all the time" half matters because a server
+ * started by boot or app update is background from the system's point of
+ * view, and without it get_location silently returns nothing.
+ */
+val LOCATION_GRANT = Grant(
+    ask = "Location permission missing (needs \"allow all the time\").",
+    button = "Allow location",
+    granted = { Locator.hasPermission(it) && Locator.hasBackgroundPermission(it) },
+    open = {
+        if (Locator.hasPermission(it)) it.requestBackgroundLocation() else it.requestLocation()
+    },
+)
+
+/**
+ * The tab-top setup card's list. Overlay and media sit here rather than
+ * only on tool rows because app-specific tools with no rows (timers,
+ * podcasts, voice) also need them — the Tools card shows only the generic
+ * tier. When the app-specific sections land, each moves to its rows and
+ * this shrinks to just battery.
  */
 val MCP_GRANTS = listOf(
     OVERLAY_GRANT,
-    Grant(
-        ask = "Grant location, all the time, so get_location answers even when " +
-            "the server started on its own after a reboot.",
-        button = "Allow location",
-        granted = { Locator.hasPermission(it) && Locator.hasBackgroundPermission(it) },
-        open = {
-            if (Locator.hasPermission(it)) it.requestBackgroundLocation() else it.requestLocation()
-        },
-    ),
     MEDIA_GRANT,
     BATTERY_GRANT,
 )

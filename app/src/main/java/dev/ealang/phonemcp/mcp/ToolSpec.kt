@@ -16,9 +16,11 @@ class ToolSpec(
     val name: String,
     /**
      * The Config `feature_*` key that switches this tool off, or null for the
-     * handful that are always on (get_location, find_my_phone,
-     * silence_phone) — capabilities of the phone itself, not of an app
-     * anyone would want to fence off.
+     * pair that is always on (find_my_phone, silence_phone) — capabilities
+     * of the phone itself, not of an app anyone would want to fence off.
+     * get_location moved out of that set: a switchable
+     * tool gets a row on the MCP tab, which is where its missing-permission
+     * warning lives.
      */
     val featureKey: String?,
     /** The tools/list schema entry, name and inputSchema included. */

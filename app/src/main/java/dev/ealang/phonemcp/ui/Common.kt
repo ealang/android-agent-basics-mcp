@@ -98,13 +98,18 @@ fun CollapsibleCard(
     }
 }
 
-/** Title + optional supporting line on the left, a switch on the right. */
+/**
+ * Title + optional supporting line on the left, a switch on the right.
+ * [warn] puts the same warning icon [CollapsibleCard] uses beside the
+ * title — the one signal for "needs setup", everywhere it appears.
+ */
 @Composable
 fun SwitchRow(
     title: String,
     supporting: String? = null,
     checked: Boolean,
     enabled: Boolean = true,
+    warn: Boolean = false,
     onChange: (Boolean) -> Unit,
 ) {
     Row(
@@ -113,7 +118,20 @@ fun SwitchRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f).padding(end = 16.dp)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(title, style = MaterialTheme.typography.bodyLarge)
+                if (warn) {
+                    Icon(
+                        Icons.Filled.Warning,
+                        contentDescription = "Needs attention",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
             supporting?.let {
                 Text(
                     it,

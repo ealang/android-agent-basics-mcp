@@ -129,6 +129,15 @@ class Config(context: Context) {
     fun setFeatureEnabled(key: String, value: Boolean) =
         prefs.edit().putBoolean("feature_$key", value).apply()
 
+    /**
+     * Whether the POST_NOTIFICATIONS dialog has ever been shown. Needed
+     * because the platform cannot distinguish never-asked from
+     * don't-ask-again, and the two lead to different screens.
+     */
+    var notificationsAsked: Boolean
+        get() = prefs.getBoolean("notifications_asked", false)
+        set(value) = prefs.edit().putBoolean("notifications_asked", value).apply()
+
     /** Whether any listener is switched on — no listener wanted, no service. */
     fun anyServerEnabled(): Boolean =
         featureEnabled(FEATURE_MCP) || featureEnabled(FEATURE_WEBHOOK)

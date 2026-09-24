@@ -133,7 +133,7 @@ object AppTools {
 
         val getLocation = ToolSpec(
             name = "get_location",
-            featureKey = null,
+            featureKey = "location",
             definition = JSONObject()
                 .put("name", "get_location")
                 .put(
