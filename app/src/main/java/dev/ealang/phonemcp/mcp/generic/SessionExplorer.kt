@@ -124,6 +124,22 @@ object SessionExplorer {
     }
 
     /**
+     * The friendly names for the media KEYCODEs, shared with send_intent's
+     * key_event extra so the two spellings never diverge.
+     */
+    internal fun mediaKeyCode(name: String): Int? = when (name.trim().lowercase()) {
+        "play" -> KeyEvent.KEYCODE_MEDIA_PLAY
+        "pause" -> KeyEvent.KEYCODE_MEDIA_PAUSE
+        "play_pause" -> KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
+        "next" -> KeyEvent.KEYCODE_MEDIA_NEXT
+        "previous" -> KeyEvent.KEYCODE_MEDIA_PREVIOUS
+        "stop" -> KeyEvent.KEYCODE_MEDIA_STOP
+        "fast_forward" -> KeyEvent.KEYCODE_MEDIA_FAST_FORWARD
+        "rewind" -> KeyEvent.KEYCODE_MEDIA_REWIND
+        else -> null
+    }
+
+    /**
      * Dispatch one media-button press as a down/up pair, then read back
      * whatever sessions exist a beat later — the routing happened inside the
      * system, so the read-back is the only visibility. Works without the
@@ -131,18 +147,9 @@ object SessionExplorer {
      * the grant buys.
      */
     fun key(context: Context, name: String): String {
-        val code = when (name.trim().lowercase()) {
-            "play" -> KeyEvent.KEYCODE_MEDIA_PLAY
-            "pause" -> KeyEvent.KEYCODE_MEDIA_PAUSE
-            "play_pause" -> KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
-            "next" -> KeyEvent.KEYCODE_MEDIA_NEXT
-            "previous" -> KeyEvent.KEYCODE_MEDIA_PREVIOUS
-            "stop" -> KeyEvent.KEYCODE_MEDIA_STOP
-            "fast_forward" -> KeyEvent.KEYCODE_MEDIA_FAST_FORWARD
-            "rewind" -> KeyEvent.KEYCODE_MEDIA_REWIND
-            else -> return "FAILED: unknown key \"$name\" — use play, pause, play_pause, " +
+        val code = mediaKeyCode(name)
+            ?: return "FAILED: unknown key \"$name\" — use play, pause, play_pause, " +
                 "next, previous, stop, fast_forward, or rewind."
-        }
         val audio = context.getSystemService(AudioManager::class.java)
 
         var answer = "no answer within ${MediaExplorer.PLAY_SETTLE_MS / 1000 + 3}s"

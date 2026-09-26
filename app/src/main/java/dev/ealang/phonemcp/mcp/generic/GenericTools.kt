@@ -189,7 +189,7 @@ object GenericTools {
                         "properties",
                         JSONObject()
                             .put("key", JSONObject().put("type", "string"))
-                            .put("type", JSONObject().put("type", "string").put("description", "string, int, long, boolean, float, double, uri, string_array, int_array, or long_array."))
+                            .put("type", JSONObject().put("type", "string").put("description", "string, int, long, boolean, float, double, uri, string_array, int_array, long_array, or key_event. key_event builds a KeyEvent parcelable (the payload a MEDIA_BUTTON intent needs): value is a key name — play, pause, play_pause, next, previous, stop, fast_forward, rewind, or any android KEYCODE_* name — with an optional \"up:\" prefix for ACTION_UP (default is ACTION_DOWN)."))
                             .put("value", JSONObject().put("description", "The value, matching the type.")),
                     ).put("required", JSONArray().put("key").put("value")),
                 ).put("description", "Typed extras. The type must match what the receiving app reads."),

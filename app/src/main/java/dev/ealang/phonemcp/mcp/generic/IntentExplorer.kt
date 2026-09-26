@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.content.pm.ResolveInfo
 import android.net.Uri
 import android.util.Log
+import android.view.KeyEvent
 import dev.ealang.phonemcp.mcp.Preflight
 import dev.ealang.phonemcp.mcp.UnlockGate
 import org.json.JSONArray
@@ -417,8 +418,30 @@ object IntentExplorer {
                     val a = e.getJSONArray("value")
                     intent.putExtra(key, LongArray(a.length()) { a.getLong(it) })
                 }
+                // A KeyEvent parcelable — the payload of a MEDIA_BUTTON
+                // intent, which is unsendable without it: the action only
+                // says "a button was pressed", the KeyEvent says which.
+                // Value is a key name, "up:" prefixed for ACTION_UP
+                // (default is ACTION_DOWN, the half receivers act on).
+                "key_event" -> {
+                    val spec = e.getString("value").trim()
+                    val up = spec.startsWith("up:", ignoreCase = true)
+                    val name = spec.removePrefix("up:").removePrefix("UP:").removePrefix("down:").removePrefix("DOWN:")
+                    val code = SessionExplorer.mediaKeyCode(name)
+                        ?: KeyEvent.keyCodeFromString(name.uppercase())
+                            .takeIf { it != KeyEvent.KEYCODE_UNKNOWN }
+                        ?: KeyEvent.keyCodeFromString("KEYCODE_${name.uppercase()}")
+                            .takeIf { it != KeyEvent.KEYCODE_UNKNOWN }
+                        ?: return "extra \"$key\": unknown key \"$name\" — use play, pause, " +
+                            "play_pause, next, previous, stop, fast_forward, rewind, or any " +
+                            "android KEYCODE_* name."
+                    intent.putExtra(
+                        key,
+                        KeyEvent(if (up) KeyEvent.ACTION_UP else KeyEvent.ACTION_DOWN, code),
+                    )
+                }
                 else -> return "extra \"$key\": type must be string, int, long, boolean, " +
-                    "float, double, uri, string_array, int_array, or long_array."
+                    "float, double, uri, string_array, int_array, long_array, or key_event."
             }
         } catch (ex: Exception) {
             return "extra \"$key\": value does not match type $type."
