@@ -1,11 +1,23 @@
-# Media control — driving apps through their MediaBrowserService
+# Media control — driving apps through their media sessions
 
-The mechanism behind `media_apps`, `media_browse`, `media_search`,
-`media_play`, and `media_command`. This is Android Auto's route: bind the
-app's MediaBrowserService, get its browse tree and media session, and send
-transport commands through the session. Connecting wakes the app's process
-with **no activity, no launch, and no keyguard involvement** — playback
-starts on a locked phone from a cold app.
+Two mechanisms, one grammar.
+
+**The browser route** — behind `media_apps`, `media_browse`,
+`media_search`, `media_play`, and `media_command`. This is Android Auto's
+route: bind the app's MediaBrowserService, get its browse tree and media
+session, and send transport commands through the session. Connecting wakes
+the app's process with **no activity, no launch, and no keyguard
+involvement** — playback starts on a locked phone from a cold app. Its
+limit is the door: each app decides in `onGetRoot` who may connect, and a
+signature-allowlisted app refuses this route forever.
+
+**The session route** — behind `media_sessions`, `media_key`, and
+`media_command` with `route: session`. Requires the notification-access
+grant. `getActiveSessions` hands over a controller for every **live**
+session on the phone regardless of the app's browser policy — this is how
+refused-tier apps (YouTube Music) get steered. Its limit is liveness: a
+session exists while the app plays or sits freshly paused, and this route
+can never cold-start anything.
 
 ## The tools
 
@@ -20,12 +32,26 @@ starts on a locked phone from a cold app.
 - `media_play {app, media_id?, query?}` — `media_id` calls
   `playFromMediaId`; `query` calls `playFromSearch`. The result includes a
   3-second read-back of the session state.
-- `media_command {app, action}` — everything else. Actions:
+- `media_command {app, action, route?}` — everything else. Actions:
   `play`, `pause`, `stop`, `next`, `previous`, `queue`, `queue:<id>`
   (skipToQueueItem), `seek:<seconds|+N|-N>`, `speed:<x>`, `rate:<spec>`,
-  `uri:<uri>` (playFromUri), `queue_add:<id>`, `queue_add:<pos>:<id>`,
-  `queue_remove:<id>`; anything else is sent verbatim as a **custom
-  action** (app-defined, case-sensitive ids — see per-app files).
+  `uri:<uri>` (playFromUri), `search:<query>` (playFromSearch),
+  `media:<id>` (playFromMediaId), `queue_add:<id>`,
+  `queue_add:<pos>:<id>`, `queue_remove:<id>`; anything else is sent
+  verbatim as a **custom action** (app-defined, case-sensitive ids — see
+  per-app files). `route: session` targets a live session instead of
+  connecting the browser service; queue edits are browser-only.
+- `media_sessions` — list every live session on the phone with state,
+  title, position, and advertised actions. Sees apps the browser route
+  cannot connect to. Needs notification access.
+- `media_key {key}` — press a system media button (`play`, `pause`,
+  `play_pause`, `next`, `previous`, `stop`, `fast_forward`, `rewind`),
+  the car/headset mechanism. **Untargetable by design**: the system
+  routes the press to whatever it considers the most recent media app,
+  and idle sessions (including our own voice gateway's) compete for it.
+  Prefer `media_command route: session` whenever a target can be named;
+  use `media_key` when the point is exactly "resume whatever was last".
+  Needs no grant to send; the read-back needs notification access.
 
 ## Connection tiers
 
@@ -80,3 +106,11 @@ resolve text server-side and start playing with no browse at all.
 - Media ids may be stable public identifiers, opaque database keys, or
   signed/minted blobs. The per-app file states which; it decides whether
   ids can be stored long-term in a skill or must be re-browsed each time.
+- **`paused` is drivable; `stopped` is a dead handle.** A stopped session
+  still shows metadata but ignores every command — fall back to launching
+  the app. And a paused reading during an app's teardown is not proof of
+  resumability; only a command's read-back tells. Sessions also decay
+  fast: losing an audio-focus fight can erase one within a minute.
+- **Force-stopped apps are unreachable on every route** (platform
+  stopped-state: no broadcasts, no media-button restarts) until the user
+  opens them again.

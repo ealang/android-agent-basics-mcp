@@ -15,7 +15,9 @@ MediaBrowser route.
 - **Smart AudioBook Player** (`ak.alizandro.smartaudiobookplayer`) —
   re-confirmed 2026-09-04
 - **Google app** (`com.google.android.googlequicksearchbox`)
-- **YouTube Music** (`com.google.android.apps.youtube.music`)
+- **YouTube Music** (`com.google.android.apps.youtube.music`) — refused
+  *on this route*, but reachable through the active-session route while
+  playing or paused: see [youtube-music.md](youtube-music.md)
 - **Telegram** (`org.telegram.messenger`)
 
 ## Eleven Reader — no MediaBrowserService at all

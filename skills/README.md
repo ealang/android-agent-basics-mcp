@@ -18,9 +18,11 @@ don't try search.
 
 ## Generic skills
 
-- [media-control.md](media-control.md) — driving apps through their
-  MediaBrowserService: connection tiers, the proven play pattern, transport
-  commands, queue read/write, verification.
+- [media-control.md](media-control.md) — driving apps through their media
+  sessions, by two routes: the MediaBrowserService (connection tiers, the
+  proven play pattern, browse/queue) and the active-session route
+  (`media_sessions`, `media_key`, `route: session`) that reaches apps the
+  browser route cannot.
 - [media-discovery.md](media-discovery.md) — every way to find content:
   browse, session search, queue, now-playing, and out-of-band web APIs.
 - [app-launch.md](app-launch.md) — when a launch is needed at all, and the
@@ -40,6 +42,7 @@ don't try search.
 | Substack | [apps/substack.md](apps/substack.md) | works with sharp edges |
 | AIMP | [apps/aimp.md](apps/aimp.md) | plays only while connected |
 | YouTube | [apps/youtube.md](apps/youtube.md) | VIEW intent cold-starts any video; fully drivable once playing |
+| YouTube Music | [apps/youtube-music.md](apps/youtube-music.md) | resume and steer a live session only; no cold start, no named content |
 | Google Maps | [apps/google-maps.md](apps/google-maps.md) | start navigation hands-free; everything else is one tap |
 | Samsung Clock | [apps/samsung-clock.md](apps/samsung-clock.md) | timers and alarms via public actions; stopwatch signature-locked — don't re-probe |
 | Agent Timer (Pebble) | [apps/pebble-agent-timer.md](apps/pebble-agent-timer.md) | key table for the generic path; `set_watch_timer` is easier |
@@ -56,8 +59,6 @@ reachable generically, and its key table is the worked example.
 
 Candidates for the same treatment once the tool surface exists:
 
-- Active-MediaSession control via notification-listener — would reach apps
-  with no MediaBrowserService (e.g. Eleven Reader) while they are playing.
 - Receiving AppMessages *from* the watch. Deliberately not built: a watchapp
   with something to say should say it to a companion app of its own, not to
   a generic listener that has no idea what the keys mean.
