@@ -3,7 +3,8 @@
 - **Package**: `ak.alizandro.smartaudiobookplayer`
 - **Tier**: browser route refused (signature allowlist); **fully drivable
   anyway** — its player service exports named actions as plain intent
-  filters, richer than a media button
+  filters, and the live session honors `play_from_search`, so any book
+  plays by name from a dead process
 - **Verified on device**: 2026-09-26 (v11.9.0)
 
 Mechanisms: [media-control.md](../media-control.md).
@@ -47,6 +48,24 @@ grammar has no words for.
 Only `ActionPlay` is verified so far; the rest are the same filter on
 the same service, declared in the same manifest block.
 
+## Any book by name — `play_from_search` is honored
+
+Verified 2026-09-26: on the live session,
+
+```
+media_command app: "smart audiobook", route: session,
+  action: "search:<book title>"
+```
+
+switched playback to the named book within the 3s read-back ("PLAYING,
+<title>, 2s of 90141s"). Free text against the local
+library, no ids, no URLs. A non-matching outcome is silent (the session
+stays on the current book and keeps playing — no error state), so
+verify by title in the read-back, not by "sent".
+
+Chained with the revival intent: **"play book X" works from a dead
+process** — `ActionPlay` → wait for the session → `search:<title>`.
+
 ## While a session is live
 
 - `media_sessions` shows it: state, book title, position, speed.
@@ -59,11 +78,9 @@ the same service, declared in the same manifest block.
 
 - **Browser route refused** — `onGetRoot` signature allowlist, confirmed
   2026-09-02 and 2026-09-04. Don't re-probe.
-- Untested: session `play_from_search` / `play_from_media_id` (the
-  session advertises both), and `MEDIA_PLAY_FROM_SEARCH` at its
-  `PlayerActivity` (the manifest accepts it — but YT Music also
-  accepted-and-ignored it, so treat as unproven). Content selection by
-  name is an open question; transport and resume-last-book are solved.
+- Untested: session `play_from_media_id` (advertised; id format unknown
+  and now redundant — search does the job), and `MEDIA_PLAY_FROM_SEARCH`
+  at its `PlayerActivity` (also redundant).
 - Untested: revival from screen locked and from a naturally
-  long-dead process (the verified run had the screen unlocked).
+  long-dead process (the verified runs had the screen unlocked).
 - Force-stopped remains unreachable, as everywhere.

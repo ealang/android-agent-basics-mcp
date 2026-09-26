@@ -1,33 +1,30 @@
-# Apps with no usable media route — don't re-probe
+# Apps with no ability to be automated at all — don't re-probe
 
-Verified on device 2026-09-02, re-confirmed 2026-09-04 where noted. These
-conclusions are policy/architecture, not transient state; re-testing them
-wastes time and (for the refused tier) cannot ever succeed from this
-codebase.
+This file is only for apps where **every** route has been exhausted:
+browser, session, and the exported-surface scan (`intent_scan` +
+`send_intent foreground_service`). A refused browser route alone no
+longer qualifies — YouTube Music and Smart AudioBook Player both turned
+out fully drivable through other doors and have their own files.
 
-## Refused at the door (signature allowlist)
+## Browser route refused, other routes not yet scanned
 
-`onGetRoot` returns null for callers that aren't Android Auto / Wear-class
-signed packages. No browse, no session, no play — no workaround on the
-MediaBrowser route.
+`onGetRoot` signature allowlist (verified 2026-09-02/04) — that route
+is closed forever, but after the 2026-09-26 findings these need an
+`intent_scan` pass before they can be called unavailable:
 
-- **Audible** (`com.audible.application`) — re-confirmed 2026-09-04
-- **Smart AudioBook Player** (`ak.alizandro.smartaudiobookplayer`) —
-  refused *on this route*, but fully drivable through its exported
-  service actions: see [smart-audiobook.md](smart-audiobook.md)
+- **Audible** (`com.audible.application`)
 - **Google app** (`com.google.android.googlequicksearchbox`)
-- **YouTube Music** (`com.google.android.apps.youtube.music`) — refused
-  *on this route*, but reachable through the active-session route while
-  playing or paused: see [youtube-music.md](youtube-music.md)
 - **Telegram** (`org.telegram.messenger`)
 
-## Eleven Reader — no MediaBrowserService at all
+## Eleven Reader — scanned, nothing to drive
 
-Absent from `media_apps`: it ships no browser service, so this entire
-mechanism cannot see it. If it posts a media notification while playing,
-the active-MediaSession route (notification-listener permission) could
-control transport — a possible future phone-mcp capability, noted in
-[../README.md](../README.md), not a current one.
+`io.elevenlabs.readerapp`, scanned 2026-09-26. No MediaBrowserService,
+no MEDIA_BUTTON listener, no exported service surface at all — the two
+exported services are permission-guarded framework plumbing, the player
+service is internal. The only exported surface is activity-level
+(deep links, document SEND/VIEW, PROCESS_TEXT): screen required, no
+playback control. Transport-steering a live session is possible in
+principle but doesn't clear the automation bar. Don't re-probe.
 
 ## Bluetooth system app
 
