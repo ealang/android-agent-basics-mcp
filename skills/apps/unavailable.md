@@ -13,7 +13,8 @@ MediaBrowser route.
 
 - **Audible** (`com.audible.application`) — re-confirmed 2026-09-04
 - **Smart AudioBook Player** (`ak.alizandro.smartaudiobookplayer`) —
-  re-confirmed 2026-09-04
+  refused *on this route*, but fully drivable through its exported
+  service actions: see [smart-audiobook.md](smart-audiobook.md)
 - **Google app** (`com.google.android.googlequicksearchbox`)
 - **YouTube Music** (`com.google.android.apps.youtube.music`) — refused
   *on this route*, but reachable through the active-session route while

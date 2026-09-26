@@ -44,6 +44,14 @@ broadcast at the same app's exported MediaButtonReceiver was delivered
 and ignored, so prefer the service delivery. Whether an app honors it is
 per-app data; force-stopped apps stay unreachable even here.
 
+MEDIA_BUTTON is one instance of the general move: **`intent_scan` the
+app for whatever service-level control surface it exports, and start
+the service with it via `foreground_service`.** Some apps declare a
+private action vocabulary instead of (or richer than) the media-button
+contract — Smart AudioBook Player has thirteen named actions including
+bookmark and sleep timer, all reachable from a dead process with no
+extras at all (see its per-app file).
+
 ## The tools
 
 - `media_apps` — enumerate every installed app declaring a
