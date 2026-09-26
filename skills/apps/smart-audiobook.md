@@ -74,6 +74,20 @@ process** — `ActionPlay` → wait for the session → `search:<title>`.
   (ActionRewindSmall, ActionFwdSmall, ActionExit) — with the service
   route available there is no reason to prefer them.
 
+## Seeking: no absolute seek, only jumps
+
+`seek_to` is **not advertised and genuinely ignored** (`seek:0` on a
+playing session: position kept advancing — verified 2026-09-26). Seek
+by repeated jump actions instead, verifying position in the read-back
+between presses:
+
+- `ActionRewindBig` / `ActionFwdBig` — ≈60s per press (app-configured,
+  measured 2026-09-26)
+- `ActionRewindSmall` / `ActionFwdSmall` — smaller, app-configured
+
+"Rewind to the beginning" from ~2 min in took three `ActionRewindBig`
+presses and landed at 1s, playing.
+
 ## Not usable / untested
 
 - **Browser route refused** — `onGetRoot` signature allowlist, confirmed
