@@ -75,10 +75,19 @@ switched playback to the named track within seconds ("PLAYING,
 above, "play this specific song" works from nothing, hands free:
 revive → wait for the session → `uri:` the watch URL.
 
-The missing half is name → URL: the app resolves a URL it is handed
-but answers no searches, so the lookup happens out of band (a web
-search for the `music.youtube.com/watch` link — see
-[media-discovery.md](../media-discovery.md) on out-of-band APIs).
+The missing half is name → URL, done out of band. Three ways, any
+search engine:
+
+- Search `<artist/song> "music.youtube.com/watch"` (or
+  `site:music.youtube.com`) — the quoted domain surfaces direct links.
+- **ID mapping**: video ids are shared with regular YouTube, so any
+  `youtube.com/watch?v=X` result becomes
+  `music.youtube.com/watch?v=X` by swapping the host. Regular YouTube
+  results are far more plentiful.
+- YouTube Data API v3 `search.list` (needs an API key) for a
+  programmatic lookup that can filter to official music
+  (`videoCategoryId=10`); a web search finds *an* upload, not
+  necessarily the canonical track.
 
 Every other content-selection route is refused — tested, don't
 re-probe:
