@@ -74,19 +74,29 @@ process** — `ActionPlay` → wait for the session → `search:<title>`.
   (ActionRewindSmall, ActionFwdSmall, ActionExit) — with the service
   route available there is no reason to prefer them.
 
-## Seeking: no absolute seek, only jumps
+## Seeking: no absolute seek — jumps and file boundaries
 
 `seek_to` is **not advertised and genuinely ignored** (`seek:0` on a
-playing session: position kept advancing — verified 2026-09-26). Seek
-by repeated jump actions instead, verifying position in the read-back
-between presses:
+playing session: position kept advancing — verified 2026-09-26). The
+seeking vocabulary is the service actions, all fired with the
+`send_intent` recipe above (only the action name changes):
 
+- **`ActionPrevFile` restarts the current file** — verified: one press
+  from 43s in landed at the file's start. The conventional prev-track
+  contract; presumably a second press within the first seconds crosses
+  to the prior file (untested). This is the one-press "back to the
+  beginning of the chapter".
 - `ActionRewindBig` / `ActionFwdBig` — ≈60s per press (app-configured,
-  measured 2026-09-26)
-- `ActionRewindSmall` / `ActionFwdSmall` — smaller, app-configured
+  measured 2026-09-26). For arbitrary offsets: repeat, verifying
+  position in the read-back between presses.
+- `ActionRewindSmall` / `ActionFwdSmall` — smaller, app-configured.
 
-"Rewind to the beginning" from ~2 min in took three `ActionRewindBig`
-presses and landed at 1s, playing.
+Quirk: **right after `ActionPrevFile`, a paused session's read-back
+omits the position line entirely** — position is unset until playback
+resumes. Not a dead session; send `play` and read again.
+
+Note the jumps land audibly at each intermediate point while playing —
+this is the widget jump button pressed repeatedly, not a seek bar.
 
 ## Not usable / untested
 
