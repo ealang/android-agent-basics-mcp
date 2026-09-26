@@ -22,7 +22,9 @@ don't try search.
   sessions, by two routes: the MediaBrowserService (connection tiers, the
   proven play pattern, browse/queue) and the active-session route
   (`media_sessions`, `media_key`, `route: session`) that reaches apps the
-  browser route cannot.
+  browser route cannot — plus the targeted media-button recipe
+  (`send_intent` with a `key_event` extra) that revives an app neither
+  route can reach.
 - [media-discovery.md](media-discovery.md) — every way to find content:
   browse, session search, queue, now-playing, and out-of-band web APIs.
 - [app-launch.md](app-launch.md) — when a launch is needed at all, and the
@@ -42,7 +44,7 @@ don't try search.
 | Substack | [apps/substack.md](apps/substack.md) | works with sharp edges |
 | AIMP | [apps/aimp.md](apps/aimp.md) | plays only while connected |
 | YouTube | [apps/youtube.md](apps/youtube.md) | VIEW intent cold-starts any video; fully drivable once playing |
-| YouTube Music | [apps/youtube-music.md](apps/youtube-music.md) | resume and steer a live session only; no cold start, no named content |
+| YouTube Music | [apps/youtube-music.md](apps/youtube-music.md) | resumable at will via targeted media button, even screen-locked; named content refused |
 | Google Maps | [apps/google-maps.md](apps/google-maps.md) | start navigation hands-free; everything else is one tap |
 | Samsung Clock | [apps/samsung-clock.md](apps/samsung-clock.md) | timers and alarms via public actions; stopwatch signature-locked — don't re-probe |
 | Agent Timer (Pebble) | [apps/pebble-agent-timer.md](apps/pebble-agent-timer.md) | key table for the generic path; `set_watch_timer` is easier |

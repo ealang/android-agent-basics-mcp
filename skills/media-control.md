@@ -1,6 +1,7 @@
 # Media control — driving apps through their media sessions
 
-Two mechanisms, one grammar.
+Two mechanisms, one grammar — plus a third, built from `send_intent`,
+for the case both mechanisms lose.
 
 **The browser route** — behind `media_apps`, `media_browse`,
 `media_search`, `media_play`, and `media_command`. This is Android Auto's
@@ -18,6 +19,30 @@ session on the phone regardless of the app's browser policy — this is how
 refused-tier apps (YouTube Music) get steered. Its limit is liveness: a
 session exists while the app plays or sits freshly paused, and this route
 can never cold-start anything.
+
+**The targeted media button** — not a `media_*` tool but a `send_intent`
+recipe, for the app both routes lose: browser refused, session dead.
+`media_key` exists but is untargetable, so build the press by hand and
+address it:
+
+```
+send_intent
+  mode: foreground_service        # plain service: Android refuses cross-app
+  component: <pkg>/<its media service>   # from intent_scan (MEDIA_BUTTON filter)
+  action: android.intent.action.MEDIA_BUTTON
+  extras: [{key: android.intent.extra.KEY_EVENT, type: key_event, value: play}]
+```
+
+One intent: starting the service is the delivery, and the `key_event`
+extra is the press — without it the intent is an empty envelope, since
+MEDIA_BUTTON only says *a* button was pressed and the KeyEvent says
+which. This is the system's own headset-revival mechanism, aimed instead
+of routed: it wakes the app's process and resumes last content with no
+live session, no unlock, no audio-focus permission. Proven on YouTube
+Music from a stopped session with the screen locked (2026-09-26); a
+broadcast at the same app's exported MediaButtonReceiver was delivered
+and ignored, so prefer the service delivery. Whether an app honors it is
+per-app data; force-stopped apps stay unreachable even here.
 
 ## The tools
 
