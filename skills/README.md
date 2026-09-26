@@ -44,7 +44,7 @@ don't try search.
 | Substack | [apps/substack.md](apps/substack.md) | works with sharp edges |
 | AIMP | [apps/aimp.md](apps/aimp.md) | plays only while connected |
 | YouTube | [apps/youtube.md](apps/youtube.md) | VIEW intent cold-starts any video; fully drivable once playing |
-| YouTube Music | [apps/youtube-music.md](apps/youtube-music.md) | resumable at will via targeted media button, even screen-locked; named content refused |
+| YouTube Music | [apps/youtube-music.md](apps/youtube-music.md) | fully drivable despite refused browser route: targeted-button revival + play-by-URL |
 | Google Maps | [apps/google-maps.md](apps/google-maps.md) | start navigation hands-free; everything else is one tap |
 | Samsung Clock | [apps/samsung-clock.md](apps/samsung-clock.md) | timers and alarms via public actions; stopwatch signature-locked — don't re-probe |
 | Agent Timer (Pebble) | [apps/pebble-agent-timer.md](apps/pebble-agent-timer.md) | key table for the generic path; `set_watch_timer` is easier |

@@ -1,9 +1,9 @@
 # YouTube Music
 
 - **Package**: `com.google.android.apps.youtube.music`
-- **Tier**: browser route refused; **resumable at will via a targeted
-  media-button intent** — steerable while a session is live; named
-  content refused on every route
+- **Tier**: browser route refused; **fully drivable anyway** — revive
+  with a targeted media-button intent, then play named content by
+  `music.youtube.com` URL through the live session
 - **Verified on device**: 2026-09-26
 
 Mechanisms: [media-control.md](../media-control.md).
@@ -60,9 +60,28 @@ app remains unreachable: platform stopped-state blocks even this.
   session within a minute. With the revival recipe above this no longer
   matters much — a dead session is one call from alive.
 
-## Named content — refused on every route
+## Named content — one route works: URI on the live session
 
-The app accepts transport, never content selection from a stranger:
+**`play_from_uri` is honored** where everything else is refused.
+Verified 2026-09-26: on a live session,
+
+```
+media_command app: "youtube music", route: session,
+  action: "uri:https://music.youtube.com/watch?v=<id>"
+```
+
+switched playback to the named track within seconds ("PLAYING,
+<title>, 1s of 359s"). Chained with the revival recipe
+above, "play this specific song" works from nothing, hands free:
+revive → wait for the session → `uri:` the watch URL.
+
+The missing half is name → URL: the app resolves a URL it is handed
+but answers no searches, so the lookup happens out of band (a web
+search for the `music.youtube.com/watch` link — see
+[media-discovery.md](../media-discovery.md) on out-of-band APIs).
+
+Every other content-selection route is refused — tested, don't
+re-probe:
 
 - `play_from_search` / `play_from_media_id` on a live session:
   **advertised but refused** — `search:<query>` answers `error: Cannot
@@ -75,11 +94,6 @@ The app accepts transport, never content selection from a stranger:
 - The browser route can never help: `onGetRoot` refuses non-allowlisted
   signatures (see [unavailable.md](unavailable.md)).
 
-Untested lead: VIEW intents at `music.youtube.com` URLs (the pattern is
-proven on YouTube, [youtube.md](youtube.md)). Even if it works it needs
-the screen unlocked — activity launches are discarded behind the
-keyguard, so it would be `send_intent` with `via_unlock_gate: true`.
-
-Bottom line: "resume what was last playing" is fully solved, hands
-free, screen locked. "Play *this specific thing*" still means picking
-it on the phone.
+Untested (and now redundant): VIEW intents at `music.youtube.com` URLs
+launching the activity — the session `uri:` route does the same job
+without needing the screen unlocked.
