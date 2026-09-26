@@ -98,8 +98,10 @@ re-probe:
   with a plain `play`).
 - `android.media.action.MEDIA_PLAY_FROM_SEARCH` at its main activity
   (the Google Assistant voice-play intent, which its manifest accepts):
-  launches the app to the home screen and **silently ignores the
-  query** — no search, no playback. Tested unlocked 2026-09-26.
+  brings the app to the foreground and **silently ignores the query**
+  — no search, no playback. Tested unlocked 2026-09-26, both cold and
+  with the app running on a live session; app state makes no
+  difference.
 - The browser route can never help: `onGetRoot` refuses non-allowlisted
   signatures (see [unavailable.md](unavailable.md)).
 
