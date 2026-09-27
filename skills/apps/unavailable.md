@@ -12,9 +12,12 @@ out fully drivable through other doors and have their own files.
 is closed forever, but after the 2026-09-26 findings these need an
 `intent_scan` pass before they can be called unavailable:
 
-- **Audible** (`com.audible.application`)
 - **Google app** (`com.google.android.googlequicksearchbox`)
-- **Telegram** (`org.telegram.messenger`)
+
+(Audible was scanned 2026-09-27 and turned out fully drivable — see
+[audible.md](audible.md). Telegram was dropped from the survey
+entirely: phone-mcp sends Telegram messages natively via TDLib, so
+automating the Telegram app adds nothing.)
 
 ## Eleven Reader — scanned, nothing to drive
 
