@@ -141,6 +141,79 @@ object ProviderExplorer {
         }
     }
 
+    // ---------------------------------------------------------------- call
+
+    /**
+     * ContentResolver.call — the RPC half of the provider interface, and
+     * the command channel most modern apps actually use: one method name,
+     * one optional string arg, one Bundle each way. Addressed by bare
+     * authority rather than a URI because that is the platform's own
+     * asymmetry: call() does not route by path, and accepting a URI would
+     * imply path semantics that don't exist.
+     *
+     * Errors come back raw, same doctrine as query, because each names a
+     * different next move: SecurityException = locked, and with what
+     * permission; IllegalArgumentException = no provider at that
+     * authority (the resolver's own message); an exception out of the
+     * provider's call() = the method exists enough to crash. A null
+     * Bundle is not an error — it is the normal answer of a command with
+     * nothing to report, and only the target's documentation can say
+     * whether it also means "unknown method ignored".
+     */
+    fun call(context: Context, args: JSONObject): String {
+        val authority = args.optString("authority").trim()
+            .removePrefix("content://").trimEnd('/')
+        if (authority.isEmpty()) return "FAILED: authority is required, e.g. com.example.app.provider."
+        if (authority.contains('/')) {
+            return "FAILED: authority must be bare (no path) — call() does not route by path."
+        }
+        val method = args.optString("method").trim()
+        if (method.isEmpty()) return "FAILED: method is required."
+        val arg = args.optString("arg").takeIf { it.isNotBlank() }
+        val extras = args.optJSONArray("extras")?.let { a ->
+            val (bundle, problem) = IntentExplorer.parseExtras(a)
+            bundle ?: return "FAILED: $problem"
+        }
+
+        val uri = Uri.parse("content://$authority")
+        val result = try {
+            context.contentResolver.call(uri, method, arg, extras)
+        } catch (e: Exception) {
+            Log.w(TAG, "provider: call $method on $authority failed", e)
+            return "FAILED: ${e.javaClass.simpleName}: ${e.message}"
+        }
+        Log.i(TAG, "provider: call $method on $authority → ${result?.keySet()?.size ?: "null"} keys")
+        if (result == null) {
+            return "Called $method on $authority. The provider returned no Bundle — " +
+                "normal for a command with nothing to report, but some providers " +
+                "also answer unknown methods this way."
+        }
+        if (result.isEmpty) return "Called $method on $authority. The provider returned an empty Bundle."
+        val sb = StringBuilder("Called $method on $authority. Result:\n")
+        for (key in result.keySet().sorted()) {
+            sb.append("  $key = ${bundleValue(result, key)}\n")
+        }
+        return sb.toString().trimEnd()
+    }
+
+    @Suppress("DEPRECATION") // Bundle.get: the typed accessors need the type known up front.
+    private fun bundleValue(b: android.os.Bundle, key: String): String =
+        when (val v = b.get(key)) {
+            null -> "null"
+            is ByteArray -> "<byte[], ${v.size} bytes>"
+            is IntArray -> v.joinToString(", ", "[", "]")
+            is LongArray -> v.joinToString(", ", "[", "]")
+            is Array<*> -> v.joinToString(", ", "[", "]")
+            is android.os.Bundle -> {
+                val inner = v.keySet().sorted().joinToString("; ") { k -> "$k = ${bundleValue(v, k)}" }
+                "{$inner}"
+            }
+            else -> {
+                val s = v.toString()
+                if (s.length > MAX_CELL) s.take(MAX_CELL) + "… (${s.length} chars)" else s
+            }
+        }
+
     private fun cellValue(c: Cursor, i: Int): String = when (c.getType(i)) {
         Cursor.FIELD_TYPE_NULL -> "null"
         Cursor.FIELD_TYPE_INTEGER -> c.getLong(i).toString()

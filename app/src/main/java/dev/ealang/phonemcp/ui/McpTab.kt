@@ -43,7 +43,7 @@ private data class Feature(
 // tier is shown; the app-specific switches are hidden, not removed.
 private val GENERIC = listOf(
     Feature("intents", "Intents", "send_intent, intent_scan, intent_resolve — raw Android intents, sent exactly as given.", listOf(OVERLAY_GRANT)),
-    Feature("content_providers", "Content providers", "Reading other apps' automation surfaces, like the recorder's file list."),
+    Feature("content_providers", "Content providers", "provider_query, provider_call — reading other apps' automation surfaces and invoking the commands they expose."),
     Feature("media_control", "Media control", "The media_* family — sessions, playback, browse and search in any media app.", listOf(MEDIA_GRANT)),
     Feature("watch_control", "Pebble control", "launch_watch_app, stop_watch_app, send_watch_message — raw watchapp messaging."),
     Feature("notifications", "Notifications", "post_notification, dismiss_notification — text notifications in the phone's shade.", listOf(NOTIFICATIONS_GRANT)),

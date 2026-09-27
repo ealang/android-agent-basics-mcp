@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ResolveInfo
 import android.net.Uri
+import android.os.Bundle
 import android.util.Log
 import android.view.KeyEvent
 import dev.ealang.phonemcp.mcp.Preflight
@@ -387,36 +388,50 @@ object IntentExplorer {
         if (!any) return null to "give at least an action, a data URI, or a component."
 
         args.optJSONArray("extras")?.let { extras ->
-            for (i in 0 until extras.length()) {
-                val e = extras.optJSONObject(i)
-                    ?: return null to "each extra is an object with key, type, and value."
-                val key = e.optString("key")
-                if (key.isBlank()) return null to "each extra needs a key."
-                val problem = putExtra(intent, key, e.optString("type", "string"), e)
-                if (problem != null) return null to problem
-            }
+            val (bundle, problem) = parseExtras(extras)
+            if (bundle == null) return null to problem
+            intent.putExtras(bundle)
         }
         return intent to null
     }
 
-    private fun putExtra(intent: Intent, key: String, type: String, e: JSONObject): String? {
+    /**
+     * Typed extras [{"key","type","value"}] into a Bundle. Shared with
+     * provider_call, whose input Bundle is the same grammar — one extras
+     * format across the whole generic tier. Types matter on the receiving
+     * side — an app reading getIntExtra sees nothing if a string arrives.
+     */
+    fun parseExtras(extras: JSONArray): Pair<Bundle?, String?> {
+        val bundle = Bundle()
+        for (i in 0 until extras.length()) {
+            val e = extras.optJSONObject(i)
+                ?: return null to "each extra is an object with key, type, and value."
+            val key = e.optString("key")
+            if (key.isBlank()) return null to "each extra needs a key."
+            val problem = putExtra(bundle, key, e.optString("type", "string"), e)
+            if (problem != null) return null to problem
+        }
+        return bundle to null
+    }
+
+    private fun putExtra(bundle: Bundle, key: String, type: String, e: JSONObject): String? {
         try {
             when (type.trim().lowercase()) {
-                "string" -> intent.putExtra(key, e.getString("value"))
-                "int" -> intent.putExtra(key, e.getInt("value"))
-                "long" -> intent.putExtra(key, e.getLong("value"))
-                "boolean", "bool" -> intent.putExtra(key, e.getBoolean("value"))
-                "float" -> intent.putExtra(key, e.getDouble("value").toFloat())
-                "double" -> intent.putExtra(key, e.getDouble("value"))
-                "uri" -> intent.putExtra(key, Uri.parse(e.getString("value")))
-                "string_array" -> intent.putExtra(key, stringArray(e.getJSONArray("value")))
+                "string" -> bundle.putString(key, e.getString("value"))
+                "int" -> bundle.putInt(key, e.getInt("value"))
+                "long" -> bundle.putLong(key, e.getLong("value"))
+                "boolean", "bool" -> bundle.putBoolean(key, e.getBoolean("value"))
+                "float" -> bundle.putFloat(key, e.getDouble("value").toFloat())
+                "double" -> bundle.putDouble(key, e.getDouble("value"))
+                "uri" -> bundle.putParcelable(key, Uri.parse(e.getString("value")))
+                "string_array" -> bundle.putStringArray(key, stringArray(e.getJSONArray("value")))
                 "int_array" -> {
                     val a = e.getJSONArray("value")
-                    intent.putExtra(key, IntArray(a.length()) { a.getInt(it) })
+                    bundle.putIntArray(key, IntArray(a.length()) { a.getInt(it) })
                 }
                 "long_array" -> {
                     val a = e.getJSONArray("value")
-                    intent.putExtra(key, LongArray(a.length()) { a.getLong(it) })
+                    bundle.putLongArray(key, LongArray(a.length()) { a.getLong(it) })
                 }
                 // A KeyEvent parcelable — the payload of a MEDIA_BUTTON
                 // intent, which is unsendable without it: the action only
@@ -435,7 +450,7 @@ object IntentExplorer {
                         ?: return "extra \"$key\": unknown key \"$name\" — use play, pause, " +
                             "play_pause, next, previous, stop, fast_forward, rewind, or any " +
                             "android KEYCODE_* name."
-                    intent.putExtra(
+                    bundle.putParcelable(
                         key,
                         KeyEvent(if (up) KeyEvent.ACTION_UP else KeyEvent.ACTION_DOWN, code),
                     )

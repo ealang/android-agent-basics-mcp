@@ -273,6 +273,28 @@ object GenericTools {
             text to text.startsWith("FAILED:")
         }
 
+        val providerCall = ToolSpec(
+            name = "provider_call",
+            featureKey = "content_providers",
+            definition = JSONObject()
+                .put("name", "provider_call")
+                .put("description", "EXPERIMENTAL: invoke a method on another app's ContentProvider (ContentResolver.call) — the RPC half of the provider interface, one round trip in and out. Returns the result Bundle as text; a null Bundle is a normal answer, not a failure.")
+                .put(
+                    "inputSchema",
+                    JSONObject().put("type", "object").put(
+                        "properties",
+                        JSONObject()
+                            .put("authority", JSONObject().put("type", "string").put("description", "The provider's authority, bare, no path — e.g. com.example.app.provider. Find it with provider_query's list."))
+                            .put("method", JSONObject().put("type", "string").put("description", "Method name the provider dispatches on."))
+                            .put("arg", JSONObject().put("type", "string").put("description", "Optional string argument."))
+                            .put("extras", JSONObject().put("type", "array").put("items", JSONObject().put("type", "object")).put("description", "Optional typed extras, same format as send_intent: [{key, type, value}] with type one of string, int, long, boolean, float, double, uri, string_array, int_array, long_array.")),
+                    ).put("required", JSONArray().put("authority").put("method")),
+                ),
+        ) { args ->
+            val text = ProviderExplorer.call(context, args)
+            text to text.startsWith("FAILED:")
+        }
+
         val postNotification = ToolSpec(
             name = "post_notification",
             featureKey = "notifications",
@@ -329,7 +351,7 @@ object GenericTools {
         return listOf(
             mediaApps, mediaBrowse, mediaPlay, mediaCommand, mediaSearch,
             mediaSessions, mediaKey,
-            intentScan, intentResolve, sendIntent, providerQuery,
+            intentScan, intentResolve, sendIntent, providerQuery, providerCall,
             postNotification, dismissNotification,
         )
     }
