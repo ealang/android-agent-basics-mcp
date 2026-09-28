@@ -122,9 +122,9 @@ is no CONFIRMED and no UNCERTAIN — "we did it" and "we did it and watched it
 happen" are the same thing to the caller, and a tool that is unsure should be
 fixed rather than labelled.
 
-**Status tools answer the user's questions, not the tools'.** `voice_status`
-and `podcast_now_playing` exist because "who am I talking to" and "what's
-playing" are things people ask. None of them exists to prop up an action tool.
+**Status tools answer the user's questions, not the tools'.**
+`podcast_now_playing` exists because "what's playing" is a thing people ask.
+No status tool exists to prop up an action tool.
 
 **Launching another app is still fire-and-forget underneath.** We hold the one
 `SYSTEM_ALERT_WINDOW` grant and the companion holds nothing, so a launch intent

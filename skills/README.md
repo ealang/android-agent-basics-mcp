@@ -56,10 +56,12 @@ don't try search.
 Not documented here: apps reachable only through a purpose-built
 integration in phone-mcp itself (the recorder). Their contracts live in
 `docs/` next to the code that implements them; these skills cover apps
-driven through the *generic* surfaces. The Agent Timer watchapp and the
-voice gateway are in both places — each has first-class tools, but both
-are also reachable generically, and their files are the worked examples
-(the gateway's arrival here is what `provider_call` was built for).
+driven through the *generic* surfaces. The Agent Timer watchapp is in
+both places — `set_watch_timer` is the first-class tool, and its file
+is the worked example of the generic path. The voice gateway went the
+other way: its app-specific tools were removed once its skill file
+covered everything they did (its arrival here is what `provider_call`
+was built for), so the generic route is now its only route.
 
 ## Future generic capabilities (not yet built)
 

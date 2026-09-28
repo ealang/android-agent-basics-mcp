@@ -334,110 +334,6 @@ object AppTools {
             }
         }
 
-        val startVoice = ToolSpec(
-            name = "start_voice_session",
-            featureKey = "voice_gateway",
-            definition = JSONObject()
-                .put("name", "start_voice_session")
-                .put(
-                    "description",
-                    "Open a live voice session with one of the user's Telegram " +
-                        "conversations, on their phone: their unread messages are read " +
-                        "aloud, and anything they say is transcribed and sent back. The " +
-                        "session runs until stopped.",
-                )
-                .put(
-                    "inputSchema",
-                    JSONObject()
-                        .put("type", "object")
-                        .put(
-                            "properties",
-                            JSONObject().put(
-                                "conversation",
-                                JSONObject().put("type", "string")
-                                    .put(
-                                        "description",
-                                        "Who to talk to: a conversation name, or enough of " +
-                                            "one to be unambiguous. voice_status lists them. " +
-                                            "Omit it to resume the most recent conversation.",
-                                    ),
-                            ).put(
-                                "catch_up",
-                                JSONObject().put("type", "boolean")
-                                    .put(
-                                        "description",
-                                        "Only when the user explicitly asks to hear messages " +
-                                            "again: true rewinds to their own last sent message " +
-                                            "and replays everything after it, even if already " +
-                                            "read or heard. Works on a running session too — no " +
-                                            "need to stop it first. Otherwise omit it.",
-                                    ),
-                            ),
-                        ),
-                ),
-        ) { args ->
-            // Absent means "resume the most recent conversation" — the gateway
-            // reads a missing extra that way, so the blank is passed through as
-            // null rather than refused.
-            val conversation = args.optString("conversation").trim().ifBlank { null }
-            val catchUp = args.optBoolean("catch_up", false)
-            blocked(Preflight.voice(context))
-                ?: conversation?.let { blocked(Preflight.voiceConversation(context, it)) }
-                ?: when (val r = Voice.start(context, conversation, catchUp)) {
-                    is Voice.Result.Accepted ->
-                        "The voice session with ${r.conversation ?: "the most recent " +
-                            "conversation"} is open on the phone" +
-                            (if (catchUp) ", replaying from their last sent message" else "") +
-                            "." to false
-                    else -> voiceFailure(r)
-                }
-        }
-
-        val stopVoice = ToolSpec(
-            name = "stop_voice_session",
-            featureKey = "voice_gateway",
-            definition = JSONObject()
-                .put("name", "stop_voice_session")
-                .put(
-                    "description",
-                    "End the live voice session, releasing the phone's microphone. " +
-                        "Messages already being transcribed still get sent.",
-                )
-                .put(
-                    "inputSchema",
-                    JSONObject().put("type", "object").put("properties", JSONObject()),
-                ),
-        ) { _ ->
-            when (val r = Voice.stop(context)) {
-                is Voice.Result.Accepted ->
-                    "The phone accepted the request to end the session with " +
-                        "${r.conversation ?: "the current conversation"}." to false
-                else -> voiceFailure(r)
-            }
-        }
-
-        val voiceStatus = ToolSpec(
-            name = "voice_status",
-            featureKey = "voice_gateway",
-            definition = JSONObject()
-                .put("name", "voice_status")
-                .put(
-                    "description",
-                    "Whether a Telegram voice session is running on the phone and who " +
-                        "with, plus every conversation available to start one with and " +
-                        "how many unread messages each has.",
-                )
-                .put(
-                    "inputSchema",
-                    JSONObject().put("type", "object").put("properties", JSONObject()),
-                ),
-        ) { _ ->
-            when (val r = Voice.status(context)) {
-                is Voice.Result.Status -> describe(r) to false
-                else -> voiceFailure(r)
-            }
-        }
-
         val startRecording = ToolSpec(
             name = "start_recording",
             featureKey = "voice_recorder",
@@ -518,7 +414,6 @@ object AppTools {
         return listOf(
             setTimer, cancelTimer, getLocation, findMyPhone, silencePhone,
             playPodcast, nowPlaying,
-            startVoice, stopVoice, voiceStatus,
             startRecording, stopRecording,
             navigate,
         )
@@ -550,45 +445,4 @@ object AppTools {
      */
     internal fun dueAt(clockTime: TimeOfDay.Resolved?): String =
         if (clockTime == null) "" else ", due at " + TimeOfDay.format(clockTime.time)
-
-    private fun describe(status: Voice.Result.Status): String {
-        // The id decides whether a session exists; the name is only how we
-        // refer to it, and can be missing for a session that is very much live.
-        val name = status.activeConversation ?: status.activeConversationId
-        val session = when {
-            status.activeConversationId == null -> "No voice session is running."
-            status.paused -> "Paused mid-session with $name."
-            status.listening && status.micSecured -> "Listening to $name — the microphone is live."
-            // Everything else is a session that exists but cannot hear the
-            // user: a start still in flight, one Android refused, or a
-            // microphone taken away mid-session. Which of those it is changes
-            // nothing the caller can do about it — the recording state is in
-            // the log for a human. Kept as one outcome on purpose.
-            else -> "A session with $name is not listening yet. Ask the user to check the phone."
-        }
-        val audio = if (status.queueDepth > 0) {
-            " ${status.queueDepth} message(s) still to be read aloud."
-        } else {
-            ""
-        }
-        val conversations = if (status.conversations.isEmpty()) {
-            "No conversations are configured in the app."
-        } else {
-            "Conversations:\n" + status.conversations.joinToString("\n") {
-                val unread = if (it.unread > 0) " — ${it.unread} unread" else ""
-                "  ${it.name}$unread${if (it.active) " (active)" else ""}"
-            }
-        }
-        return "$session$audio\n\n$conversations"
-    }
-
-    private fun voiceFailure(result: Voice.Result): Pair<String, Boolean> = when (result) {
-        is Voice.Result.Refused -> "FAILED: ${result.message}" to true
-        Voice.Result.NotAvailable ->
-            "FAILED: the voice gateway app did not answer. Ask the user to open it " +
-                "once on the phone." to true
-        // Not reachable — callers handle every success shape first — but it
-        // must not hand the agent a Kotlin toString it can do nothing with.
-        else -> "FAILED: the voice gateway did not give a usable answer." to true
-    }
 }

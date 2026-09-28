@@ -158,10 +158,10 @@ val BATTERY_GRANT = Grant(
     open = settingsFor(Settings.ACTION_APPLICATION_DETAILS_SETTINGS),
 )
 
-/** Also serves the app-specific launchers (timers, podcasts, voice). */
+/** Also serves the app-specific launchers (timers, podcasts, the recorder). */
 val OVERLAY_GRANT = Grant(
-    ask = "Grant \"Display over other apps\" so timers, podcasts and voice " +
-        "sessions can open their apps from the background.",
+    ask = "Grant \"Display over other apps\" so timers, podcasts and " +
+        "recordings can open their apps from the background.",
     button = "Allow opening other apps",
     granted = { Clock.canStartFromBackground(it) },
     open = settingsFor(Settings.ACTION_MANAGE_OVERLAY_PERMISSION),
@@ -213,7 +213,7 @@ val LOCATION_GRANT = Grant(
 /**
  * The tab-top setup card's list. Overlay and media sit here rather than
  * only on tool rows because app-specific tools with no rows (timers,
- * podcasts, voice) also need them — the Tools card shows only the generic
+ * podcasts, the recorder) also need them — the Tools card shows only the generic
  * tier. When the app-specific sections land, each moves to its rows and
  * this shrinks to just battery.
  */

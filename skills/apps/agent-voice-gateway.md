@@ -77,7 +77,6 @@ Bundle for an unknown method. The contracts come from the app's own
 source (`AutomationProvider.kt`, `AutomationStartActivity.kt` in the
 agent-voice-gateway repo), not guessed from a scan.
 
-phone-mcp also has first-class tools for this app
-(`start_voice_session`, `stop_voice_session`, `voice_status`) — this
-file is the generic-route equivalent, written to prove the generic
-tier can cover it.
+This file is the only route to the app: phone-mcp's app-specific
+voice tools were removed on 2026-09-28 once the generic tier proved
+it could cover the gateway completely.

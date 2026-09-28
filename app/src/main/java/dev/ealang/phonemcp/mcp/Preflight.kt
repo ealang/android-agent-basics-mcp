@@ -9,7 +9,6 @@ import dev.ealang.phonemcp.mcp.apps.Locator
 import dev.ealang.phonemcp.mcp.apps.Navigation
 import dev.ealang.phonemcp.mcp.apps.Podcast
 import dev.ealang.phonemcp.mcp.apps.Recorder
-import dev.ealang.phonemcp.mcp.apps.Voice
 import dev.ealang.phonemcp.mcp.pebble.Watch
 
 /**
@@ -122,30 +121,6 @@ object Preflight {
             "location is switched off on the phone, so nothing can answer. Ask the " +
                 "user to turn it on."
         else -> null
-    }
-
-    fun voice(context: Context): String? = when {
-        !Clock.canStartFromBackground(context) -> NO_BACKGROUND_LAUNCH
-        !installed(context, Voice.PACKAGE) ->
-            "the voice gateway app is not installed on the phone."
-        else -> null
-    }
-
-    /**
-     * Whether [wanted] names a conversation the gateway knows about.
-     *
-     * Matching mirrors the gateway's own rule — a name or enough of one — so a
-     * name this accepts is one it will resolve. An empty list means the gateway
-     * did not answer, which is not evidence the name is wrong, so it is left
-     * alone rather than turned into a refusal.
-     */
-    fun voiceConversation(context: Context, wanted: String): String? {
-        val names = Voice.conversationNames(context)
-        if (names.isEmpty()) return null
-        val needle = wanted.trim().lowercase()
-        if (names.any { it.lowercase().contains(needle) }) return null
-        return "there is no conversation called \"$wanted\". The user has: " +
-            names.joinToString(", ") + "."
     }
 
     /**

@@ -45,11 +45,6 @@ apps that have no polished tool yet.
   locate it.
 - `play_podcast()` / `podcast_now_playing()` — resume Pocket Casts where the
   user left off, and read back what it is on. See `docs/pocket-casts.md`.
-- `start_voice_session(conversation)` / `stop_voice_session()` /
-  `voice_status()` — drive agent-voice-gateway, the user's own Telegram voice
-  client. Starting opens its entry activity with a launch intent; status and
-  stop go through the ContentProvider it exports. See
-  `docs/companion-apps.md`.
 - `start_recording(...)` / `stop_recording()` — drive the voice recorder
   app's automation surface.
 
