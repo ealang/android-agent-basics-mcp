@@ -26,11 +26,9 @@ One row per conversation: `id`, `name`, `unread`, `active` (0/1).
 provider_query  uri: content://com.agentvoicegateway.app.automation/status
 ```
 
-One row: `active_conversation_id`, `active_conversation_name`,
-`listening`, `paused`, `recording_state`, `playback_state`,
-`queue_depth`, `mic_secured`. **A session is up when `listening` and
-`mic_secured` are both 1** — check both, since `listening` can read 1
-for a start that is about to fail.
+One row: the active conversation (`active_conversation_id`,
+`active_conversation_name`) and whether a session is running. That is
+all the status says — the app keeps its internals to itself.
 
 ## Command: stop the session
 
@@ -63,21 +61,21 @@ send_intent
 - **Fire-and-forget by design**: no match, an ambiguous match, or a
   bad mode produce nothing the caller can see — only a line in the
   app's own event log. Always read `/status` ~2–3 s after a start and
-  check `active_conversation_name`, `listening`, and `mic_secured`.
+  check that the expected conversation is running.
 - The activity is a trampoline (no visible screen); the app handles
-  keyguard itself and auto-closes once the mic is secured.
+  keyguard itself and auto-closes once the session is up.
 
 ## Verified / untested (2026-09-28)
 
 Verified on the device: both queries; the full start/stop cycle —
 start intent with a `conversation` extra brought the named session up
-(`/status`: `listening = 1`, `mic_secured = 1` ~3 s later), a live
-`provider_call stop` answered `ok = true` with the conversation id and
-name, and `/status` confirmed the session down; and the error Bundle
-for an unknown method. Untested: catch-up mode (`since_last_sent`).
-The contracts come from the app's own source (`AutomationProvider.kt`,
-`AutomationStartActivity.kt` in the agent-voice-gateway repo), not
-guessed from a scan.
+(confirmed via `/status` ~3 s later), a live `provider_call stop`
+answered `ok = true` with the conversation id and name, and `/status`
+confirmed the session down; catch-up mode (`since_last_sent`), which
+replayed a message sent moments before the start; and the error
+Bundle for an unknown method. The contracts come from the app's own
+source (`AutomationProvider.kt`, `AutomationStartActivity.kt` in the
+agent-voice-gateway repo), not guessed from a scan.
 
 phone-mcp also has first-class tools for this app
 (`start_voice_session`, `stop_voice_session`, `voice_status`) — this
