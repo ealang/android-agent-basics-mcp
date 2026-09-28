@@ -1,6 +1,7 @@
 # Agent Voice Gateway
 
-`com.agentvoicegateway.app` (verified on-device 2026-09-28). A
+`com.agentvoicegateway.app` (fully verified on-device 2026-09-28,
+including a live start/stop cycle). A
 voice-conversation app. Unlike the media apps, it was *designed* to be
 driven: it exports a ContentProvider for reads and commands, and a
 launch activity for starting sessions. No media session, no
@@ -27,9 +28,9 @@ provider_query  uri: content://com.agentvoicegateway.app.automation/status
 
 One row: `active_conversation_id`, `active_conversation_name`,
 `listening`, `paused`, `recording_state`, `playback_state`,
-`queue_depth`, `mic_secured`. **A session is really up only when
-`listening` and `mic_secured` are both 1** — `listening` alone flips
-transiently true for a start Android is about to refuse.
+`queue_depth`, `mic_secured`. **A session is up when `listening` and
+`mic_secured` are both 1** — check both, since `listening` can read 1
+for a start that is about to fail.
 
 ## Command: stop the session
 
@@ -66,19 +67,15 @@ send_intent
 - The activity is a trampoline (no visible screen); the app handles
   keyguard itself and auto-closes once the mic is secured.
 
-## Checking before stopping
-
-A live session may be the user actively talking to their agent —
-read `/status` first, and don't stop a session you didn't start
-without being asked to.
-
 ## Verified / untested (2026-09-28)
 
-Verified on the device: both queries; `provider_call` request/response
-end to end including the error Bundle for an unknown method. Untested
-via the generic route: a live `stop` (a real session was up and in
-use), the start intent, catch-up mode. The contracts come from the
-app's own source (`AutomationProvider.kt`,
+Verified on the device: both queries; the full start/stop cycle —
+start intent with a `conversation` extra brought the named session up
+(`/status`: `listening = 1`, `mic_secured = 1` ~3 s later), a live
+`provider_call stop` answered `ok = true` with the conversation id and
+name, and `/status` confirmed the session down; and the error Bundle
+for an unknown method. Untested: catch-up mode (`since_last_sent`).
+The contracts come from the app's own source (`AutomationProvider.kt`,
 `AutomationStartActivity.kt` in the agent-voice-gateway repo), not
 guessed from a scan.
 
