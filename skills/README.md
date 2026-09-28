@@ -49,15 +49,17 @@ don't try search.
 | Audible | [apps/audible.md](apps/audible.md) | fully drivable despite refused browser route: media-button revival (two-step) + the richest session, including real absolute seek |
 | Google Maps | [apps/google-maps.md](apps/google-maps.md) | start navigation hands-free; everything else is one tap |
 | Samsung Clock | [apps/samsung-clock.md](apps/samsung-clock.md) | timers and alarms via public actions; stopwatch signature-locked — don't re-probe |
+| Agent Voice Gateway | [apps/agent-voice-gateway.md](apps/agent-voice-gateway.md) | designed for automation: provider reads + `provider_call` stop + start intent |
 | Agent Timer (Pebble) | [apps/pebble-agent-timer.md](apps/pebble-agent-timer.md) | key table for the generic path; `set_watch_timer` is easier |
 | Eleven Reader, others | [apps/unavailable.md](apps/unavailable.md) | no usable route — don't re-probe |
 
 Not documented here: apps reachable only through a purpose-built
-integration in phone-mcp itself (the voice gateway, the recorder). Their
-contracts live in `docs/` next to the code that implements them; these
-skills cover apps driven through the *generic* surfaces. The Agent Timer
-watchapp is in both places — it has a first-class tool, but it is also
-reachable generically, and its key table is the worked example.
+integration in phone-mcp itself (the recorder). Their contracts live in
+`docs/` next to the code that implements them; these skills cover apps
+driven through the *generic* surfaces. The Agent Timer watchapp and the
+voice gateway are in both places — each has first-class tools, but both
+are also reachable generically, and their files are the worked examples
+(the gateway's arrival here is what `provider_call` was built for).
 
 ## Future generic capabilities (not yet built)
 
