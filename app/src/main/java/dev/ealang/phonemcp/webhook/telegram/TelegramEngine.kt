@@ -21,10 +21,10 @@ import java.util.concurrent.atomic.AtomicBoolean
  *
  * A process-wide object rather than a per-owner instance: TDLib allows one
  * client per database directory, and both the activity (the auth UI) and the
- * service (delivery, later) need the same one. Trimmed from
- * agent-voice-gateway's TelegramTdlibClient, which is where the non-obvious
- * moves (the network-type kick, the two-layer chat search) were learned —
- * though only the server layer of that search survived here; see
+ * service (delivery, later) need the same one. Trimmed from an earlier TDLib
+ * client, which is where the non-obvious moves (the network-type
+ * kick, the two-layer chat search) were learned — though only the server
+ * layer of that search survived here; see
  * [searchChats] for why this app needs no local chat cache at all.
  *
  * Threading: TDLib delivers results on its own daemon thread; every handler
@@ -586,8 +586,8 @@ object TelegramEngine {
      * Tell TDLib about every network transition. Left to itself TDLib sits on
      * a dead socket for minutes after a Wi-Fi→LTE switch; SetNetworkType is
      * the documented kick that makes it drop and redial immediately. The
-     * single hardest-won lesson from agent-voice-gateway's "not always the
-     * best at staying online" era. Once per process; deduped by type so the
+     * single hardest-won lesson from the previous TDLib client's "not always
+     * the best at staying online" era. Once per process; deduped by type so the
      * chatty onCapabilitiesChanged doesn't spam TDLib.
      */
     private fun registerNetworkKick(context: Context) {
