@@ -57,6 +57,17 @@ object Notifier {
                 "Phone MCP. They can re-enable it under Settings > Notifications." to true
         }
 
+        // A posted notification cannot move channels: notify() with the same
+        // tag but a different channel keeps the old channel and only logs a
+        // warning in logcat. So a level change is cancel-then-repost — which
+        // is also what lets an info raised to alert actually make a sound,
+        // since an in-place update never re-alerts.
+        val existing = manager.activeNotifications
+            .firstOrNull { it.id == ID && it.tag == key }
+        if (existing != null && existing.notification.channelId != channelId) {
+            manager.cancel(key, ID)
+        }
+
         val open = PendingIntent.getActivity(
             context,
             0,
@@ -80,7 +91,8 @@ object Notifier {
 
         manager.notify(key, ID, notification)
         return "The notification is in the phone's shade. Posting the same key " +
-            "again replaces it in place, silently." to false
+            "again replaces it: silently at the same alert level, audibly if " +
+            "raised to alert." to false
     }
 
     fun dismiss(context: Context, key: String): Pair<String, Boolean> {

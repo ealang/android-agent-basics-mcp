@@ -300,7 +300,7 @@ object GenericTools {
             featureKey = "notifications",
             definition = JSONObject()
                 .put("name", "post_notification")
-                .put("description", "Show a text notification in the phone's notification shade. Posting again with the same key replaces that notification in place, without sounding again. Tapping it opens the Phone MCP app.")
+                .put("description", "Show a text notification in the phone's notification shade. Posting again with the same key replaces that notification: silently at the same level, with a sound if raised to alert. Tapping it opens the Phone MCP app.")
                 .put(
                     "inputSchema",
                     JSONObject().put("type", "object").put(

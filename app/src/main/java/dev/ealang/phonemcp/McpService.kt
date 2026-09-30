@@ -35,7 +35,8 @@ class McpService : Service() {
 
     companion object {
         private const val TAG = "PhoneMcpService"
-        private const val CHANNEL_ID = "phone-mcp-server"
+        private const val LEGACY_CHANNEL_ID = "phone-mcp-server"
+        private const val CHANNEL_ID = "phone-mcp-server-quiet"
         private const val NOTIFICATION_ID = 1
 
         const val ACTION_STOP = "dev.ealang.phonemcp.STOP"
@@ -587,12 +588,17 @@ class McpService : Service() {
     private fun notification(text: String): Notification {
         val manager = getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            // IMPORTANCE_LOW: the notification is a requirement of running in the
-            // foreground, not something the user needs to be alerted about.
+            // IMPORTANCE_MIN: the notification is a requirement of running in
+            // the foreground, not information — MIN keeps it out of the status
+            // bar entirely and collapses it into the shade's minimized section.
+            // Importance cannot be changed on an existing channel (it belongs
+            // to the user once created), so the move from IMPORTANCE_LOW was a
+            // new channel id; the old one is deleted so Settings shows one.
+            manager.deleteNotificationChannel(LEGACY_CHANNEL_ID)
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "MCP server",
-                NotificationManager.IMPORTANCE_LOW,
+                NotificationManager.IMPORTANCE_MIN,
             )
             channel.description = "Shown while the local MCP server is running."
             manager.createNotificationChannel(channel)
@@ -618,6 +624,9 @@ class McpService : Service() {
             .setContentIntent(open)
             .addAction(Notification.Action.Builder(null, "Stop", stop).build())
             .setOngoing(true)
+            // Its own group keeps the system's auto-bundling from stacking
+            // agent notifications underneath this permanent one.
+            .setGroup("phone-mcp-service")
             .build()
     }
 }
