@@ -92,9 +92,20 @@ class McpServer(
     }
 
     private fun readBody(session: IHTTPSession): String? = try {
-        val map = HashMap<String, String>()
-        session.parseBody(map)
-        map["postData"] ?: ""
+        // Read the bytes ourselves rather than NanoHTTPD's parseBody: that
+        // decodes with the Content-Type charset and falls back to ASCII when
+        // a client sends bare application/json — turning every multi-byte
+        // character into one '?' per byte. JSON is UTF-8 by definition
+        // (RFC 8259), so decode it as such unconditionally.
+        val length = session.headers["content-length"]?.toIntOrNull() ?: 0
+        val bytes = ByteArray(length)
+        var read = 0
+        while (read < length) {
+            val n = session.inputStream.read(bytes, read, length - read)
+            if (n < 0) break
+            read += n
+        }
+        String(bytes, 0, read, Charsets.UTF_8)
     } catch (e: Exception) {
         Log.w(TAG, "Could not read the request body", e)
         null
