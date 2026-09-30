@@ -42,6 +42,7 @@ abstract class AuthedHttpServer(
     final override fun serve(session: IHTTPSession): Response {
         detail.remove()
         log.bump("requests")
+        defaultToUtf8(session)
         val response = handle(session)
         val what = detail.get()?.let { " $it" } ?: ""
         // Every request, at debug: the wire-level record underneath whatever
@@ -83,6 +84,22 @@ abstract class AuthedHttpServer(
 
     /** The server's own paths. Auth has passed; [serves] said yes; uri is normalized. */
     protected abstract fun route(uri: String, session: IHTTPSession): Response
+
+    /**
+     * NanoHTTPD decodes request bodies — postData and multipart text fields
+     * alike — with the charset parameter of the Content-Type header, and
+     * falls back to ASCII when there is none, which mangles every multi-byte
+     * character into one '?' per byte. Nothing talking to these servers
+     * sends anything but UTF-8 (JSON is UTF-8 by definition, RFC 8259), so
+     * a missing charset is declared to be UTF-8 here, once, for every
+     * endpoint present and future. An explicit charset is left alone.
+     */
+    private fun defaultToUtf8(session: IHTTPSession) {
+        val contentType = session.headers["content-type"] ?: return
+        if (!contentType.contains("charset", ignoreCase = true)) {
+            session.headers["content-type"] = "$contentType; charset=utf-8"
+        }
+    }
 
     private fun authorized(session: IHTTPSession): Boolean {
         // NanoHTTPD lowercases header names.
