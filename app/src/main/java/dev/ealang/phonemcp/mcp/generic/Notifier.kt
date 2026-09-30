@@ -81,9 +81,17 @@ object Notifier {
             // Long text wraps into an expandable block instead of truncating
             // to one line.
             .setStyle(Notification.BigTextStyle().bigText(text))
-            .setSmallIcon(R.drawable.ic_stat_pyramid)
+            // The status bar icon carries the level: info circle or warning
+            // triangle. The pyramid stays the service's alone, so agent
+            // notifications are tellable from it at a glance.
+            .setSmallIcon(
+                if (alert) R.drawable.ic_stat_warning else R.drawable.ic_stat_info,
+            )
             .setContentIntent(open)
             .setAutoCancel(true)
+            // The agent pile and the service's own notification are two fixed
+            // groups, so the shade never stacks one under the other.
+            .setGroup("phone-mcp-agent")
             // Updates replace the text without sounding again; only the first
             // post of a key alerts.
             .setOnlyAlertOnce(true)
