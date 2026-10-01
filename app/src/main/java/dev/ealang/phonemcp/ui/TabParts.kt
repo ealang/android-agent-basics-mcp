@@ -158,18 +158,17 @@ val BATTERY_GRANT = Grant(
     open = settingsFor(Settings.ACTION_APPLICATION_DETAILS_SETTINGS),
 )
 
-/** Also serves the app-specific launchers (timers, podcasts, the recorder). */
+/** The one background-activity-start exemption; every launch rides on it. */
 val OVERLAY_GRANT = Grant(
-    ask = "Grant \"Display over other apps\" so timers, podcasts and " +
-        "recordings can open their apps from the background.",
+    ask = "Grant \"Display over other apps\" so tools can open other apps " +
+        "from the background.",
     button = "Allow opening other apps",
     granted = { Clock.canStartFromBackground(it) },
     open = settingsFor(Settings.ACTION_MANAGE_OVERLAY_PERMISSION),
 )
 
-/** Also serves the app-specific podcast tools, not just the media_* family. */
 val MEDIA_GRANT = Grant(
-    ask = "Grant notification access so the podcast tools can control " +
+    ask = "Grant notification access so the media tools can control " +
         "playback. It authorizes reading media sessions; no notifications " +
         "are read.",
     button = "Allow media control",
@@ -211,11 +210,9 @@ val LOCATION_GRANT = Grant(
 )
 
 /**
- * The tab-top setup card's list. Overlay and media sit here rather than
- * only on tool rows because app-specific tools with no rows (timers,
- * podcasts, the recorder) also need them — the Tools card shows only the generic
- * tier. When the app-specific sections land, each moves to its rows and
- * this shrinks to just battery.
+ * The tab-top setup card's list: the grants that serve the surface as a
+ * whole (launching rides on overlay, the media_* family on media, the
+ * service on battery) rather than any one tool's row.
  */
 val MCP_GRANTS = listOf(
     OVERLAY_GRANT,
