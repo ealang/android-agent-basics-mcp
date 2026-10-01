@@ -1,70 +1,65 @@
 # Working on phone-mcp
 
-## Two tiers of tools, two doctrines
+## Generic-first: what the tool surface is
 
-The tool surface is split in two on purpose, and most rules in this file
-apply to exactly one side of the split:
+The product is **generic tools plus skill files**. The tools —
+`send_intent`, `intent_scan`, `intent_resolve`, the `provider_*` and
+`media_*` families — are raw Android capabilities, remoted, for a
+capable agent. Per-app knowledge lives in `skills/`: an agent explores
+an app through the generic tools, and what it learns becomes a skill
+file, not a new tool. Maps is the worked example — `send_intent`
+experiments → `docs/maps-survey.md` → a skill file over geo URIs.
 
-- **App-specific tools** — `navigate`, `set_timer`, `play_podcast`,
-  `set_watch_timer`, the voice and recorder tools. These cover the common
-  use cases and are wired to be easy for a basic agent: full preflight,
-  one code path that works everywhere, mechanisms absorbed invisibly
-  (`navigate` routes a locked phone through the unlock gate on its own;
-  the caller never knows). Everything in the next two sections is their
-  doctrine.
-- **Advanced generic tools** — `send_intent`, `intent_scan`,
-  `intent_resolve`, the `media_*` family. Raw Android capabilities,
-  remoted, for a capable agent exploring apps nobody has polished yet.
-  They execute exactly what they are told: no guards beyond our own
-  grants, no protection against a send the target will silently discard.
-  Where a mechanism is offered at all it is opt-in and default-off
-  (`send_intent`'s `via_unlock_gate`) — the caller's judgment, never our
-  guard.
+The generic tools execute exactly what they are told: no guards beyond
+our own grants, no protection against a send the target will silently
+discard. Where a mechanism is offered at all it is opt-in and
+default-off (`send_intent`'s `via_unlock_gate`) — the caller's
+judgment, never our guard. Adding a guard to a generic tool constrains
+what it can express; don't.
 
-A check that belongs on one tier is wrong on the other. Adding a guard to
-a generic tool constrains what it can express; leaving one off a polished
-tool hands a weak model a failure it cannot interpret. The intended flow
-between the tiers is one-way: an app gets explored through the generic
-tools, the findings land in `skills/` and `docs/`, and the use cases that
-prove common graduate to app-specific tools — Maps went `send_intent`
-experiments → `docs/maps-survey.md` → `navigate`.
+Two kinds of first-class tools survive beside them, and they are the
+only kinds that should ever be added:
 
-## The app-specific tools assume a small model
+- **Phone-itself tools** — `get_location`, `find_my_phone`,
+  `silence_phone`, the notification pair. Capabilities of the phone
+  with no generic route. Not app integrations at all.
+- **Pebble platform tools** — the watch is a platform (there is no
+  generic Android route to a BLE peripheral), so watch operations are
+  first-class the way phone operations are: generic over *watchapps*,
+  specific to none. `docs/pebble-platform.md` is their design doc.
 
-Assume the model calling the app-specific tools is a weak one. It may be a
-local or cheap model with little room for reasoning, and it will be reading
-tool descriptions and result strings without much capacity to interpret
-them.
+An integration that needs a permission gets a manifest line and
+grant-guiding UI, not a tool (`docs/generic-first.md`, open question).
+If a proposed tool names a third-party app, the answer is a skill file.
 
-So that interface stays as simple as it can be, and everything the app can
-work out for itself, it works out for itself. Concretely:
+## Result strings assume a small model
 
-**Try everything internally rather than exposing the choice.** If a command has
-several possible routes, the app tries them and reports the outcome. The caller
-is never asked to pick a strategy, retry, or reason about device state like
-whether the phone is locked. Prefer one code path that works everywhere over
-branching the caller has to understand, even at some cost elsewhere —
-`Podcast.play` clears Pocket Casts' activity stack in every case rather than
-only when it must, because one proven path beats two conditional ones.
+The first-class tools may be read by a weak caller — a local or cheap
+model reading tool descriptions and result strings without much
+capacity to interpret them. So those strings stay simple:
 
 **Don't surface a distinction the caller cannot act on.** If two outcomes lead
 to the same next step, they are one outcome. Real diagnostic detail that matters
-to a human maintainer goes to logcat, not into the response. `play_podcast`
-answers UNCERTAIN whether or not a media session ever appeared, because the
-caller would do the same thing either way; which happened is in the log.
+to a human maintainer goes to logcat, not into the response.
 
 **Don't report an ordinary state as an error.** `isError = true` means the user
-has to do something. An idle media player answering "what's playing?" is a
-normal answer — returning it as a failure makes the agent apologise for a
-non-problem. Reserve errors for genuine faults, and name the exact fix in the
-message (which app is missing, which permission to grant, in which Settings
-screen).
+has to do something. Reserve errors for genuine faults, and name the exact fix
+in the message (which app is missing, which permission to grant, in which
+Settings screen).
 
 **Keep descriptions to what changes a decision.** No durations, no side effects
 the caller cannot use, no explanation of mechanism. State what the tool does and
 what it cannot do.
 
-## Validation: what a tool owes the caller
+The generic tools are exempt from none of the *clarity* here, but their
+results may expose mechanics freely — their caller is assumed capable,
+and `intent_scan` output is mechanics by definition.
+
+## Validation: what a first-class tool owes the caller
+
+This section is the doctrine of the first-class tools. The generic
+tools deliberately do almost none of it — they execute what they are
+told and report what Android said.
 
 A tool either does the job or says why it could not. It never hands back a
 maybe, and it never asks the caller to go and check.
@@ -95,12 +90,12 @@ every automated app needs, in this codebase, kept in sync by hand. Apps we drive
 are assumed to have been installed, configured and run once by their owner.
 
 **Confirm only where the platform offers a read-back, and only where silent
-failure is expensive.** The watch acknowledges an AppMessage, so
-`set_watch_timer` waits for it. The clock app exposes nothing at all, so
-`set_timer` reports success once the intent is away — and that is the end of
-it, not a hedge. Judge by what a silent failure costs: a podcast that does not
-play is obvious within seconds and needs no confirmation; a timer that never
-got set is invisible until it matters, which is why the watch one waits.
+failure is expensive.** The watch acknowledges an AppMessage, so the watchapp
+handshake waits for it. The clock app exposes nothing at all, so a timer set by
+intent is reported done once the intent is away — and that is the end of it,
+not a hedge. Judge by what a silent failure costs: media that does not play is
+obvious within seconds and needs no confirmation; a timer that never got set is
+invisible until it matters, which is why the watch one waits.
 
 **Budget the wait against the failure, not the success.** A confirmation loop
 returns the moment it sees what it wants, so the cost is only paid when
@@ -122,9 +117,9 @@ is no CONFIRMED and no UNCERTAIN — "we did it" and "we did it and watched it
 happen" are the same thing to the caller, and a tool that is unsure should be
 fixed rather than labelled.
 
-**Status tools answer the user's questions, not the tools'.**
-`podcast_now_playing` exists because "what's playing" is a thing people ask.
-No status tool exists to prop up an action tool.
+**Status tools answer the user's questions, not the tools'.** A "what's
+playing" tool exists because that is a thing people ask. No status tool exists
+to prop up an action tool.
 
 **Launching another app is still fire-and-forget underneath.** We hold the one
 `SYSTEM_ALERT_WINDOW` grant and the companion holds nothing, so a launch intent
