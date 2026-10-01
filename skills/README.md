@@ -53,20 +53,24 @@ don't try search.
 | Agent Timer (Pebble) | [apps/pebble-agent-timer.md](apps/pebble-agent-timer.md) | key table for the generic path; `set_watch_timer` is easier |
 | Eleven Reader, others | [apps/unavailable.md](apps/unavailable.md) | no usable route — don't re-probe |
 
-Not documented here: apps reachable only through a purpose-built
-integration in phone-mcp itself (the recorder). Their contracts live in
-`docs/` next to the code that implements them; these skills cover apps
-driven through the *generic* surfaces. The Agent Timer watchapp is in
-both places — `set_watch_timer` is the first-class tool, and its file
-is the worked example of the generic path. The voice gateway went the
-other way: its app-specific tools were removed once its skill file
-covered everything they did (its arrival here is what `provider_call`
-was built for), so the generic route is now its only route.
+Does an app ever deserve a tool of its own instead of a skill file? It
+almost never does — phone-mcp is generic-first (`CLAUDE.md`,
+`docs/generic-first.md`), and the voice gateway is the proof: its
+app-specific tools were removed once its skill file covered everything
+they did (its arrival here is what `provider_call` was built for), so
+the generic route is now its only route, and every remaining per-app
+tool is being converted the same way. The one worked example of
+app-aware surface that stays is the Pebble watchapp handshake
+(start → ping until ACKed → send once) — a *sequence* that cannot be
+expressed as fire-and-forget generic calls, generalized across
+watchapps rather than owned by any one of them. The Agent Timer file
+is the key table that rides on it.
 
 ## Future generic capabilities (not yet built)
 
 Candidates for the same treatment once the tool surface exists:
 
-- Receiving AppMessages *from* the watch. Deliberately not built: a watchapp
-  with something to say should say it to a companion app of its own, not to
-  a generic listener that has no idea what the keys mean.
+- Receiving AppMessages *from* the watch — designed, not yet built: a
+  mailbox the agent drains, fed by PebbleKit 2 delivery for watchapps
+  that declare phone-mcp as their companion. `docs/pebble-platform.md`
+  has the design and its limits.

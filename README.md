@@ -23,36 +23,14 @@ nothing to push, so every exchange is ordinary request/response JSON.
 
 ## Tools
 
-Two tiers, by design (see `CLAUDE.md`): app-specific tools cover the
-common use cases and are wired to be easy for a basic agent; the advanced
-generic tools are raw Android capabilities for a capable agent exploring
-apps that have no polished tool yet.
+Generic-first, by design (see `CLAUDE.md`): the product is generic
+Android capabilities, remoted, plus skill files in `skills/` carrying
+the per-app knowledge. First-class tools exist only for the phone's own
+capabilities and for the Pebble platform — things with no generic
+route. Per-app tools are not added; an app gets a skill file.
 
-### App-specific
+### Generic
 
-- `set_timer(seconds, label?)` — rejects ≤ 0 and > 24h.
-- `cancel_timer(label?)` — by label, or the next one to ring.
-- `navigate(destination, mode?)` — turn-by-turn in Google Maps. On a
-  locked phone it wakes the screen with the user's own unlock prompt and
-  starts the moment they unlock.
-- `set_watch_timer(seconds, label?)` — a timer on the watch's Timer app,
-  confirmed by AppMessage ACK. Launching the watchapp, pinging until it
-  answers, and sending the payload are all inside it; the caller names a
-  duration and nothing else. See `docs/watch-timer-retry.md`.
-- `get_location(max_age_seconds?)` — coordinates, accuracy, fix age, and a
-  street address when the geocoder can supply one.
-- `find_my_phone(seconds?, volume?)` / `silence_phone()` — ring the phone to
-  locate it.
-- `play_podcast()` / `podcast_now_playing()` — resume Pocket Casts where the
-  user left off, and read back what it is on. See `docs/pocket-casts.md`.
-- `start_recording(...)` / `stop_recording()` — drive the voice recorder
-  app's automation surface.
-
-### Advanced generic
-
-- `media_apps` / `media_browse` / `media_play` / `media_command` /
-  `media_search` — drive any app that exposes a MediaBrowserService.
-  Per-app findings live in `skills/apps/`.
 - `intent_scan(package?)` — what an installed app declares as automatable:
   exported components and their intent filters, split APKs included.
 - `intent_resolve(...)` — dry run: who would handle an intent, without
@@ -66,6 +44,24 @@ apps that have no polished tool yet.
   ContentProvider on the device with its permission guards; with a
   `content://` uri, run the query and get rows back. Intents are
   fire-and-forget; providers are the generic way to read app state.
+- `media_apps` / `media_browse` / `media_play` / `media_command` /
+  `media_search` — drive any app that exposes a MediaBrowserService.
+  Per-app findings live in `skills/apps/`.
+
+### Phone
+
+- `get_location(max_age_seconds?)` — coordinates, accuracy, fix age, and a
+  street address when the geocoder can supply one.
+- `find_my_phone(seconds?, volume?)` / `silence_phone()` — ring the phone to
+  locate it.
+- `post_notification` / `dismiss_notification` — put a message in front
+  of the user, at an info or alert level.
+
+### Pebble
+
+Generic over watchapps, specific to none; `docs/pebble-platform.md` is
+the design doc.
+
 - `launch_watch_app(app)` / `stop_watch_app(app)` — start or stop any Pebble
   watchapp, by UUID or by a name from `Watch.KNOWN_APPS`. Fire-and-forget:
   the watch never acknowledges a launch.
@@ -77,6 +73,14 @@ apps that have no polished tool yet.
   running vanishes silently, so launch it first; any reply, ACK or NACK,
   proves the app is up, which is enough to build a wait-until-running loop
   from these two tools when the app has a key known to be inert.
+
+### Being converted to skill files
+
+Still in the build, slated for deletion once their skill files are
+device-verified (`docs/generic-first.md`): `set_timer` / `cancel_timer`,
+`navigate`, `play_podcast` / `podcast_now_playing`, `start_recording` /
+`stop_recording`, and `set_watch_timer` (which becomes a skill over a
+generalized watchapp-handshake tool).
 
 ### Timers
 
