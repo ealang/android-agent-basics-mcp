@@ -10,6 +10,17 @@ Everything an agent normally reaches is a remote service. A timer isn't useful
 as a database row — it's useful when it makes a sound in the room the user is
 standing in. That requires code on the phone, which is what this is.
 
+## Design
+
+The app exposes **generic automation interfaces** — Android's (intents,
+content providers, media sessions) and the Pebble platform's (watchapp
+launch and messaging) — rather than including support for any particular
+app. Driving a specific app is done through those interfaces, and the
+knowledge of how — verified recipes for individual apps, found by
+experiment on a real device — lives in skill files under `skills/`. The
+only other tools are the phone's own capabilities: location, ringing
+itself, notifications.
+
 ## Endpoints
 
 | Path | Auth | Purpose |
@@ -22,12 +33,6 @@ with an SSE stream, but these tools return a string in a millisecond and have
 nothing to push, so every exchange is ordinary request/response JSON.
 
 ## Tools
-
-Generic-first, by design (see `CLAUDE.md`): the product is generic
-Android capabilities, remoted, plus skill files in `skills/` carrying
-the per-app knowledge. First-class tools exist only for the phone's own
-capabilities and for the Pebble platform — things with no generic
-route. Per-app tools are not added; an app gets a skill file.
 
 ### Generic
 
@@ -59,9 +64,6 @@ route. Per-app tools are not added; an app gets a skill file.
 
 ### Pebble
 
-Generic over watchapps, specific to none; `docs/pebble-platform.md` is
-the design doc.
-
 - `launch_watch_app(app)` / `stop_watch_app(app)` — start or stop any Pebble
   watchapp, by UUID or by a name from `Watch.KNOWN_APPS`. Fire-and-forget:
   the watch never acknowledges a launch.
@@ -74,46 +76,17 @@ the design doc.
   proves the app is up, which is enough to build a wait-until-running loop
   from these two tools when the app has a key known to be inert.
 
-### Being converted to skill files
-
-Still in the build, slated for deletion once their skill files are
-device-verified (`docs/generic-first.md`): `set_timer` / `cancel_timer`,
-`navigate`, `play_podcast` / `podcast_now_playing`, `start_recording` /
-`stop_recording`, and `set_watch_timer` (which becomes a skill over a
-generalized watchapp-handshake tool).
-
-### Timers
-
-Timers are handed to whichever app answers `AlarmClock.ACTION_SET_TIMER`, which
-is normally the stock clock. That is worth more than ringing them ourselves: the
-timer lands where the user already looks for timers, uses their own alarm sound,
-can be edited or snoozed by hand, and keeps running even if this app is killed.
-
-Two consequences follow from delegating, and neither has a workaround:
-
-**There is no read API.** Nothing can enumerate the clock app's timers, so there
-is no `list_timers` and no way to confirm what is running. `cancel_timer`
-searches by label (`ALARM_SEARCH_MODE_LABEL`) or takes the next one to fire
-(`ALARM_SEARCH_MODE_NEXT`).
-
-**`EXTRA_SKIP_UI` is a request, not a guarantee.** The stock clock honours it and
-starts the timer without coming to the front; another clock app may show its UI.
-
 ### The permission that isn't about drawing
 
-These are activity intents, and since Android 10 a background app may not start
-an activity — a foreground service does *not* earn the right. The only exemption
-a normal app can obtain is `SYSTEM_ALERT_WINDOW`, "Display over other apps".
-Without it the intent is dropped in silence, which is the worst possible failure
-for a tool an agent is trusting, so `Clock.canStartFromBackground` checks first
-and the tools return a hard error naming the permission rather than reporting a
-timer that was never set.
+Activity intents hit a wall: since Android 10 a background app may not start
+an activity — a foreground service does *not* earn the right. The only
+exemption a normal app can obtain is `SYSTEM_ALERT_WINDOW`, "Display over
+other apps". Without it the launch is dropped in silence, which is the worst
+possible failure for a tool an agent is trusting.
 
-This one grant is also the hub's half of the standard pattern for driving other
-apps: it lets this app fire a launch intent at anything — the clock, Pocket
-Casts, a companion app's entry activity — from a locked phone with the screen
-off, so no companion app ever needs its own background-start exemption. The
-pattern is documented in `docs/companion-apps.md`.
+This one grant lets the server fire a launch intent at any app from a locked
+phone with the screen off, so no app being driven ever needs its own
+background-start exemption.
 
 ### The watch
 
@@ -124,8 +97,8 @@ so `com.getpebble.action.app.START` with a `uuid` extra reaches
 packet. `.STOP` likewise. The broadcast is addressed to the companion's package
 rather than sent implicitly.
 
-These are broadcasts, not activity starts, so none of the background rules that
-govern the timer intents apply here. No permission is needed beyond the
+These are broadcasts, not activity starts, so none of the background rules
+above apply here. No permission is needed beyond the
 `<queries>` entries that let this app see the companion at all.
 
 Launching cannot pass parameters — the app opens in its default state. Doing
