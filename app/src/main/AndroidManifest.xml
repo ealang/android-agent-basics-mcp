@@ -44,7 +44,6 @@
         <package android:name="coredevices.coreapp" />
         <provider android:authorities="com.getpebble.android.provider.basalt" />
         <package android:name="au.com.shiftyjelly.pocketcasts" />
-        <package android:name="dev.ealang.voicerecorder" />
         <!-- See every app declaring a MediaBrowserService — the same query
              Android Auto builds its media-app list from. Intent-scoped, so no
              QUERY_ALL_PACKAGES; used by the media probe and, later, generic

@@ -53,6 +53,7 @@ don't try search.
 | Audible | [apps/audible.md](apps/audible.md) | fully drivable despite refused browser route: media-button revival (two-step) + the richest session, including real absolute seek |
 | Google Maps | [apps/google-maps.md](apps/google-maps.md) | start navigation hands-free; everything else is one tap |
 | Samsung Clock | [apps/samsung-clock.md](apps/samsung-clock.md) | set timer works; dismiss is a silent no-op; stopwatch signature-locked — don't re-probe |
+| Voice Recorder | [apps/voice-recorder.md](apps/voice-recorder.md) | designed for automation: start via trampoline activity, stop via broadcast; works with the screen locked |
 | Agent Voice Gateway | [apps/agent-voice-gateway.md](apps/agent-voice-gateway.md) | designed for automation: provider reads + `provider_call` stop + start intent |
 | Agent Timer (Pebble) | [apps/pebble-agent-timer.md](apps/pebble-agent-timer.md) | key table for the generic path; `set_watch_timer` is easier |
 | Eleven Reader, others | [apps/unavailable.md](apps/unavailable.md) | no usable route — don't re-probe |

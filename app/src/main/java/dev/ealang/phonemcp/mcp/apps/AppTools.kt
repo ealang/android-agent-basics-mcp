@@ -222,50 +222,6 @@ object AppTools {
             }
         }
 
-        val startRecording = ToolSpec(
-            name = "start_recording",
-            featureKey = "voice_recorder",
-            definition = JSONObject()
-                .put("name", "start_recording")
-                .put(
-                    "description",
-                    "Record audio on the user's phone, saving it to their notes. Picks " +
-                        "up the car's microphone when they are driving. Recording runs " +
-                        "until stopped.",
-                )
-                .put(
-                    "inputSchema",
-                    JSONObject().put("type", "object").put("properties", JSONObject()),
-                ),
-        ) { _ ->
-            blocked(Preflight.recorderStart(context))
-                ?: when (Recorder.start(context)) {
-                    Recorder.Result.Accepted -> "The phone is recording." to false
-                    Recorder.Result.NotAvailable -> RECORDER_UNAVAILABLE to true
-                }
-        }
-
-        val stopRecording = ToolSpec(
-            name = "stop_recording",
-            featureKey = "voice_recorder",
-            definition = JSONObject()
-                .put("name", "stop_recording")
-                .put(
-                    "description",
-                    "Stop recording audio on the phone and save the file.",
-                )
-                .put(
-                    "inputSchema",
-                    JSONObject().put("type", "object").put("properties", JSONObject()),
-                ),
-        ) { _ ->
-            blocked(Preflight.recorderStop(context))
-                ?: when (Recorder.stop(context)) {
-                    Recorder.Result.Accepted -> "The recording is saved." to false
-                    Recorder.Result.NotAvailable -> RECORDER_UNAVAILABLE to true
-                }
-        }
-
         val navigate = ToolSpec(
             name = "navigate",
             featureKey = "maps",
@@ -302,18 +258,9 @@ object AppTools {
         return listOf(
             getLocation, findMyPhone, silencePhone,
             playPodcast, nowPlaying,
-            startRecording, stopRecording,
             navigate,
         )
     }
-
-    /**
-     * The recorder is installed — preflight has just said so — but would not
-     * take the request. Nothing the user can do beyond opening it once.
-     */
-    private const val RECORDER_UNAVAILABLE =
-        "FAILED: the voice recorder app did not take the request. Ask the user to " +
-            "open it once on the phone."
 
     /**
      * ", due at 15:30" when the caller asked for a clock time, empty otherwise.
