@@ -21,14 +21,15 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <!-- Lets us hand timers to the clock app. A normal permission: granted at
-         install, no prompt. -->
+    <!-- Clock apps guard their AlarmClock activities with this; holding it
+         lets send_intent fire SET_TIMER and friends. A normal permission:
+         granted at install, no prompt. -->
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
     <!-- Not for drawing anything. Since Android 10 a background app may not
          start an activity, and a foreground service does not earn the right —
-         this is the only exemption a normal app can obtain, so without it the
-         intent to the clock app is silently dropped. The user must grant it by
-         hand in Settings. -->
+         this is the only exemption a normal app can obtain, so without it any
+         activity launch is silently dropped. The user must grant it by hand
+         in Settings. -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <!-- The generic intent tools scan every installed app's automation
          surface — components, filters, permissions. Scoped <queries> entries

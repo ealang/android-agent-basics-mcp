@@ -1,9 +1,7 @@
 package dev.ealang.phonemcp.mcp
 
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
-import android.provider.AlarmClock
 import dev.ealang.phonemcp.mcp.apps.Clock
 import dev.ealang.phonemcp.mcp.apps.Locator
 import dev.ealang.phonemcp.mcp.apps.Navigation
@@ -41,13 +39,6 @@ object Preflight {
         "the phone is blocking this app from opening other apps in the background. " +
             "Ask the user to open Phone MCP and grant \"Display over other apps\". " +
             "Nothing was done."
-
-    fun clock(context: Context): String? = when {
-        !Clock.canStartFromBackground(context) -> NO_BACKGROUND_LAUNCH
-        !handles(context, Intent(AlarmClock.ACTION_SET_TIMER)) ->
-            "no app on the phone handles timers. Nothing was done."
-        else -> null
-    }
 
     /** Any activity start on someone else's behalf needs the overlay grant. */
     fun activityLaunch(context: Context): String? =
@@ -145,6 +136,4 @@ object Preflight {
         false
     }
 
-    private fun handles(context: Context, intent: Intent): Boolean =
-        intent.resolveActivity(context.packageManager) != null
 }

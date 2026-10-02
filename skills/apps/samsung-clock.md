@@ -7,8 +7,11 @@ Verified on device 2026-09-06.
 The public alarm-clock actions, all on activities guarded by
 `com.android.alarm.permission.SET_ALARM` (normal-level; phone-mcp holds it):
 
-- `android.intent.action.SET_TIMER` — what the first-class `set_timer`
-  tool uses. `SHOW_TIMERS` and `DISMISS_TIMER` also resolve.
+- `android.intent.action.SET_TIMER` — verified end to end (2026-10-01):
+  the timer appears and counts down. `SHOW_TIMERS` also resolves.
+- `android.intent.action.DISMISS_TIMER` resolves and is accepted, but
+  **does nothing**: the timer keeps running (verified 2026-10-01,
+  repeatedly, by label search). Do not rely on it.
 - `android.intent.action.SET_ALARM`, `SHOW_ALARMS`, `DISMISS_ALARM`,
   `SNOOZE_ALARM` resolve to `AlarmCTSHandleActivity`.
 - Exported receivers include `com.samsung.sec.android.clockpackage.alarm.ALARM_DISMISS`

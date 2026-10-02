@@ -29,29 +29,23 @@ phone-mcp dies.
 - `LENGTH` is seconds, and **must be typed `int`** — a string arrives as
   nothing on the receiving side. Clock apps accept 1–86400 (24 h) and
   reject outside that; validate before sending.
-- Always set a `MESSAGE` label: it is the only handle for cancelling a
-  specific timer later, because there is no read API.
+- Always set a `MESSAGE` label: it is the only way the user can tell
+  agent-set timers apart, and there is no read API to check later.
 - `SKIP_UI: true` is a request, not a guarantee: the stock clock starts
   the timer without coming to the front; a third-party clock may show
   its UI anyway.
 
-## Cancel a timer
-
-`android.intent.action.DISMISS_TIMER`, same shape. By label:
-
-```json
-"extras": [
-  {"key": "android.intent.extra.alarm.SEARCH_MODE", "type": "string", "value": "android.label"},
-  {"key": "android.intent.extra.alarm.MESSAGE", "type": "string", "value": "tea"}
-]
-```
-
-Or the next one to fire, with `SEARCH_MODE` = `"android.next"` and no
-`MESSAGE`. Some clock apps show a picker when the search matches more
-than one timer.
+Verified on the device (Samsung Clock, 2026-10-01): the timer appears
+and counts down.
 
 ## What cannot be done
 
+- **Cancelling does not work.** `android.intent.action.DISMISS_TIMER`
+  (with `android.intent.extra.alarm.SEARCH_MODE` = `"android.label"` +
+  `MESSAGE`, or `"android.next"`) resolves and is accepted — "Started
+  activity" — but the timer keeps running. Verified on the device
+  (Samsung Clock, 2026-10-01), repeatedly. A timer, once set, is the
+  user's to stop.
 - **No read API.** Nothing can enumerate the clock app's timers, so
   there is no list and no way to confirm what is running. "Started
   activity" from `send_intent` means the clock app took the intent;
@@ -67,8 +61,9 @@ constants for repeats, `SKIP_UI`), `android.intent.action.DISMISS_ALARM`
 and `android.intent.action.SNOOZE_ALARM` (same `SEARCH_MODE` grammar,
 plus `"android.time"` with `HOUR`/`MINUTES`, and `"android.all"`), and
 `android.intent.action.SHOW_ALARMS` which only opens the list on
-screen. Like timers: create and dismiss are reliable, reading the alarm
-list generically is impossible.
+screen. Like timers, reading the alarm list generically is impossible —
+and given that DISMISS_TIMER is a silent no-op on the test device, do
+not rely on DISMISS_ALARM or SNOOZE_ALARM without verifying them first.
 
 A `package` can be added to any of these to target a specific clock app
 instead of the system default — see per-app files in `apps/` for apps

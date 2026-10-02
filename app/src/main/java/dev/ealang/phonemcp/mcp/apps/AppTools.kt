@@ -7,7 +7,6 @@ import dev.ealang.phonemcp.mcp.Preflight
 import dev.ealang.phonemcp.mcp.ToolSpec
 import dev.ealang.phonemcp.mcp.blocked
 import org.json.JSONObject
-import java.time.ZonedDateTime
 
 /**
  * The app-specific tier (CLAUDE.md's first doctrine): polished tools over
@@ -20,117 +19,6 @@ object AppTools {
     private const val TAG = "PhoneMcpServer"
 
     fun specs(context: Context): List<ToolSpec> {
-        val setTimer = ToolSpec(
-            name = "set_timer",
-            featureKey = "timers",
-            definition = JSONObject()
-                .put("name", "set_timer")
-                .put(
-                    "description",
-                    "Start a timer in the clock app on the user's phone.",
-                )
-                .put(
-                    "inputSchema",
-                    JSONObject()
-                        .put("type", "object")
-                        .put(
-                            "properties",
-                            JSONObject()
-                                .put(
-                                    "seconds",
-                                    JSONObject().put("type", "integer")
-                                        .put(
-                                            "description",
-                                            "How long from now, in seconds. Give this or at.",
-                                        ),
-                                )
-                                .put(
-                                    "at",
-                                    JSONObject().put("type", "string")
-                                        .put(
-                                            "description",
-                                            "Ring at a clock time instead: 15:30, 3pm, " +
-                                                "3:30pm, noon, or midnight. Means the next " +
-                                                "time that comes round.",
-                                        ),
-                                )
-                                .put(
-                                    "label",
-                                    JSONObject().put("type", "string")
-                                        .put(
-                                            "description",
-                                            "What the timer is for. Shown on the phone, and " +
-                                                "the only way to cancel this specific timer later.",
-                                        ),
-                                ),
-                        ),
-                ),
-        ) { args ->
-            blocked(Preflight.clock(context)) ?: run {
-                val label = args.optString("label").ifBlank { "Timer" }
-                val at = args.optString("at").trim()
-                val now = ZonedDateTime.now()
-                val clockTime = if (at.isEmpty()) null else TimeOfDay.resolve(at, now)
-                // Clamped rather than rejected: a clock time can only ever land a
-                // little outside the range, and refusing "at 15:31" one second past
-                // 15:30 would be a failure the user cannot make sense of.
-                val seconds = clockTime?.seconds?.coerceIn(1L, Clock.MAX_SECONDS)
-                    ?: args.optLong("seconds", -1)
-                when {
-                    at.isNotEmpty() && clockTime == null ->
-                        "FAILED: \"$at\" is not a clock time. Use something like 15:30, " +
-                            "3pm, or noon." to true
-                    seconds <= 0 ->
-                        "FAILED: give either seconds or at." to true
-                    seconds > Clock.MAX_SECONDS ->
-                        "FAILED: that is longer than 24 hours, which is the most a timer " +
-                            "can be. Set an alarm or a calendar reminder instead." to true
-                    !Clock.setTimer(context, seconds, label) -> clockRefused()
-                    else -> {
-                        Log.i(TAG, "set_timer ${Clock.humanize(seconds)} \"$label\"")
-                        "The phone's clock app is now running a ${Clock.humanize(seconds)} " +
-                            "timer labelled \"$label\"" + dueAt(clockTime) + ". It will ring " +
-                            "even if this connection closes." to false
-                    }
-                }
-            }
-        }
-
-        val cancelTimer = ToolSpec(
-            name = "cancel_timer",
-            featureKey = "timers",
-            definition = JSONObject()
-                .put("name", "cancel_timer")
-                .put(
-                    "description",
-                    "Cancel a running timer. Give the label it was set with; with no " +
-                        "label, cancels whichever timer is due to ring next. A label " +
-                        "that does not match anything is ignored.",
-                )
-                .put(
-                    "inputSchema",
-                    JSONObject()
-                        .put("type", "object")
-                        .put(
-                            "properties",
-                            JSONObject().put(
-                                "label",
-                                JSONObject().put("type", "string")
-                                    .put("description", "The label the timer was set with."),
-                            ),
-                        ),
-                ),
-        ) { args ->
-            blocked(Preflight.clock(context)) ?: run {
-                val label = args.optString("label").ifBlank { null }
-                when {
-                    !Clock.dismissTimer(context, label) -> clockRefused()
-                    label == null -> "Cancelled the timer that was due to ring next." to false
-                    else -> "Cancelled the timer labelled \"$label\"." to false
-                }
-            }
-        }
-
         val getLocation = ToolSpec(
             name = "get_location",
             featureKey = "location",
@@ -412,7 +300,7 @@ object AppTools {
         }
 
         return listOf(
-            setTimer, cancelTimer, getLocation, findMyPhone, silencePhone,
+            getLocation, findMyPhone, silencePhone,
             playPodcast, nowPlaying,
             startRecording, stopRecording,
             navigate,
@@ -426,14 +314,6 @@ object AppTools {
     private const val RECORDER_UNAVAILABLE =
         "FAILED: the voice recorder app did not take the request. Ask the user to " +
             "open it once on the phone."
-
-    /**
-     * The clock app refusing an intent that preflight said it handles. Rare
-     * enough to have one wording for both timer tools.
-     */
-    private fun clockRefused(): Pair<String, Boolean> =
-        "FAILED: the phone's clock app would not take the request. Nothing was " +
-            "changed. Ask the user to check their timers by hand." to true
 
     /**
      * ", due at 15:30" when the caller asked for a clock time, empty otherwise.
