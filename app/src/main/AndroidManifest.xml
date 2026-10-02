@@ -43,7 +43,6 @@
     <queries>
         <package android:name="coredevices.coreapp" />
         <provider android:authorities="com.getpebble.android.provider.basalt" />
-        <package android:name="au.com.shiftyjelly.pocketcasts" />
         <!-- See every app declaring a MediaBrowserService — the same query
              Android Auto builds its media-app list from. Intent-scoped, so no
              QUERY_ALL_PACKAGES; used by the media probe and, later, generic
@@ -108,9 +107,9 @@
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
         <!-- Empty listener; enabling it in Settings > Notification access is
-             what authorizes MediaSessionManager.getActiveSessions, which is the
-             only route into Pocket Casts' media session that release builds
-             don't block. We never read notifications. -->
+             what authorizes MediaSessionManager.getActiveSessions — the route
+             into media sessions whose apps block stranger connections to their
+             browser service. We never read notifications. -->
         <service
             android:name=".MediaListenerService"
             android:exported="true"

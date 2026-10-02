@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.pm.PackageManager
 import dev.ealang.phonemcp.mcp.apps.Clock
 import dev.ealang.phonemcp.mcp.apps.Locator
-import dev.ealang.phonemcp.mcp.apps.Podcast
 import dev.ealang.phonemcp.mcp.pebble.Watch
 
 /**
@@ -50,27 +49,6 @@ object Preflight {
                 "and in range. Nothing was sent."
         else -> null
     }
-
-    /** Starting playback: we launch Pocket Casts, and it plays under its own steam. */
-    fun podcastPlayback(context: Context): String? = when {
-        !installed(context, Podcast.POCKET_CASTS_PACKAGE) ->
-            "Pocket Casts is not installed on the phone."
-        !Clock.canStartFromBackground(context) -> NO_BACKGROUND_LAUNCH
-        else -> null
-    }
-
-    /** Reading what is playing, which goes through the media session instead. */
-    fun podcastState(context: Context): String? = when {
-        !installed(context, Podcast.POCKET_CASTS_PACKAGE) ->
-            "Pocket Casts is not installed on the phone."
-        !Podcast.hasSessionAccess(context) -> NO_NOTIFICATION_ACCESS
-        else -> null
-    }
-
-    private const val NO_NOTIFICATION_ACCESS =
-        "this app has not been given notification access, which is what lets it see " +
-            "what is playing. Ask the user to enable Phone MCP under Settings > " +
-            "Notifications > Notification access."
 
     fun location(context: Context): String? = when {
         !Locator.hasPermission(context) ->

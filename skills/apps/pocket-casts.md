@@ -3,7 +3,8 @@
 - **Package**: `au.com.shiftyjelly.pocketcasts`
 - **Tier**: open — browse, search, play, queue all work
 - **Survives disconnect**: yes (independent foreground service)
-- **Verified on device**: 2026-09-02/03
+- **Verified on device**: 2026-09-02/03; queue browse + play-by-id +
+  session read re-verified 2026-10-01
 
 Mechanisms: [media-control.md](../media-control.md),
 [media-discovery.md](../media-discovery.md).

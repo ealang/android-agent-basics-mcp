@@ -19,8 +19,7 @@ import java.util.concurrent.TimeUnit
  * (docs/media-survey.md) found apps it cannot reach.
  *
  * **Active sessions** — [MediaSessionManager.getActiveSessions], the
- * notification-listener API [dev.ealang.phonemcp.mcp.apps.Podcast] already
- * uses for Pocket Casts, generalized: every live session on the phone,
+ * notification-listener API: every live session on the phone,
  * observable and drivable, including apps whose browser service refuses
  * strangers (YouTube Music, Audible). The limit is in the name — a session
  * exists while the app is playing or paused-but-alive, so this route can

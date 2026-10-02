@@ -9,10 +9,10 @@ import dev.ealang.phonemcp.mcp.blocked
 import org.json.JSONObject
 
 /**
- * The app-specific tier (CLAUDE.md's first doctrine): polished tools over
- * apps on the phone, written for a weak model — full preflight, one code
- * path, `FAILED:` with the fix named. Everything here that talks to another
- * app starts with a [Preflight] check via [blocked].
+ * The phone-itself tools: capabilities of the phone with no generic route,
+ * written for a weak model — full preflight, one code path, `FAILED:` with
+ * the fix named. Anything that integrates a third-party app belongs in a
+ * skill file over the generic tools instead (CLAUDE.md, generic-first).
  */
 object AppTools {
 
@@ -163,69 +163,7 @@ object AppTools {
             }
         }
 
-        val playPodcast = ToolSpec(
-            name = "play_podcast",
-            featureKey = "pocket_casts",
-            definition = JSONObject()
-                .put("name", "play_podcast")
-                .put(
-                    "description",
-                    "Resume podcast playback in Pocket Casts on the phone, picking up " +
-                        "the episode the user was last listening to. Cannot choose a " +
-                        "specific show or episode.",
-                )
-                .put(
-                    "inputSchema",
-                    JSONObject().put("type", "object").put("properties", JSONObject()),
-                ),
-        ) { _ ->
-            blocked(Preflight.podcastPlayback(context)) ?: when (Podcast.play(context)) {
-                Podcast.Result.AlreadyPlaying ->
-                    "It was already playing — nothing to do." to false
-                Podcast.Result.NotInstalled ->
-                    "FAILED: Pocket Casts is not installed on the phone." to true
-                else -> "Told Pocket Casts to play." to false
-            }
-        }
-
-        val nowPlaying = ToolSpec(
-            name = "podcast_now_playing",
-            featureKey = "pocket_casts",
-            definition = JSONObject()
-                .put("name", "podcast_now_playing")
-                .put(
-                    "description",
-                    "What Pocket Casts on the phone is playing or paused on: podcast, " +
-                        "episode title, position, and whether audio is running.",
-                )
-                .put(
-                    "inputSchema",
-                    JSONObject().put("type", "object").put("properties", JSONObject()),
-                ),
-        ) { _ ->
-            blocked(Preflight.podcastState(context)) ?: when (val r = Podcast.nowPlaying(context)) {
-                // Idle is a normal answer to "what's playing?", not a failure —
-                // reporting it as an error makes callers apologise for the phone.
-                Podcast.Result.NoSession ->
-                    "Nothing is playing — Pocket Casts is idle. Call play_podcast " +
-                        "to start it." to false
-                is Podcast.Result.NowPlaying -> {
-                    val position = if (r.positionMs >= 0 && r.durationMs > 0) {
-                        " at ${Clock.humanize(r.positionMs / 1000)} of " +
-                            Clock.humanize(r.durationMs / 1000)
-                    } else ""
-                    val state = if (r.playing) "Playing" else "Paused"
-                    "$state: \"${r.episode ?: "unknown episode"}\" from " +
-                        "\"${r.podcast ?: "unknown podcast"}\"$position." to false
-                }
-                else -> "FAILED: Pocket Casts did not give a usable answer." to true
-            }
-        }
-
-        return listOf(
-            getLocation, findMyPhone, silencePhone,
-            playPodcast, nowPlaying,
-        )
+        return listOf(getLocation, findMyPhone, silencePhone)
     }
 
     /**
