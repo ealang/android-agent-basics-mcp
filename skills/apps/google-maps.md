@@ -30,16 +30,11 @@ turn-by-turn immediately, no confirmation tap:
 - **Always target the Maps package**: Uber also claims the scheme.
 - **Always pass `via_unlock_gate: true`.** On an unlocked phone it does
   nothing and the route starts straight away. On a locked phone the
-  phone must be unlocked before navigation runs either way, but the two
-  paths differ (both measured 2026-10-01):
-  - *Without* the gate the launch lands silently behind the keyguard:
-    the screen stays dark, and on unlock Maps is sitting at the route
-    preview waiting for a Start tap.
-  - *Through* the gate the screen wakes with the user's own unlock
-    prompt, and navigation is already running the moment they unlock —
-    no tap. If they leave the phone locked, the request expires after
-    two minutes and nothing happens. The result string says which of
-    the two happened.
+  screen wakes with the user's own unlock prompt, and navigation is
+  already running the moment they unlock — no tap (verified
+  2026-10-01). If they leave the phone locked, the request expires
+  after two minutes and nothing happens. The result string says which
+  of the two happened.
 
 ## Change destination mid-navigation — one tap
 
