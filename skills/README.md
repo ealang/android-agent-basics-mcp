@@ -31,8 +31,8 @@ don't try search.
 - [app-launch.md](app-launch.md) — when a launch is needed at all, and the
   one class of app that must be foregrounded.
 - [timers.md](timers.md) — timers and alarms through the AlarmClock
-  intents: setting works, dismissing is a silent no-op on the test
-  device, and nothing can read the clock app's state back.
+  intents, handled by whatever app the system resolves them to: setting
+  works, dismissing is a silent no-op, nothing can be read back.
 - [watch-control.md](watch-control.md) — driving a Pebble watchapp: launch,
   raw AppMessage, the silent discard when the app is not running, and what
   an ACK does and does not prove.
