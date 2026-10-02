@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.pm.PackageManager
 import dev.ealang.phonemcp.mcp.apps.Clock
 import dev.ealang.phonemcp.mcp.apps.Locator
-import dev.ealang.phonemcp.mcp.apps.Navigation
 import dev.ealang.phonemcp.mcp.apps.Podcast
 import dev.ealang.phonemcp.mcp.pebble.Watch
 
@@ -42,20 +41,6 @@ object Preflight {
     /** Any activity start on someone else's behalf needs the overlay grant. */
     fun activityLaunch(context: Context): String? =
         if (!Clock.canStartFromBackground(context)) NO_BACKGROUND_LAUNCH else null
-
-    /**
-     * Navigation is an activity launch into Google Maps. The locked phone is
-     * deliberately not checked here: Maps does not show over the lock screen
-     * and would silently discard the destination (measured on the device,
-     * 2026-09-05), so Navigation routes that case through the unlock gate
-     * rather than failing.
-     */
-    fun navigation(context: Context): String? = when {
-        !installed(context, Navigation.MAPS_PACKAGE) ->
-            "Google Maps is not installed on the phone. Nothing was done."
-        !Clock.canStartFromBackground(context) -> NO_BACKGROUND_LAUNCH
-        else -> null
-    }
 
     fun watch(context: Context): String? = when {
         !installed(context, Watch.COREAPP_PACKAGE) ->

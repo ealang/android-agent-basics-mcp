@@ -51,7 +51,7 @@ don't try search.
 | YouTube Music | [apps/youtube-music.md](apps/youtube-music.md) | fully drivable despite refused browser route: targeted-button revival + play-by-URL |
 | Smart AudioBook Player | [apps/smart-audiobook.md](apps/smart-audiobook.md) | fully drivable despite refused browser route: revive via exported service actions, any book by name via session search |
 | Audible | [apps/audible.md](apps/audible.md) | fully drivable despite refused browser route: media-button revival (two-step) + the richest session, including real absolute seek |
-| Google Maps | [apps/google-maps.md](apps/google-maps.md) | start navigation hands-free; everything else is one tap |
+| Google Maps | [apps/google-maps.md](apps/google-maps.md) | start navigation hands-free via the navigation URI; everything else is one tap |
 | Samsung Clock | [apps/samsung-clock.md](apps/samsung-clock.md) | set timer works; dismiss is a silent no-op; stopwatch signature-locked — don't re-probe |
 | Voice Recorder | [apps/voice-recorder.md](apps/voice-recorder.md) | designed for automation: start via trampoline activity, stop via broadcast; works with the screen locked |
 | Agent Voice Gateway | [apps/agent-voice-gateway.md](apps/agent-voice-gateway.md) | designed for automation: provider reads + `provider_call` stop + start intent |

@@ -222,43 +222,9 @@ object AppTools {
             }
         }
 
-        val navigate = ToolSpec(
-            name = "navigate",
-            featureKey = "maps",
-            definition = JSONObject()
-                .put("name", "navigate")
-                .put(
-                    "description",
-                    "Start turn-by-turn navigation on the user's phone, in Google Maps. " +
-                        "The destination can be a place name, an address, \"lat,long\", or " +
-                        "the user's saved \"home\" or \"work\". If the phone is locked it " +
-                        "shows the unlock prompt, and navigation starts once the user unlocks.",
-                )
-                .put(
-                    "inputSchema",
-                    JSONObject().put("type", "object").put(
-                        "properties",
-                        JSONObject()
-                            .put("destination", JSONObject().put("type", "string").put("description", "Place name, address, lat,long, or home/work."))
-                            .put("mode", JSONObject().put("type", "string").put("description", "drive (default), walk, or bike.")),
-                    ).put("required", org.json.JSONArray().put("destination")),
-                ),
-        ) { args ->
-            blocked(Preflight.navigation(context)) ?: run {
-                val destination = args.optString("destination").trim()
-                if (destination.isEmpty()) {
-                    "FAILED: give a destination — a place name, address, or the user's saved home or work." to true
-                } else {
-                    val text = Navigation.navigate(context, destination, args.optString("mode").ifBlank { null })
-                    text to text.startsWith("FAILED:")
-                }
-            }
-        }
-
         return listOf(
             getLocation, findMyPhone, silencePhone,
             playPodcast, nowPlaying,
-            navigate,
         )
     }
 
