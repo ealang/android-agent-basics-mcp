@@ -109,6 +109,15 @@ object Notifier {
             "cannot fail." to false
     }
 
+    /**
+     * The silent channel's id, for the app's own housekeeping notifications
+     * (the find-my-phone stop button). Ensures the channels exist first.
+     */
+    fun infoChannel(context: Context): String {
+        ensureChannels(context.getSystemService(NotificationManager::class.java))
+        return INFO_CHANNEL
+    }
+
     private fun ensureChannels(manager: NotificationManager) {
         // createNotificationChannel is idempotent, and importance is only a
         // default: after creation the channel is the user's to retune.

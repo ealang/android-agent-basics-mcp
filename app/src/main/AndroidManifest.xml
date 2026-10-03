@@ -119,6 +119,12 @@
             </intent-filter>
         </service>
 
+        <!-- The find-my-phone stop button. Fired only by our own pending
+             intent, hence not exported. -->
+        <receiver
+            android:name=".mcp.apps.StopRingReceiver"
+            android:exported="false" />
+
         <receiver
             android:name=".BootReceiver"
             android:exported="true">

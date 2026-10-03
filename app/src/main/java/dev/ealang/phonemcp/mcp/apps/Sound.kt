@@ -1,6 +1,11 @@
 package dev.ealang.phonemcp.mcp.apps
 
+import android.app.Notification
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioManager
@@ -8,6 +13,8 @@ import android.media.AudioTrack
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import dev.ealang.phonemcp.R
+import dev.ealang.phonemcp.mcp.generic.Notifier
 import kotlin.math.min
 
 /**
@@ -68,11 +75,19 @@ object Sound {
 
     private val main = Handler(Looper.getMainLooper())
 
+    /**
+     * The stop notification's id. Notifier owns 2000 for agent posts; this is
+     * the app's own, so it cannot collide with an agent's tag.
+     */
+    private const val STOP_ID = 2001
+
     private var track: AudioTrack? = null
     private var stopAt: Runnable? = null
     /** The user's own alarm volume, and the manager to put it back with. */
     private var restoreVolume: Int? = null
     private var mixer: AudioManager? = null
+    /** Where the stop notification was posted, so stop() can take it down. */
+    private var shade: NotificationManager? = null
 
     sealed interface Result {
         data class Playing(val seconds: Long, val percent: Int) : Result
@@ -135,6 +150,8 @@ object Sound {
             stopAt = deadline
             main.postDelayed(deadline, seconds * 1000)
 
+            offerStop(context.applicationContext)
+
             val asPercent = playedAt * 100 / max
             Log.i(TAG, "Ringing for ${seconds}s at $asPercent% alarm volume")
             Result.Playing(seconds, asPercent)
@@ -152,6 +169,9 @@ object Sound {
         stopAt?.let { main.removeCallbacks(it) }
         stopAt = null
 
+        shade?.cancel(STOP_ID)
+        shade = null
+
         restore()
 
         val current = track ?: return false
@@ -163,6 +183,34 @@ object Sound {
         }
         current.release()
         return true
+    }
+
+    /**
+     * A stop button in the shade for the person holding the phone. On the
+     * silent channel, because they can already hear the ring — the
+     * notification only has to be findable, not announce itself. stop() takes
+     * it down on every exit path (the stop tool, the deadline, the service
+     * dying, the button itself), so it lives exactly as long as the sound.
+     */
+    private fun offerStop(context: Context) {
+        val manager = context.getSystemService(NotificationManager::class.java) ?: return
+        val stop = PendingIntent.getBroadcast(
+            context,
+            0,
+            Intent(context, StopRingReceiver::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val notification = Notification.Builder(context, Notifier.infoChannel(context))
+            .setContentTitle("Phone is ringing")
+            .setContentText("Tap to stop the sound.")
+            .setSmallIcon(R.drawable.ic_stat_info)
+            .setContentIntent(stop)
+            // Not swipeable: the only way it leaves is by the ring ending, so
+            // it cannot be dismissed while the noise carries on.
+            .setOngoing(true)
+            .build()
+        manager.notify(STOP_ID, notification)
+        shade = manager
     }
 
     /**
@@ -260,5 +308,15 @@ object Sound {
         restoreVolume = null
         mixer = null
         if (audio != null) setVolume(audio, previous)
+    }
+}
+
+/**
+ * What the stop notification fires. Not exported, so only this app's own
+ * pending intent can reach it.
+ */
+class StopRingReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        Sound.stop()
     }
 }
