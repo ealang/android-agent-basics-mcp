@@ -140,7 +140,7 @@ object GenericTools {
             featureKey = "media_control",
             definition = JSONObject()
                 .put("name", "media_key")
-                .put("description", "EXPERIMENTAL: press a system media button — the mechanism a car or headset uses. Takes no target: Android routes the press to the most recent media app, which may restart that app even when it is fully closed. Keys: play, pause, play_pause, next, previous, stop, fast_forward, rewind. Reads back the active sessions after a beat. Audible on the phone.")
+                .put("description", "EXPERIMENTAL: press a system media button — the mechanism a car or headset uses. Takes no target: Android routes the press to the most recent media app, which may restart that app even when it is fully closed. Keys: play, pause, play_pause, next, previous, stop, fast_forward, rewind. Not all apps respect the press — use the app-specific skill file when one exists. Reads back the active sessions after a beat. Audible on the phone.")
                 .put(
                     "inputSchema",
                     JSONObject().put("type", "object").put(
