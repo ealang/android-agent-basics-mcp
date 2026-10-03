@@ -233,7 +233,7 @@ object AppTools {
                 .put("name", "set_volume")
                 .put(
                     "description",
-                    "Set one of the phone's volume sliders.",
+                    "Set or adjust one of the phone's volume sliders.",
                 )
                 .put(
                     "inputSchema",
@@ -249,10 +249,19 @@ object AppTools {
                             ).put(
                                 "percent",
                                 JSONObject().put("type", "integer")
-                                    .put("description", "0 to 100; 0 is silent."),
+                                    .put("description", "Absolute level, 0 to 100; 0 is silent."),
+                            ).put(
+                                "change",
+                                JSONObject().put("type", "integer")
+                                    .put(
+                                        "description",
+                                        "Relative adjustment, -100 to 100; stops at 1 " +
+                                            "rather than muting. Give percent or change, " +
+                                            "not both.",
+                                    ),
                             ),
                         )
-                        .put("required", JSONArray().put("stream").put("percent")),
+                        .put("required", JSONArray().put("stream")),
                 ),
         ) { args ->
             val stream = STREAMS[args.optString("stream")]
@@ -261,13 +270,25 @@ object AppTools {
             when {
                 stream == null ->
                     "FAILED: stream must be one of ${STREAMS.keys.joinToString(", ")}." to true
-                percent !in 0..100 -> "FAILED: percent must be 0 to 100." to true
+                args.has("percent") == args.has("change") ->
+                    "FAILED: give exactly one of percent or change." to true
+                args.has("percent") && percent !in 0..100 ->
+                    "FAILED: percent must be 0 to 100." to true
                 audio == null -> "FAILED: the phone could not change its volume." to true
                 else -> {
                     val max = audio.getStreamMaxVolume(stream)
+                    val goal = if (args.has("percent")) percent else {
+                        val current = audio.getStreamVolume(stream) * 100 / max
+                        // A relative change never mutes — "a bit quieter" must
+                        // not leave the phone silent, so decreases stop at 1.
+                        // Except from an already-silent slider, where staying
+                        // at 0 beats a decrease that raises the volume.
+                        (current + args.optInt("change"))
+                            .coerceIn(if (current == 0) 0 else 1, 100)
+                    }
                     // Ceil, so 1% is still a step up from silent rather than
                     // rounding back down to it.
-                    val target = if (percent == 0) 0 else ((percent * max + 99) / 100).coerceIn(1, max)
+                    val target = if (goal == 0) 0 else ((goal * max + 99) / 100).coerceIn(1, max)
                     try {
                         audio.setStreamVolume(stream, target, 0)
                         "" to false
