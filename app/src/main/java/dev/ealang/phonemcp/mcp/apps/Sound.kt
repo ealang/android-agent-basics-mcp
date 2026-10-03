@@ -89,11 +89,8 @@ object Sound {
     /** Where the stop notification was posted, so stop() can take it down. */
     private var shade: NotificationManager? = null
 
-    sealed interface Result {
-        data class Playing(val seconds: Long, val percent: Int) : Result
-        data object Silent : Result
-        data class Failed(val reason: String) : Result
-    }
+    /** Details like the effective volume go to logcat, not to the caller. */
+    enum class Result { Playing, Silent, Failed }
 
     /** Loop length in seconds, for bounding a caller's tracks before playing. */
     fun loopSeconds(tracks: List<List<Note>>): Double =
@@ -113,7 +110,7 @@ object Sound {
     @Synchronized
     fun play(context: Context, seconds: Long, percent: Int?, tracks: List<List<Note>>? = null): Result {
         val audio = context.applicationContext.getSystemService(AudioManager::class.java)
-            ?: return Result.Failed("no audio service")
+            ?: return Result.Failed
 
         val max = audio.getStreamMaxVolume(AudioManager.STREAM_ALARM)
         val current = audio.getStreamVolume(AudioManager.STREAM_ALARM)
@@ -152,15 +149,14 @@ object Sound {
 
             offerStop(context.applicationContext)
 
-            val asPercent = playedAt * 100 / max
-            Log.i(TAG, "Ringing for ${seconds}s at $asPercent% alarm volume")
-            Result.Playing(seconds, asPercent)
+            Log.i(TAG, "Ringing for ${seconds}s at ${playedAt * 100 / max}% alarm volume")
+            Result.Playing
         } catch (e: Exception) {
             Log.w(TAG, "Could not start the tone", e)
             track?.release()
             track = null
             restore()
-            Result.Failed(e.message ?: e::class.java.simpleName)
+            Result.Failed
         }
     }
 

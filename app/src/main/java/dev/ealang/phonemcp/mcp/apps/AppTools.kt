@@ -167,17 +167,16 @@ object AppTools {
                 tracks is TracksParse.Bad -> "FAILED: ${tracks.why}" to true
                 else -> {
                     val notes = (tracks as? TracksParse.Ok)?.tracks
-                    when (val result = Sound.play(context, seconds, volume, notes)) {
-                        is Sound.Result.Playing ->
-                            "The phone is ringing now for ${Clock.humanize(result.seconds)} at " +
-                                "${result.percent}% volume. It stops by itself; call " +
-                                "find_my_phone_stop to stop it sooner." to false
+                    when (Sound.play(context, seconds, volume, notes)) {
+                        Sound.Result.Playing ->
+                            "The phone is ringing now. It stops by itself; " +
+                                "find_my_phone_stop stops it sooner." to false
                         Sound.Result.Silent ->
                             "FAILED: the phone's alarm volume is turned all the way down, so " +
                                 "ringing it would make no sound. Nothing was played. Pass a " +
                                 "volume to override it, or try get_location instead." to true
-                        is Sound.Result.Failed ->
-                            "FAILED: could not play a sound (${result.reason})." to true
+                        Sound.Result.Failed ->
+                            "FAILED: the phone could not play a sound." to true
                     }
                 }
             }
@@ -197,11 +196,10 @@ object AppTools {
                     JSONObject().put("type", "object").put("properties", JSONObject()),
                 ),
         ) { _ ->
-            if (Sound.stop()) {
-                "Stopped the ringing." to false
-            } else {
-                "The phone was not ringing." to false
-            }
+            // Fire-and-forget: stopping a ring that already ended is the
+            // common case, not a condition worth telling the caller about.
+            Sound.stop()
+            "The phone is not ringing." to false
         }
 
         return listOf(getLocation, findMyPhonePlay, findMyPhoneStop)
