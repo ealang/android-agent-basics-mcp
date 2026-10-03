@@ -51,21 +51,6 @@ object Watch {
     /** Names for watchapps installed on the watch, so a UUID need not be quoted. */
     val KNOWN_APPS = mapOf("timer" to TIMER_UUID)
 
-    /** AppMessage key the timer watchapp reads a duration from; matches its package.json. */
-    private const val KEY_START_TIMER = 20
-
-    /**
-     * A key the timer watchapp does not read. Its inbox handler looks for
-     * KEY_START_TIMER and discards the whole message when that is absent, so
-     * one carrying only this key cannot do anything — which is what makes it
-     * safe to send over and over. Must stay unassigned in the watchapp.
-     */
-    private const val KEY_PING = 1
-
-    /** What the watchapp's own setting screen can express, so what it will accept. */
-    const val TIMER_MIN_SECONDS = 5L
-    const val TIMER_MAX_SECONDS = 86_399L
-
     /** How long to keep trying to get the watchapp up, and how long each go gets. */
     private const val APP_LAUNCH_TIMEOUT_MS = 10_000L
     private const val LAUNCH_ATTEMPT_MS = 1_000L
@@ -82,13 +67,18 @@ object Watch {
         data class UnknownApp(val given: String) : Result
     }
 
-    sealed interface TimerResult {
-        /** The watchapp acknowledged the message, so the timer is running. */
-        data object Confirmed : TimerResult
-        /** Launched and sent to, but nothing came back. */
-        data object NoAcknowledgement : TimerResult
-        /** The watchapp was reached and refused the message. */
-        data object Rejected : TimerResult
+    sealed interface HandshakeResult {
+        /** The watch acknowledged the payload. Delivery, not understanding. */
+        data object Acknowledged : HandshakeResult
+        /** The payload reached the watch and the watchapp refused it. */
+        data object Refused : HandshakeResult
+        /** The payload was sent and nothing came back within the wait. */
+        data object NoReply : HandshakeResult
+        /** No ping was ever acknowledged; the payload was never sent. */
+        data object NeverCameUp : HandshakeResult
+        data class UnknownApp(val given: String) : HandshakeResult
+        /** Never sent: the tuples do not fit CoreApp's wire format. */
+        data class Malformed(val why: String) : HandshakeResult
     }
 
     sealed interface SendResult {
@@ -108,50 +98,58 @@ object Watch {
     fun stop(context: Context, app: String): Result = send(context, ACTION_STOP, app)
 
     /**
-     * Starts a countdown of [seconds] in the timer watchapp, bringing it to the
-     * front of the watch on the way.
+     * The whole handshake in one call: get the watchapp running, prove it is
+     * up, send the payload once.
      *
      * CoreApp only forwards a message to a watchapp that is already running and
      * drops it silently otherwise, so the app has to be launched first and the
      * launch is fire-and-forget — nothing reports when it finishes. Rather than
-     * guess at a duration, wait for the app to say so itself: see [awaitWatchapp].
+     * guess at a duration, wait for the app to say so itself: see
+     * [awaitWatchapp]. The [pingKey] is the caller's claim that the target app
+     * deliberately ignores that key — skill-file knowledge; a wrong one means
+     * the ping *does* something, up to ten times per call.
      *
-     * The duration is then sent exactly once and never repeated. A repeat could
-     * race a slow acknowledgement and leave the user with two timers, and by
+     * The payload is then sent exactly once and never repeated here. A repeat
+     * could race a slow acknowledgement and apply the payload twice, and by
      * this point there is nothing left to retry for — the app is known to be
-     * listening before the first byte of it goes out.
+     * listening before the first byte of it goes out. Whether a resend is safe
+     * after [HandshakeResult.NoReply] depends on what the keys do, which only
+     * the caller knows.
      *
      * Whether a watch is connected at all is settled by `Preflight.watch` before
      * this is called, and is not revisited here: if it drops mid-sequence there
      * is nothing to do about it that failing does not already do.
      */
-    fun setTimer(context: Context, seconds: Long): TimerResult {
+    fun launchAndSend(
+        context: Context,
+        app: String,
+        pingKey: Int,
+        tuples: JSONArray,
+    ): HandshakeResult {
+        val uuid = resolve(app) ?: return HandshakeResult.UnknownApp(app)
+        checkWireFormat(tuples)?.let { return HandshakeResult.Malformed(it) }
         val replies = Replies()
         registerForReplies(context, replies)
 
         return try {
-            if (!awaitWatchapp(context, replies, TIMER_UUID, KEY_PING)) {
-                return TimerResult.NoAcknowledgement
+            if (!awaitWatchapp(context, replies, uuid, pingKey)) {
+                return HandshakeResult.NeverCameUp
             }
 
             val transaction = nextTransaction()
             replies.expectMessage(transaction)
-            context.sendBroadcast(
-                message(TIMER_UUID, transaction, int32Payload(KEY_START_TIMER, seconds.toInt())),
-            )
+            context.sendBroadcast(message(uuid, transaction, tuples.toString()))
+            Log.i(TAG, "launch_and_send -> $uuid, transaction $transaction: $tuples")
 
             when {
                 !replies.messageReplied.await(ACK_TIMEOUT_MS, TimeUnit.MILLISECONDS) -> {
-                    Log.w(TAG, "set_watch_timer $seconds s: no reply to transaction $transaction")
-                    TimerResult.NoAcknowledgement
+                    Log.w(TAG, "launch_and_send $uuid: no reply to transaction $transaction")
+                    HandshakeResult.NoReply
                 }
-                replies.messageAcknowledged.get() -> {
-                    Log.i(TAG, "set_watch_timer $seconds s: acknowledged")
-                    TimerResult.Confirmed
-                }
+                replies.messageAcknowledged.get() -> HandshakeResult.Acknowledged
                 else -> {
-                    Log.w(TAG, "set_watch_timer $seconds s: the watchapp refused it")
-                    TimerResult.Rejected
+                    Log.w(TAG, "launch_and_send $uuid: the watchapp refused the payload")
+                    HandshakeResult.Refused
                 }
             }
         } finally {
@@ -160,7 +158,7 @@ object Watch {
     }
 
     /**
-     * The generic side of [setTimer]: one raw AppMessage to any watchapp,
+     * The fire-once side of [launchAndSend]: one raw AppMessage to any watchapp,
      * tuples passed through to CoreApp's wire format untouched, the watch's
      * own answer back. Advanced tier — no judgment about what the keys mean,
      * and an acknowledgement of a key the app never reads looks exactly like
@@ -170,10 +168,8 @@ object Watch {
      * swallows it in silence (no reply, not an error — CoreApp has no
      * receiver for an app that is not running). That is not this function's
      * problem to solve: the "no reply" result already distinguishes reached
-     * from not, so a caller who knows an inert key for the target app can
-     * build the launch-and-ping pattern out of [launch] and this, one call
-     * at a time. The baked-in loop exists only inside [setTimer], where the
-     * inert key is ours to guarantee.
+     * from not, and a caller who knows an inert key for the target app gets
+     * the whole launch-ping-send pattern from [launchAndSend] instead.
      */
     fun sendMessage(context: Context, app: String, tuples: JSONArray): SendResult {
         val uuid = resolve(app) ?: return SendResult.UnknownApp(app)
@@ -185,7 +181,7 @@ object Watch {
             val transaction = nextTransaction()
             replies.expectMessage(transaction)
             context.sendBroadcast(message(uuid, transaction, tuples.toString()))
-            Log.i(TAG, "send_watch_message -> $uuid, transaction $transaction: $tuples")
+            Log.i(TAG, "pebblekit_send_message -> $uuid, transaction $transaction: $tuples")
 
             when {
                 !replies.messageReplied.await(ACK_TIMEOUT_MS, TimeUnit.MILLISECONDS) ->
@@ -245,7 +241,7 @@ object Watch {
     }
 
     /**
-     * Gets the timer watchapp running, by launching it and asking whether it is
+     * Gets a watchapp running, by launching it and asking whether it is
      * there until it answers.
      *
      * An acknowledgement is the only evidence available that the app is up, and
@@ -253,8 +249,8 @@ object Watch {
      * watchapp, so with the app closed there is no receiver, the broadcast lands
      * nowhere and nothing at all comes back. What an acknowledgement does not
      * prove is that the message meant anything — which is the point here,
-     * because [KEY_PING] means nothing at all, so this can be repeated as often
-     * as needed with no effect on the watch.
+     * because [pingKey] is one the app deliberately ignores, so this can be
+     * repeated as often as needed with no effect on the watch.
      *
      * The launch is retried alongside the ping rather than sent once up front:
      * it is fire-and-forget, so a lost one is otherwise indistinguishable from a
@@ -276,14 +272,14 @@ object Watch {
 
             if (replies.watchappUp.await(LAUNCH_ATTEMPT_MS, TimeUnit.MILLISECONDS)) return true
             if (SystemClock.elapsedRealtime() >= deadline) {
-                Log.w(TAG, "The timer app did not come up within $APP_LAUNCH_TIMEOUT_MS ms")
+                Log.w(TAG, "Watchapp $uuid did not come up within $APP_LAUNCH_TIMEOUT_MS ms")
                 return false
             }
         }
     }
 
     /**
-     * CoreApp's replies for one [setTimer] or [sendMessage] call, matched back
+     * CoreApp's replies for one [launchAndSend] or [sendMessage] call, matched back
      * to what was sent by the transaction id it echoes.
      *
      * Pings are pooled rather than tracked one by one: a late acknowledgement of

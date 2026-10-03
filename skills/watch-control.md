@@ -1,21 +1,26 @@
 # Driving a Pebble watchapp
 
-The generic surface is three tools, and they map onto the Android app
-tools closely enough that the analogy is worth keeping: `launch_watch_app`
-is a launch intent, `send_watch_message` is `send_intent`, and there is no
-read side at all.
+The surface is the `pebblekit_*` family — the classic PebbleKit intent
+protocol, remoted (a `pebblekit2_*` family would be a different channel).
+The tools map onto the Android app tools closely enough that the analogy
+is worth keeping: `pebblekit_launch_app` is a launch intent,
+`pebblekit_send_message` is `send_intent`, and there is no read side at
+all.
 
 ## The tools
 
-- `launch_watch_app(app)` / `stop_watch_app(app)` — `app` is a UUID or a
-  short name the server knows. Fire-and-forget: the watch never
+- `pebblekit_launch_app(app)` / `pebblekit_stop_app(app)` — `app` is a
+  UUID or a short name the server knows. Fire-and-forget: the watch never
   acknowledges a launch, so a success here means the broadcast went out,
   nothing more.
-- `send_watch_message(app, tuples)` — one AppMessage. `tuples` is an array
-  of `{key, type, length, value}` with `type` one of `int`, `uint`,
+- `pebblekit_send_message(app, tuples)` — one AppMessage. `tuples` is an
+  array of `{key, type, length, value}` with `type` one of `int`, `uint`,
   `string`, `bytes`. **All four fields are required** — `length` is the
   byte width (1, 2 or 4 for int/uint). Sent verbatim once it fits the wire
   format; a tuple that does not is refused without being sent.
+- `pebblekit_launch_and_send(app, ping_key, tuples)` — the launch-ping-send
+  loop below, in one call. Use it whenever the watchapp may not be
+  running.
 
 ## The one rule that catches everyone
 
@@ -25,26 +30,25 @@ a closed app has no receiver — nothing errors, nothing arrives. Launching
 is not enough on its own either, because a launch takes a second or two
 and the send will lose the race.
 
-The reliable pattern is built from the two tools, because any reply — ACK
-or NACK — proves the app is up (see below):
+`pebblekit_launch_and_send` is the answer: it launches, sends a single
+tuple on `ping_key` about once a second until the watch answers (any
+reply — ACK or NACK — proves the app is up; see below), gives up at 10 s,
+and only then delivers the payload, exactly once. A payload that gets no
+reply is **not** resent by the tool — it may have arrived with only the
+reply lost, and whether a duplicate is harmless depends on what the keys
+do, which only the caller knows.
 
-1. `launch_watch_app`.
-2. `send_watch_message` with a single tuple on a key **the target app is
-   known to ignore**. Repeat on "no reply", about once a second; a few
-   tries is normal while the app starts. Stop after ~10 s.
-3. Once anything comes back, send the real message — once. Never resend a
-   payload that got no reply: it may have arrived with only the reply
-   lost, and a duplicate is how a user gets two timers.
-
-The ping key matters: it is sent repeatedly, so a key that does anything
-does it several times. If the app has no key known to be inert, there is
-no safe ping — launch, wait a couple of seconds, and accept that the send
-is best-effort.
+The ping key matters: it must be a key **the target app deliberately
+ignores**, and it is sent repeatedly, so a wrong one does something
+several times. Which key is safe is per-app knowledge from the app's
+file in `apps/pebble/`. If the app has no key known to be inert, there is
+no safe ping — `pebblekit_launch_app`, wait a couple of seconds, send
+with `pebblekit_send_message`, and accept that it is best-effort.
 
 ## What an ACK proves
 
-`send_watch_message` returns the watch's own answer, and it proves less
-than it looks:
+The send tools return the watch's own answer, and it proves less than it
+looks:
 
 - Something came back ⇒ **the app is running**. This is the load-bearing
   fact and it holds for any watchapp.
@@ -59,10 +63,11 @@ that matters, verify by what the user can see on the watch.
 ## Keys are per-app knowledge
 
 Nothing in the transport describes an app's keys, and nothing validates
-them. The key table for each watchapp lives in `apps/`, one file per app.
-If there is no file, the keys have to come from the watchapp's own
-`package.json` (`messageKeys`) and its inbox handler — reading the C is
-the only way to learn which keys do nothing, which is what a ping needs.
+them. The key table for each watchapp lives in `apps/pebble/`, one file
+per app. If there is no file, the keys have to come from the watchapp's
+own `package.json` (`messageKeys`) and its inbox handler — reading the C
+is the only way to learn which keys do nothing, which is what a ping
+needs.
 
 ## Watchapps that cannot be reached at all
 

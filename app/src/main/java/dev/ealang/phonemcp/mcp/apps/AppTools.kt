@@ -165,15 +165,4 @@ object AppTools {
 
         return listOf(getLocation, findMyPhone, silencePhone)
     }
-
-    /**
-     * ", due at 15:30" when the caller asked for a clock time, empty otherwise.
-     *
-     * Echoing the resolved time is the only way an am/pm guess that went the
-     * wrong way becomes visible before the timer rings. It reports the time
-     * that was asked for rather than one worked back from the interval, so a
-     * clamp cannot make it disagree with the request.
-     */
-    internal fun dueAt(clockTime: TimeOfDay.Resolved?): String =
-        if (clockTime == null) "" else ", due at " + TimeOfDay.format(clockTime.time)
 }

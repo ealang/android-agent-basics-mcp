@@ -33,9 +33,10 @@ don't try search.
 - [alarms-and-timers.md](alarms-and-timers.md) — timers and alarms through the AlarmClock
   intents, handled by whatever app the system resolves them to: setting
   works, dismissing is a silent no-op, nothing can be read back.
-- [watch-control.md](watch-control.md) — driving a Pebble watchapp: launch,
-  raw AppMessage, the silent discard when the app is not running, and what
-  an ACK does and does not prove.
+- [watch-control.md](watch-control.md) — driving a Pebble watchapp through
+  the `pebblekit_*` family: launch, raw AppMessage, the one-call
+  launch-and-send handshake, the silent discard when the app is not
+  running, and what an ACK does and does not prove.
 
 ## Per-app skills
 
@@ -55,7 +56,7 @@ don't try search.
 | Samsung Clock | [apps/samsung-clock.md](apps/samsung-clock.md) | set timer works; dismiss is a silent no-op; stopwatch signature-locked — don't re-probe |
 | Voice Recorder | [apps/voice-recorder.md](apps/voice-recorder.md) | designed for automation: start via trampoline activity, stop via broadcast; works with the screen locked |
 | Agent Voice Gateway | [apps/agent-voice-gateway.md](apps/agent-voice-gateway.md) | designed for automation: provider reads + `provider_call` stop + start intent |
-| Agent Timer (Pebble) | [apps/pebble-agent-timer.md](apps/pebble-agent-timer.md) | key table for the generic path; `set_watch_timer` is easier |
+| Agent Timer (Pebble) | [apps/pebble/agent-timer.md](apps/pebble/agent-timer.md) | one `pebblekit_launch_and_send` call starts a timer; ping key 1, duration key 20 |
 | Eleven Reader, others | [apps/unavailable.md](apps/unavailable.md) | no usable route — don't re-probe |
 
 ## Future generic capabilities (not yet built)
