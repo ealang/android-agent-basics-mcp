@@ -89,16 +89,9 @@ object Sound {
     /** Where the stop notification was posted, so stop() can take it down. */
     private var shade: NotificationManager? = null
 
-    /** Details like the effective volume go to logcat, not to the caller. */
-    enum class Result { Playing, Silent, Failed }
-
     /** Loop length in seconds, for bounding a caller's tracks before playing. */
     fun loopSeconds(tracks: List<List<Note>>): Double =
         tracks.maxOf { track -> track.sumOf { it.seconds } }
-
-    /** True while a ring is in progress, so the caller can say so. */
-    @Synchronized
-    fun isPlaying(): Boolean = track != null
 
     /**
      * @param percent 1–100 of the maximum alarm volume, or null to ring at
@@ -106,19 +99,16 @@ object Sound {
      * @param tracks up to [MAX_TRACKS] note tracks mixed together; the longest
      *   one sets the loop length. Null plays the built-in ring. The caller
      *   bounds the loop with [loopSeconds] before getting here.
+     * @return whether playback started. Details like the effective volume go
+     *   to logcat, not to the caller.
      */
     @Synchronized
-    fun play(context: Context, seconds: Long, percent: Int?, tracks: List<List<Note>>? = null): Result {
+    fun play(context: Context, seconds: Long, percent: Int?, tracks: List<List<Note>>? = null): Boolean {
         val audio = context.applicationContext.getSystemService(AudioManager::class.java)
-            ?: return Result.Failed
+            ?: return false
 
         val max = audio.getStreamMaxVolume(AudioManager.STREAM_ALARM)
         val current = audio.getStreamVolume(AudioManager.STREAM_ALARM)
-
-        // Alarms ignore silent mode but not a zeroed alarm slider. With no
-        // volume asked for, saying so beats ringing inaudibly and reporting
-        // success.
-        if (percent == null && current == 0) return Result.Silent
 
         stop()
 
@@ -135,7 +125,6 @@ object Sound {
                 current
             }
         }
-        if (playedAt == 0) return Result.Silent
 
         return try {
             val samples = render(tracks ?: DEFAULT_TRACKS)
@@ -150,13 +139,13 @@ object Sound {
             offerStop(context.applicationContext)
 
             Log.i(TAG, "Ringing for ${seconds}s at ${playedAt * 100 / max}% alarm volume")
-            Result.Playing
+            true
         } catch (e: Exception) {
             Log.w(TAG, "Could not start the tone", e)
             track?.release()
             track = null
             restore()
-            Result.Failed
+            false
         }
     }
 

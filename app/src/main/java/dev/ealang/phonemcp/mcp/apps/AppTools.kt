@@ -167,16 +167,10 @@ object AppTools {
                 tracks is TracksParse.Bad -> "FAILED: ${tracks.why}" to true
                 else -> {
                     val notes = (tracks as? TracksParse.Ok)?.tracks
-                    when (Sound.play(context, seconds, volume, notes)) {
-                        Sound.Result.Playing ->
-                            "The phone is ringing now. It stops by itself; " +
-                                "find_my_phone_stop stops it sooner." to false
-                        Sound.Result.Silent ->
-                            "FAILED: the phone's alarm volume is turned all the way down, so " +
-                                "ringing it would make no sound. Nothing was played. Pass a " +
-                                "volume to override it, or try get_location instead." to true
-                        Sound.Result.Failed ->
-                            "FAILED: the phone could not play a sound." to true
+                    if (Sound.play(context, seconds, volume, notes)) {
+                        "" to false
+                    } else {
+                        "FAILED: the phone could not play a sound." to true
                     }
                 }
             }
@@ -199,7 +193,7 @@ object AppTools {
             // Fire-and-forget: stopping a ring that already ended is the
             // common case, not a condition worth telling the caller about.
             Sound.stop()
-            "The phone is not ringing." to false
+            "" to false
         }
 
         return listOf(getLocation, findMyPhonePlay, findMyPhoneStop)
