@@ -60,7 +60,7 @@ object GenericTools {
             featureKey = "media_control",
             definition = JSONObject()
                 .put("name", "media_play")
-                .put("description", "EXPERIMENTAL: try to start playback in a media app — by media_id, by search query, or bare resume. Reads back the session state after a beat. Audible on the phone.")
+                .put("description", "EXPERIMENTAL: start playback in a media app — a specific item by media_id, the app's own match for a search query, or bare resume. Connects over the browser route, so it works even when the app is fully closed; for an app that refuses that route, use media_command with route session on its live session instead. Reads back the session state after a beat. Audible on the phone.")
                 .put(
                     "inputSchema",
                     JSONObject().put("type", "object").put(
@@ -90,15 +90,15 @@ object GenericTools {
             featureKey = "media_control",
             definition = JSONObject()
                 .put("name", "media_command")
-                .put("description", "EXPERIMENTAL: send a media app a transport command: next, previous, pause, play, stop, queue, queue:<id>, seek:<seconds> (absolute, or +N/-N relative), speed:<multiplier>, rate:up/down/clear/<number>, uri:<uri>, search:<query>, media:<id>, queue_add:<id>, queue_add:<pos>:<id>, queue_remove:<id>, or a custom action id verbatim. Reads back the session state, position, and advertised actions after a beat.")
+                .put("description", "EXPERIMENTAL: send a media app a transport command through its session — the action grammar (see the action parameter) maps directly onto Android's TransportControls, plus queue listing and edits. An action the session does not advertise is silently ignored, not errored. Reads back the session state, position, and advertised actions after a beat.")
                 .put(
                     "inputSchema",
                     JSONObject().put("type", "object").put(
                         "properties",
                         JSONObject()
                             .put("app", JSONObject().put("type", "string").put("description", "App name or package, fuzzy matched."))
-                            .put("action", JSONObject().put("type", "string").put("description", "next, previous, pause, play, stop, queue, queue:<id>, seek:<seconds>, seek:+N, seek:-N, speed:<multiplier>, rate:up/down/clear/<number>, uri:<uri>, search:<query>, media:<id>, queue_add:<id>, queue_add:<pos>:<id>, queue_remove:<id>, or a custom action id."))
-                            .put("route", JSONObject().put("type", "string").put("description", "browser (default) connects the app's MediaBrowserService. session drives the app's live media session instead — reaches apps whose browser service refuses the connection, but only while they are playing or paused, and cannot cold-start anything. Needs notification access. Queue edits are browser-only.")),
+                            .put("action", JSONObject().put("type", "string").put("description", "next, previous, pause, play, stop, queue (list it), queue:<id> (jump to an entry), seek:<seconds> (absolute, or +N/-N relative), speed:<multiplier>, rate:up/down/clear/<number>, uri:<uri>, search:<query>, media:<id>, queue_add:<id>, queue_add:<pos>:<id>, queue_remove:<id>, or a custom action id verbatim (case-sensitive, listed in read-backs)."))
+                            .put("route", JSONObject().put("type", "string").put("description", "browser (default) connects the app's MediaBrowserService — wakes the app even from fully closed, but some apps refuse the connection. session drives the app's live media session instead — reaches apps whose browser service refuses, but only while they are playing or paused, and cannot cold-start anything; needs notification access. Queue edits are browser-only.")),
                     ).put("required", JSONArray().put("app").put("action")),
                 ),
         ) { args ->
