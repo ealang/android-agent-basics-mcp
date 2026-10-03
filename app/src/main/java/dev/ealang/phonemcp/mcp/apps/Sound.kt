@@ -290,9 +290,11 @@ object Sound {
     }
 
     /**
-     * Raising the alarm stream is refused while Do Not Disturb is on unless the
-     * app holds `ACCESS_NOTIFICATION_POLICY`, which is a heavier grant than
-     * find-my-phone is worth. Ring at the user's own volume instead.
+     * setStreamVolume can throw SecurityException under Do Not Disturb, but
+     * only for changes that would toggle DND itself — the ringer stream. The
+     * alarm stream is independent of DND, and setting it with DND on has been
+     * tested working on the device (2026-10-02). The catch stays as insurance
+     * against OEM volume policies; the fallback is the user's own volume.
      */
     private fun setVolume(audio: AudioManager, index: Int): Boolean = try {
         audio.setStreamVolume(AudioManager.STREAM_ALARM, index, 0)
