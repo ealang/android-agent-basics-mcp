@@ -290,11 +290,8 @@ object Sound {
     }
 
     /**
-     * setStreamVolume can throw SecurityException under Do Not Disturb, but
-     * only for changes that would toggle DND itself — the ringer stream. The
-     * alarm stream is independent of DND, and setting it with DND on has been
-     * tested working on the device (2026-10-02). The catch stays as insurance
-     * against OEM volume policies; the fallback is the user's own volume.
+     * Sets the alarm stream's volume, or says it could not. On a refusal the
+     * caller falls back to ringing at the user's own volume.
      */
     private fun setVolume(audio: AudioManager, index: Int): Boolean = try {
         audio.setStreamVolume(AudioManager.STREAM_ALARM, index, 0)
