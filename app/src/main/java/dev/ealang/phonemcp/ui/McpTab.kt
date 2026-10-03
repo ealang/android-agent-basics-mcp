@@ -39,8 +39,8 @@ private data class Feature(
     val grants: List<Grant> = emptyList(),
 )
 
-// One row per switch-off-able slice of the tool surface. Only the generic
-// tier is shown; the app-specific switches are hidden, not removed.
+// One row per switch-off-able slice of the tool surface. Every tool the
+// server offers is on one of these rows — nothing is hidden.
 private val GENERIC = listOf(
     Feature("intents", "Intents", "send_intent, intent_scan, intent_resolve — raw Android intents, sent exactly as given.", listOf(OVERLAY_GRANT)),
     Feature("content_providers", "Content providers", "provider_query, provider_call — reading other apps' automation surfaces and invoking the commands they expose."),
@@ -48,6 +48,7 @@ private val GENERIC = listOf(
     Feature("watch_control", "Pebble control", "The pebblekit_* family — launching watchapps and raw AppMessage delivery."),
     Feature("notifications", "Notifications", "post_notification, dismiss_notification — text notifications in the phone's shade.", listOf(NOTIFICATIONS_GRANT)),
     Feature("location", "Location", "get_location — the phone's position.", listOf(LOCATION_GRANT)),
+    Feature("find_my_phone", "Find my phone", "find_my_phone_play, find_my_phone_stop — ring the phone audibly, even on silent or Do Not Disturb."),
 )
 
 /**

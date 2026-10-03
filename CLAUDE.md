@@ -20,8 +20,8 @@ what it can express; don't.
 Two kinds of first-class tools survive beside them, and they are the
 only kinds that should ever be added:
 
-- **Phone-itself tools** — `get_location`, `find_my_phone`,
-  `silence_phone`, the notification pair. Capabilities of the phone
+- **Phone-itself tools** — `get_location`, the `find_my_phone_*`
+  pair, the notification pair. Capabilities of the phone
   with no generic route. Not app integrations at all.
 - **Pebble platform tools** — the watch is a platform (there is no
   generic Android route to a BLE peripheral), so watch operations are

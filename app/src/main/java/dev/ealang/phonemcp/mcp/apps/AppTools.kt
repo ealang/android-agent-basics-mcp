@@ -6,6 +6,7 @@ import dev.ealang.phonemcp.McpService
 import dev.ealang.phonemcp.mcp.Preflight
 import dev.ealang.phonemcp.mcp.ToolSpec
 import dev.ealang.phonemcp.mcp.blocked
+import org.json.JSONArray
 import org.json.JSONObject
 
 /**
@@ -89,15 +90,16 @@ object AppTools {
             }
         }
 
-        val findMyPhone = ToolSpec(
-            name = "find_my_phone",
-            featureKey = null,
+        val findMyPhonePlay = ToolSpec(
+            name = "find_my_phone_play",
+            featureKey = "find_my_phone",
             definition = JSONObject()
-                .put("name", "find_my_phone")
+                .put("name", "find_my_phone_play")
                 .put(
                     "description",
-                    "Play an alarm on the phone to help the user find it; it sounds " +
-                        "even on silent or Do Not Disturb.",
+                    "Play a sound on the phone to help the user find it; it sounds " +
+                        "even on silent or Do Not Disturb. A default sound plays " +
+                        "unless tracks are given.",
                 )
                 .put(
                     "inputSchema",
@@ -121,6 +123,38 @@ object AppTools {
                                         "Loudness, 1 to 100. Omit to ring at the user's " +
                                             "current alarm volume.",
                                     ),
+                            ).put(
+                                "tracks",
+                                JSONObject().put("type", "array")
+                                    .put(
+                                        "description",
+                                        "A melody to play instead of the default sound: up " +
+                                            "to ${Sound.MAX_TRACKS} tracks sounding together, " +
+                                            "each an array of notes. The longest track sets " +
+                                            "the loop, which repeats until the time is up.",
+                                    )
+                                    .put("maxItems", Sound.MAX_TRACKS)
+                                    .put(
+                                        "items",
+                                        JSONObject().put("type", "array").put(
+                                            "items",
+                                            JSONObject().put("type", "object").put(
+                                                "properties",
+                                                JSONObject().put(
+                                                    "pitch",
+                                                    JSONObject().put("type", "number")
+                                                        .put(
+                                                            "description",
+                                                            "Hz; 0 or omitted is a rest.",
+                                                        ),
+                                                ).put(
+                                                    "seconds",
+                                                    JSONObject().put("type", "number")
+                                                        .put("description", "Note length."),
+                                                ),
+                                            ).put("required", JSONArray().put("seconds")),
+                                        ),
+                                    ),
                             ),
                         ),
                 ),
@@ -128,28 +162,35 @@ object AppTools {
             val seconds = args.optLong("seconds", Sound.DEFAULT_SECONDS)
                 .coerceIn(1, Sound.MAX_SECONDS)
             val volume = if (args.has("volume")) args.optInt("volume", 100).coerceIn(1, 100) else null
-            when (val result = Sound.play(context, seconds, volume)) {
-                is Sound.Result.Playing ->
-                    "The phone is ringing now for ${Clock.humanize(result.seconds)} at " +
-                        "${result.percent}% volume. It stops by itself; call " +
-                        "silence_phone to stop it sooner." to false
-                Sound.Result.Silent ->
-                    "FAILED: the phone's alarm volume is turned all the way down, so " +
-                        "ringing it would make no sound. Nothing was played. Pass a " +
-                        "volume to override it, or try get_location instead." to true
-                is Sound.Result.Failed ->
-                    "FAILED: could not play a sound (${result.reason})." to true
+            val tracks = if (args.has("tracks")) parseTracks(args.optJSONArray("tracks")) else null
+            when {
+                tracks is TracksParse.Bad -> "FAILED: ${tracks.why}" to true
+                else -> {
+                    val notes = (tracks as? TracksParse.Ok)?.tracks
+                    when (val result = Sound.play(context, seconds, volume, notes)) {
+                        is Sound.Result.Playing ->
+                            "The phone is ringing now for ${Clock.humanize(result.seconds)} at " +
+                                "${result.percent}% volume. It stops by itself; call " +
+                                "find_my_phone_stop to stop it sooner." to false
+                        Sound.Result.Silent ->
+                            "FAILED: the phone's alarm volume is turned all the way down, so " +
+                                "ringing it would make no sound. Nothing was played. Pass a " +
+                                "volume to override it, or try get_location instead." to true
+                        is Sound.Result.Failed ->
+                            "FAILED: could not play a sound (${result.reason})." to true
+                    }
+                }
             }
         }
 
-        val silencePhone = ToolSpec(
-            name = "silence_phone",
-            featureKey = null,
+        val findMyPhoneStop = ToolSpec(
+            name = "find_my_phone_stop",
+            featureKey = "find_my_phone",
             definition = JSONObject()
-                .put("name", "silence_phone")
+                .put("name", "find_my_phone_stop")
                 .put(
                     "description",
-                    "Stop the find_my_phone alarm early.",
+                    "Stop the find_my_phone_play sound early.",
                 )
                 .put(
                     "inputSchema",
@@ -163,6 +204,48 @@ object AppTools {
             }
         }
 
-        return listOf(getLocation, findMyPhone, silencePhone)
+        return listOf(getLocation, findMyPhonePlay, findMyPhoneStop)
+    }
+
+    private sealed interface TracksParse {
+        data class Ok(val tracks: List<List<Sound.Note>>) : TracksParse
+        data class Bad(val why: String) : TracksParse
+    }
+
+    /**
+     * Light validation at the boundary: the shape has to be right and the
+     * loop has to fit the playback buffer; pitches and lengths are otherwise
+     * taken as given.
+     */
+    private fun parseTracks(given: JSONArray?): TracksParse {
+        if (given == null || given.length() == 0 || given.length() > Sound.MAX_TRACKS) {
+            return TracksParse.Bad(
+                "tracks must be up to ${Sound.MAX_TRACKS} arrays of {pitch, seconds} notes.",
+            )
+        }
+        val tracks = (0 until given.length()).map { t ->
+            val notes = given.optJSONArray(t)
+                ?: return TracksParse.Bad("track ${t + 1} is not an array of notes.")
+            if (notes.length() == 0) {
+                return TracksParse.Bad("track ${t + 1} is empty.")
+            }
+            (0 until notes.length()).map { n ->
+                val note = notes.optJSONObject(n)
+                    ?: return TracksParse.Bad("track ${t + 1}, note ${n + 1} is not an object.")
+                val length = note.optDouble("seconds", Double.NaN)
+                if (length.isNaN() || length <= 0) {
+                    return TracksParse.Bad(
+                        "track ${t + 1}, note ${n + 1} needs seconds greater than 0.",
+                    )
+                }
+                Sound.Note(note.optDouble("pitch", 0.0), length)
+            }
+        }
+        if (Sound.loopSeconds(tracks) > Sound.MAX_LOOP_SECONDS) {
+            return TracksParse.Bad(
+                "the loop is longer than ${Sound.MAX_LOOP_SECONDS.toInt()} seconds.",
+            )
+        }
+        return TracksParse.Ok(tracks)
     }
 }

@@ -15,12 +15,9 @@ import org.json.JSONObject
 class ToolSpec(
     val name: String,
     /**
-     * The Config `feature_*` key that switches this tool off, or null for the
-     * pair that is always on (find_my_phone, silence_phone) — capabilities
-     * of the phone itself, not of an app anyone would want to fence off.
-     * get_location moved out of that set: a switchable
-     * tool gets a row on the MCP tab, which is where its missing-permission
-     * warning lives.
+     * The Config `feature_*` key that switches this tool off. Null is allowed
+     * and means always-on, but nothing uses it today: every tool has a row on
+     * the MCP tab, because a hidden tool is a surprise.
      */
     val featureKey: String?,
     /** The tools/list schema entry, name and inputSchema included. */

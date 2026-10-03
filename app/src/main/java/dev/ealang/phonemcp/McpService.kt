@@ -559,7 +559,7 @@ class McpService : Service() {
     override fun onDestroy() {
         main.removeCallbacks(retry)
         stopPipeline()
-        // Nothing would be left able to answer silence_phone, so a ring that
+        // Nothing would be left able to answer find_my_phone_stop, so a ring that
         // outlived the server would have to be waited out.
         Sound.stop()
         mcpServer?.stop()

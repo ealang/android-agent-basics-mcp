@@ -251,5 +251,6 @@ get_location is the phone's own position, so it is where the user is. Call it
 rather than asking them where they are, and rather than assuming a city from
 earlier in the conversation.
 
-find_my_phone is loud and overrides silent mode, so use it only for a phone the
-user has actually lost. If they are reading the reply, they have their phone."""
+find_my_phone_play is loud and overrides silent mode, so use it only for a phone
+the user has actually lost. If they are reading the reply, they have their
+phone."""

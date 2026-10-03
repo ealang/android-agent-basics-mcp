@@ -57,8 +57,9 @@ nothing to push, so every exchange is ordinary request/response JSON.
 
 - `get_location(max_age_seconds?)` — coordinates, accuracy, fix age, and a
   street address when the geocoder can supply one.
-- `find_my_phone(seconds?, volume?)` / `silence_phone()` — ring the phone to
-  locate it.
+- `find_my_phone_play(seconds?, volume?, tracks?)` / `find_my_phone_stop()` —
+  ring the phone to locate it. A default sound plays unless `tracks` gives a
+  melody: up to two tracks of `{pitch, seconds}` notes, mixed and looped.
 - `post_notification` / `dismiss_notification` — put a message in front
   of the user, at an info or alert level.
 
@@ -141,12 +142,18 @@ that one window; the status line and the tool's own error both say which.
 
 ### Finding the phone
 
-`find_my_phone` plays a looping tone with `USAGE_ALARM`. That usage is the whole
-feature: alarms are exempt from silent mode and from Do Not Disturb, so a phone
-face-down under a cushion still answers. Being loud by definition, every ring is
-bounded — a deadline stops it after `seconds` (30 by default, 300 at most) even
-if `silence_phone` is never called, and stopping the service stops the tone,
-since nothing would be left to answer `silence_phone`.
+`find_my_phone_play` synthesises a looping sound with `USAGE_ALARM`. That usage
+is the whole feature: alarms are exempt from silent mode and from Do Not
+Disturb, so a phone face-down under a cushion still answers. Being loud by
+definition, every ring is bounded — a deadline stops it after `seconds` (30 by
+default, 300 at most) even if `find_my_phone_stop` is never called, and
+stopping the service stops the sound, since nothing would be left to answer
+`find_my_phone_stop`.
+
+The voice is a 25%-duty pulse wave — the chiptune lead. A default sound plays
+if no melody is given; `tracks` replaces it with up to two note tracks sounding
+together, each an array of `{pitch, seconds}` (pitch 0 is a rest). The longest
+track sets the loop, which repeats until the time is up.
 
 The one thing the usage cannot override is a zeroed alarm slider, so `volume`
 (1–100) sets the alarm stream for the length of the ring and puts the user's own
