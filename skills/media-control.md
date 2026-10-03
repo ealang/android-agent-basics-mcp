@@ -81,9 +81,14 @@ extras at all (see its per-app file).
   `play_pause`, `next`, `previous`, `stop`, `fast_forward`, `rewind`),
   the car/headset mechanism. **Untargetable by design**: the system
   routes the press to whatever it considers the most recent media app,
-  and idle sessions (including our own voice gateway's) compete for it.
-  Prefer `media_command route: session` whenever a target can be named;
-  use `media_key` when the point is exactly "resume whatever was last".
+  and can revive that app from swiped-away just as a headset button
+  does (verified: YouTube Music, 2026-10-03). A reasonable default for
+  a bare "play / pause / skip" request — but **not all apps respect
+  it** (Pocket Casts ignores the revival, and a press at its paused
+  player tears the player down), so use the per-app skill file when
+  one exists, and prefer `media_command route: session` whenever a
+  target can be named. An app actively holding the audio session (a
+  voice assistant mid-conversation) can capture the press instead.
   Needs no grant to send; the read-back needs notification access.
 
 ## Connection tiers
