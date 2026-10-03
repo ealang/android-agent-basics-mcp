@@ -1,6 +1,10 @@
 package dev.ealang.phonemcp.mcp.apps
 
 import android.content.Context
+import android.content.pm.PackageManager
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraManager
+import android.media.AudioManager
 import android.util.Log
 import dev.ealang.phonemcp.McpService
 import dev.ealang.phonemcp.mcp.Preflight
@@ -196,7 +200,147 @@ object AppTools {
             "" to false
         }
 
-        return listOf(getLocation, findMyPhonePlay, findMyPhoneStop)
+        val getVolume = ToolSpec(
+            name = "get_volume",
+            featureKey = "volume",
+            definition = JSONObject()
+                .put("name", "get_volume")
+                .put(
+                    "description",
+                    "The current level of each of the phone's volume sliders, " +
+                        "as percentages.",
+                )
+                .put(
+                    "inputSchema",
+                    JSONObject().put("type", "object").put("properties", JSONObject()),
+                ),
+        ) { _ ->
+            val audio = context.getSystemService(AudioManager::class.java)
+            if (audio == null) {
+                "FAILED: the phone could not read its volume." to true
+            } else {
+                STREAMS.entries.joinToString("\n") { (name, stream) ->
+                    val max = audio.getStreamMaxVolume(stream)
+                    "$name: ${audio.getStreamVolume(stream) * 100 / max}%"
+                } to false
+            }
+        }
+
+        val setVolume = ToolSpec(
+            name = "set_volume",
+            featureKey = "volume",
+            definition = JSONObject()
+                .put("name", "set_volume")
+                .put(
+                    "description",
+                    "Set one of the phone's volume sliders.",
+                )
+                .put(
+                    "inputSchema",
+                    JSONObject()
+                        .put("type", "object")
+                        .put(
+                            "properties",
+                            JSONObject().put(
+                                "stream",
+                                JSONObject().put("type", "string")
+                                    .put("enum", JSONArray(STREAMS.keys.toList()))
+                                    .put("description", "Which slider to set."),
+                            ).put(
+                                "percent",
+                                JSONObject().put("type", "integer")
+                                    .put("description", "0 to 100; 0 is silent."),
+                            ),
+                        )
+                        .put("required", JSONArray().put("stream").put("percent")),
+                ),
+        ) { args ->
+            val stream = STREAMS[args.optString("stream")]
+            val percent = args.optInt("percent", -1)
+            val audio = context.getSystemService(AudioManager::class.java)
+            when {
+                stream == null ->
+                    "FAILED: stream must be one of ${STREAMS.keys.joinToString(", ")}." to true
+                percent !in 0..100 -> "FAILED: percent must be 0 to 100." to true
+                audio == null -> "FAILED: the phone could not change its volume." to true
+                else -> {
+                    val max = audio.getStreamMaxVolume(stream)
+                    // Ceil, so 1% is still a step up from silent rather than
+                    // rounding back down to it.
+                    val target = if (percent == 0) 0 else ((percent * max + 99) / 100).coerceIn(1, max)
+                    try {
+                        audio.setStreamVolume(stream, target, 0)
+                        "" to false
+                    } catch (e: SecurityException) {
+                        Log.w(TAG, "Not allowed to set the $stream stream", e)
+                        "FAILED: the phone refused to change that volume." to true
+                    }
+                }
+            }
+        }
+
+        val setFlashlight = ToolSpec(
+            name = "set_flashlight",
+            featureKey = "flashlight",
+            definition = JSONObject()
+                .put("name", "set_flashlight")
+                .put(
+                    "description",
+                    "Turn the phone's flashlight on or off.",
+                )
+                .put(
+                    "inputSchema",
+                    JSONObject()
+                        .put("type", "object")
+                        .put(
+                            "properties",
+                            JSONObject().put(
+                                "on",
+                                JSONObject().put("type", "boolean")
+                                    .put("description", "true for on, false for off."),
+                            ),
+                        )
+                        .put("required", JSONArray().put("on")),
+                ),
+        ) { args ->
+            when {
+                !context.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_FLASH) ->
+                    "FAILED: this phone has no flashlight." to true
+                setTorch(context, args.optBoolean("on", true)) -> "" to false
+                else -> "FAILED: the phone could not switch its flashlight." to true
+            }
+        }
+
+        return listOf(
+            getLocation, findMyPhonePlay, findMyPhoneStop,
+            getVolume, setVolume, setFlashlight,
+        )
+    }
+
+    /** The sliders in the phone's volume panel, by the names users use. */
+    private val STREAMS = linkedMapOf(
+        "media" to AudioManager.STREAM_MUSIC,
+        "call" to AudioManager.STREAM_VOICE_CALL,
+        "ring" to AudioManager.STREAM_RING,
+        "notification" to AudioManager.STREAM_NOTIFICATION,
+        "alarm" to AudioManager.STREAM_ALARM,
+    )
+
+    /**
+     * Flips the torch on the first camera that has one. No permission is
+     * needed for the torch alone — only for capturing images.
+     */
+    private fun setTorch(context: Context, on: Boolean): Boolean = try {
+        val cameras = context.getSystemService(CameraManager::class.java)!!
+        val flash = cameras.cameraIdList.first {
+            cameras.getCameraCharacteristics(it)
+                .get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
+        }
+        cameras.setTorchMode(flash, on)
+        true
+    } catch (e: Exception) {
+        Log.w(TAG, "Could not switch the torch", e)
+        false
     }
 
     private sealed interface TracksParse {

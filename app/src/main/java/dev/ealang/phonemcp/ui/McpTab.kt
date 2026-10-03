@@ -49,6 +49,8 @@ private val GENERIC = listOf(
     Feature("notifications", "Notifications", "post_notification, dismiss_notification — text notifications in the phone's shade.", listOf(NOTIFICATIONS_GRANT)),
     Feature("location", "Location", "get_location — the phone's position.", listOf(LOCATION_GRANT)),
     Feature("find_my_phone", "Find my phone", "find_my_phone_play, find_my_phone_stop — ring the phone audibly, even on silent or Do Not Disturb."),
+    Feature("volume", "Volume", "get_volume, set_volume — the phone's volume sliders: media, call, ring, notification, alarm."),
+    Feature("flashlight", "Flashlight", "set_flashlight — the torch on the back of the phone."),
 )
 
 /**
