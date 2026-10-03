@@ -4,7 +4,8 @@
 - **Tier**: open — browse, search, play, queue all work
 - **Survives disconnect**: yes (independent foreground service)
 - **Verified on device**: 2026-09-02/03; queue browse + play-by-id +
-  session read re-verified 2026-10-01
+  session read re-verified 2026-10-01; cold-start `play` and the
+  media_key failures 2026-10-02
 
 Mechanisms: [media-control.md](../media-control.md),
 [media-discovery.md](../media-discovery.md).
@@ -25,11 +26,16 @@ but honored verbatim; re-browse rather than storing long-term.
 
 ## What works
 
+- **Resume / revive: bare `play` (browser route, the default).**
+  Works paused, and cold-starts the app from fully swiped away,
+  resuming the saved position (the app applies its own courtesy
+  rewind). This is the recipe; no search or media id needed.
 - `playFromMediaId` — plays, resumes saved position.
 - `playFromSearch` — free text resolved to the right show, starts an
-  episode. Works from cold start with screen locked.
+  episode. Works from cold start with screen locked. Fallback — use
+  it to play something *other* than the current episode.
 - Session search (`media_search`) — implemented.
-- `pause` / `play` — work.
+- `pause` — works (session or browser route).
 - **Queue**: read works (full Up Next), `queue:<id>` (skipToQueueItem)
   works and resumes that episode's saved position. "Next episode" = read
   queue, jump to the entry after the current one.
@@ -41,3 +47,9 @@ but honored verbatim; re-browse rather than storing long-term.
 
 - `skipToNext` — silently ignored (honestly: not advertised). Use the
   queue-jump pattern instead.
+- **`media_key` — do not use on Pocket Casts.** Swiped away: no
+  resurrection. Paused with the notification up: the press tears the
+  player down (notification vanishes, nothing plays) and leaves a
+  `stopped` session that still advertises `play` but ignores a
+  session-route `play`. Revive with the bare browser-route `play`
+  above instead.
