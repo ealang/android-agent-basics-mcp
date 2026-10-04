@@ -35,9 +35,8 @@ phone-mcp dies.
 
 Verified on the device (2026-10-01): the timer appears and counts down.
 
-- `LENGTH` is seconds, and **must be typed `int`** — a string arrives as
-  nothing on the receiving side. Clock apps accept 1–86400 (24 h) and
-  reject outside that; validate before sending.
+- `LENGTH` is seconds, typed `int`. Clock apps accept 1–86400 (24 h)
+  and reject outside that; validate before sending.
 - Always set a `MESSAGE` label so the user can tell agent-set timers
   apart; there is no read API to check later.
 - `SKIP_UI: true` is a request, not a guarantee: the stock clock starts
@@ -60,10 +59,18 @@ Verified on the device (2026-10-01): the timer appears and counts down.
 ```
 
 Verified on the device (2026-10-01): the alarm appears, armed.
-`HOUR`/`MINUTES` must be typed `int` like `LENGTH` above. For repeating
-alarms add `DAYS` as an `int_array` of `java.util.Calendar` day
-constants (Sunday = 1). `android.intent.action.SHOW_ALARMS` opens the
-alarm list on screen.
+`HOUR`/`MINUTES` are typed `int`. For a repeating alarm add `DAYS` as
+an `int_arraylist` of `java.util.Calendar` day constants (Sunday = 1,
+Saturday = 7) — the platform specifies `EXTRA_DAYS` as
+`ArrayList<Integer>`, and with any other type the alarm comes out
+one-time. `android.intent.action.SHOW_ALARMS` opens the alarm list on
+screen.
+
+**SET_ALARM creates; it never edits.** A clock app reuses an existing
+alarm only when *every* parameter matches, so sending a new time makes
+a second alarm rather than moving the first. With no dismiss and no
+delete, each send leaves a live alarm the user has to remove by hand.
+See `apps/sleep-as-android.md`.
 
 ## Dismissing — does not work; do not rely on it
 
