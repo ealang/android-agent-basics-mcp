@@ -238,6 +238,12 @@ conclusions later proved wrong. When behaviour changes on the device, update
 the relevant doc alongside the code; the wrong turns are kept on purpose,
 because they are what stops the same dead ends being retried.
 
+`skills/` is the opposite contract: current behaviour only, stated
+succinctly and rewritten in place when the device says otherwise. No
+changelog narrative, no discovery story — that belongs in `docs/` and
+git. The authoring rules are in `skills/README.md`; read them before
+adding or editing a skill file.
+
 `docs/companion-apps.md` is written for agents working on the *other* side —
 a custom app that phone-mcp should be able to drive. Point them at it before
 they design an automation interface, and fold anything new we learn back into

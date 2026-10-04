@@ -17,6 +17,29 @@ it needs plus the files for the apps actually installed. Nothing here
 requires re-discovery: if a per-app file says search is unimplemented,
 don't try search.
 
+## Writing and updating these files
+
+A skill file states current behavior, succinctly — it is read as
+operating knowledge, so every sentence should change what a caller does
+next.
+
+- **Current state only.** State what works and the correct way to do
+  it. Don't narrate how it was discovered, what the file used to say,
+  or the bug that prompted the edit — when behavior changes, rewrite
+  the sentence. Git keeps the history, and `docs/` is where findings,
+  failed approaches and wrong turns are recorded; this directory is
+  only the conclusions.
+- **One date survives:** the "verified on device" stamp, because it
+  says how stale a file might be.
+- **Negative results are welcome, as warnings, with the reason** —
+  "signature-locked, don't re-probe", "accepted then silently ignored"
+  — not as experiment logs.
+- **Nothing outside the repo's own world.** No paths into agent
+  workspaces or group folders, no references to private apps that are
+  not documented here deliberately, and no snapshots of the user's
+  actual data (alarm rows, play history) — describe the schema, never
+  the contents.
+
 ## Generic skills
 
 - [media-control.md](media-control.md) — driving apps through their media
