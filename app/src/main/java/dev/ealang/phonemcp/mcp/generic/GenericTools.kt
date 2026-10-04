@@ -189,7 +189,7 @@ object GenericTools {
                         "properties",
                         JSONObject()
                             .put("key", JSONObject().put("type", "string"))
-                            .put("type", JSONObject().put("type", "string").put("description", "string, int, long, boolean, float, double, uri, string_array, int_array, long_array, or key_event. key_event builds a KeyEvent parcelable (the payload a MEDIA_BUTTON intent needs): value is a key name — play, pause, play_pause, next, previous, stop, fast_forward, rewind, or any android KEYCODE_* name — with an optional \"up:\" prefix for ACTION_UP (default is ACTION_DOWN)."))
+                            .put("type", JSONObject().put("type", "string").put("description", "string, int, long, boolean, float, double, uri, string_array, int_array, long_array, int_arraylist, string_arraylist, or key_event. The _arraylist types send an ArrayList rather than an array; some platform extras specify ArrayList and reading one as an array yields null. key_event builds a KeyEvent parcelable (the payload a MEDIA_BUTTON intent needs): value is a key name — play, pause, play_pause, next, previous, stop, fast_forward, rewind, or any android KEYCODE_* name — with an optional \"up:\" prefix for ACTION_UP (default is ACTION_DOWN)."))
                             .put("value", JSONObject().put("description", "The value, matching the type.")),
                     ).put("required", JSONArray().put("key").put("value")),
                 ).put("description", "Typed extras. The type must match what the receiving app reads."),
@@ -287,7 +287,7 @@ object GenericTools {
                             .put("authority", JSONObject().put("type", "string").put("description", "The provider's authority, bare, no path — e.g. com.example.app.provider. Find it with provider_query's list."))
                             .put("method", JSONObject().put("type", "string").put("description", "Method name the provider dispatches on."))
                             .put("arg", JSONObject().put("type", "string").put("description", "Optional string argument."))
-                            .put("extras", JSONObject().put("type", "array").put("items", JSONObject().put("type", "object")).put("description", "Optional typed extras, same format as send_intent: [{key, type, value}] with type one of string, int, long, boolean, float, double, uri, string_array, int_array, long_array.")),
+                            .put("extras", JSONObject().put("type", "array").put("items", JSONObject().put("type", "object")).put("description", "Optional typed extras, same format as send_intent: [{key, type, value}] with type one of string, int, long, boolean, float, double, uri, string_array, int_array, long_array, int_arraylist, string_arraylist.")),
                     ).put("required", JSONArray().put("authority").put("method")),
                 ),
         ) { args ->

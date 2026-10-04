@@ -433,6 +433,26 @@ object IntentExplorer {
                     val a = e.getJSONArray("value")
                     bundle.putLongArray(key, LongArray(a.length()) { a.getLong(it) })
                 }
+                // ArrayList, not array. Several of the platform's own extras
+                // are specified this way (AlarmClock.EXTRA_DAYS is
+                // ArrayList<Integer>), and an app reading
+                // getIntegerArrayListExtra gets null from an int[] — no error,
+                // just a silently missing extra. So the two are not
+                // interchangeable and both have to be sendable.
+                "int_arraylist" -> {
+                    val a = e.getJSONArray("value")
+                    bundle.putIntegerArrayList(key, ArrayList<Int>(a.length()).apply {
+                        for (i in 0 until a.length()) add(a.getInt(i))
+                    })
+                }
+                // Also what getCharSequenceArrayListExtra reads: the cast is
+                // of the list, and a String is a CharSequence.
+                "string_arraylist" -> {
+                    val a = e.getJSONArray("value")
+                    bundle.putStringArrayList(key, ArrayList<String>(a.length()).apply {
+                        for (i in 0 until a.length()) add(a.getString(i))
+                    })
+                }
                 // A KeyEvent parcelable — the payload of a MEDIA_BUTTON
                 // intent, which is unsendable without it: the action only
                 // says "a button was pressed", the KeyEvent says which.
@@ -456,7 +476,8 @@ object IntentExplorer {
                     )
                 }
                 else -> return "extra \"$key\": type must be string, int, long, boolean, " +
-                    "float, double, uri, string_array, int_array, long_array, or key_event."
+                    "float, double, uri, string_array, int_array, long_array, " +
+                    "int_arraylist, string_arraylist, or key_event."
             }
         } catch (ex: Exception) {
             return "extra \"$key\": value does not match type $type."
