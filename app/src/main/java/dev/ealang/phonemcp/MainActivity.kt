@@ -21,27 +21,25 @@ import androidx.compose.runtime.mutableIntStateOf
 import dev.ealang.phonemcp.mcp.McpServer
 import dev.ealang.phonemcp.mcp.apps.Locator
 import dev.ealang.phonemcp.ui.PhoneMcpApp
-import dev.ealang.phonemcp.webhook.PebbleWebhookServer
-import dev.ealang.phonemcp.webhook.telegram.TelegramEngine
 import dev.ealang.phonemcp.ui.PhoneMcpTheme
 
 /**
- * Two tabs on a bottom bar: Webhook (the pipeline and its Telegram delivery) and
- * MCP (the tool server) — one tab per server, like one log per server.
+ * One page: the server switch, its address and token, the tool switches and
+ * the grants they need.
  *
  * The activity owns the non-UI glue — config, service calls, permission
  * requests — and one piece of state the whole UI hangs off: [tick], a counter
- * bumped whenever anything on screen may have changed. Every tab reads it, so
- * a bump recomposes everything; the tabs re-read live state (McpService,
- * TelegramEngine, grants) directly in composition. Cheap reads, tiny UI —
- * simpler than plumbing each fact through its own observable.
+ * bumped whenever anything on screen may have changed. Every card reads it, so
+ * a bump recomposes everything; the cards re-read live state (McpService,
+ * grants) directly in composition. Cheap reads, tiny UI — simpler than
+ * plumbing each fact through its own observable.
  */
 class MainActivity : ComponentActivity() {
 
     lateinit var config: Config
         private set
 
-    /** Bumped on any state change; every tab subscribes by reading it. */
+    /** Bumped on any state change; every card subscribes by reading it. */
     val tick = mutableIntStateOf(0)
 
     private val handler = Handler(Looper.getMainLooper())
@@ -68,17 +66,12 @@ class MainActivity : ComponentActivity() {
         // wrapping key on the very first launch), so it goes to a worker
         // thread now; until then the UI shows placeholders for the secrets
         // and the callback repaints them.
-        SecretStore.warm(this) {
-            // The engine reads the db encryption key from the SecretStore, so
-            // it can only come up after the warm — same reason the UI waits.
-            TelegramEngine.ensureStarted(this)
-            bump()
-        }
+        SecretStore.warm(this) { bump() }
 
         // A start that failed may have taken the process down before the logs
         // could say so, so replay the surviving reason — otherwise the only
         // symptom is a server that is silently not running.
-        config.lastStartFailure?.let { why -> Logs.both { it.warn("earlier", why) } }
+        config.lastStartFailure?.let { why -> Logs.mcp.warn("earlier", why) }
 
         setContent {
             PhoneMcpTheme {
@@ -95,7 +88,6 @@ class MainActivity : ComponentActivity() {
         } else {
             registerReceiver(stateChanged, filter)
         }
-        TelegramEngine.onChanged = { bump() }
         bump()
 
         // A service started by boot or by an app update cannot hold the
@@ -107,7 +99,6 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onStop() {
-        TelegramEngine.onChanged = {}
         handler.removeCallbacksAndMessages(null)
         unregisterReceiver(stateChanged)
         super.onStop()
@@ -155,14 +146,10 @@ class MainActivity : ComponentActivity() {
         bump()
     }
 
-    fun regenerateMcpToken() = tokenRegenerated { config.regenerateMcpToken() }
-
-    fun regenerateWebhookToken() = tokenRegenerated { config.regenerateWebhookToken() }
-
-    private fun tokenRegenerated(regenerate: () -> Unit) {
-        regenerate()
+    fun regenerateToken() {
+        config.regenerateToken()
         bump()
-        // No restart: the servers read the token per request, so the new one
+        // No restart: the server reads the token per request, so the new one
         // is live from this moment — unlike the port, which Save applies.
         toast("New token, effective now — update the client")
     }
@@ -179,49 +166,14 @@ class MainActivity : ComponentActivity() {
         return "http://$host:${config.port}${McpServer.MCP_PATH}"
     }
 
-    fun webhookUrl(): String =
-        "http://${PebbleWebhookServer.BIND}:${config.webhookPort}${PebbleWebhookServer.PATH}"
-
-    fun setWebhookEnabled(on: Boolean) = setServerEnabled(Config.FEATURE_WEBHOOK, on)
-
-    fun setMcpEnabled(on: Boolean) = setServerEnabled(Config.FEATURE_MCP, on)
-
-    /**
-     * The two listener switches share one shape: save the preference, then
-     * reconcile the service with it. Either switch on keeps the service (and
-     * the pipeline worker) alive; a running service adjusts its sockets in
-     * place; both off is the one case that stops the service itself.
-     */
-    private fun setServerEnabled(key: String, on: Boolean) {
-        config.setFeatureEnabled(key, on)
-        when {
-            !config.anyServerEnabled() ->
-                if (McpService.serviceRunning) McpService.stop(this)
-            McpService.serviceRunning -> McpService.applyServerToggles(this)
-            else -> startServer()
-        }
-        // The switch itself reads the preference, which changed just now — an
-        // immediate bump moves it; the delayed one catches the service's
-        // reaction (bind, teardown) landing a beat later.
+    /** The one switch: on starts the service, off stops it. */
+    fun setServerEnabled(on: Boolean) {
+        if (on) startServer() else McpService.stop(this)
+        // The switch reads the config flag, which the service sets as it
+        // starts and clears as it stops — the delayed bump catches that
+        // landing a beat later.
         bump()
         bumpSoon()
-    }
-
-    fun saveWebhookPort(portText: String) {
-        val port = portText.toIntOrNull()
-        if (port == null || port !in 1024..65535) {
-            toast("Port must be between 1024 and 65535")
-            return
-        }
-        config.webhookPort = port
-        // Same restart shape as saveNetwork: the listener binds its port at
-        // service start, so a running service is bounced to pick it up.
-        if (McpService.serviceRunning) {
-            McpService.stop(this)
-            handler.postDelayed({ startServer() }, 300)
-        }
-        toast("Saved")
-        bump()
     }
 
     fun copyToClipboard(label: String, text: String) {

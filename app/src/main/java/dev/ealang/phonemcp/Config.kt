@@ -1,7 +1,6 @@
 package dev.ealang.phonemcp
 
 import android.content.Context
-import dev.ealang.phonemcp.webhook.PebbleWebhookServer
 import java.security.SecureRandom
 
 /**
@@ -33,23 +32,14 @@ class Config(context: Context) {
      * binds every interface, which a user without networking knowledge can
      * do by accident. Auto-detecting tunnel interfaces or offering a
      * dropdown of addresses might fix that; whether tunnels can be detected
-     * reliably is the unanswered part. The webhook no longer rides on this
-     * setting — it has its own loopback-only listener.
+     * reliably is the unanswered part.
      */
     var bindAddress: String
         get() = prefs.getString(KEY_BIND, "") ?: ""
         set(value) = prefs.edit().putString(KEY_BIND, value.trim()).apply()
 
-    /**
-     * Per-server bearer tokens (split 2026-09-18; before that one token
-     * covered both listeners). The MCP token keeps the original secret name,
-     * so existing MCP clients survive the split without an edit. The webhook
-     * token seeds itself from the MCP token on first read rather than
-     * generating fresh — the watch gateway was configured with the shared
-     * token, and a silent regeneration would have broken it on update. The
-     * two diverge the first time either is regenerated.
-     */
-    var mcpToken: String
+    /** The bearer token every /mcp request must carry. */
+    var token: String
         get() {
             secrets.get(KEY_TOKEN)?.let { return it }
             // Installed before the SecretStore existed: lift the plaintext
@@ -65,61 +55,9 @@ class Config(context: Context) {
         }
         set(value) = secrets.put(KEY_TOKEN, value)
 
-    var webhookToken: String
-        get() {
-            secrets.get(KEY_WEBHOOK_TOKEN)?.let { return it }
-            val seeded = mcpToken
-            secrets.put(KEY_WEBHOOK_TOKEN, seeded)
-            return seeded
-        }
-        set(value) = secrets.put(KEY_WEBHOOK_TOKEN, value)
-
     /**
-     * The destination chat. Still the numeric id — that is what TDLib sends
-     * to — but since 2026-09-19 it is chosen from a search picker rather
-     * than typed, so no validation is needed here: the only ids that reach
-     * this setter came back from Telegram.
-     */
-    var telegramChatId: Long?
-        get() = prefs.getLong(KEY_TG_CHAT, 0L).takeIf { it != 0L }
-        set(value) = prefs.edit().putLong(KEY_TG_CHAT, value ?: 0L).apply()
-
-    /**
-     * The chosen chat's title as it read at pick time, so the card can name
-     * the destination instead of showing a bare id. Display only, and
-     * deliberately not kept fresh: a renamed chat shows its old name until
-     * the picker is next used, which misleads nobody about where messages
-     * are going — the id is what routes them.
-     */
-    var telegramChatTitle: String
-        get() = prefs.getString(KEY_TG_CHAT_TITLE, "") ?: ""
-        set(value) = prefs.edit().putString(KEY_TG_CHAT_TITLE, value).apply()
-
-    /**
-     * TDLib's local-database encryption key, random per install. Unlike the
-     * api id this one *is* a secret — the database holds the account's
-     * session keys — hence SecretStore, for the same allowBackup reason as
-     * the bearer token.
-     */
-    val telegramDbKey: ByteArray
-        get() {
-            secrets.get(KEY_TG_DB_KEY)?.let {
-                return android.util.Base64.decode(it, android.util.Base64.NO_WRAP)
-            }
-            val fresh = ByteArray(32).also { SecureRandom().nextBytes(it) }
-            secrets.put(
-                KEY_TG_DB_KEY,
-                android.util.Base64.encodeToString(fresh, android.util.Base64.NO_WRAP),
-            )
-            return fresh
-        }
-
-    /**
-     * Feature switches. The MCP tool keys are enforced per request — a tool
-     * whose key is off vanishes from tools/list and is refused at dispatch.
-     * [FEATURE_WEBHOOK] gates the webhook listener socket: off means the
-     * watch gets connection-refused, while the pipeline worker stays up and
-     * drains whatever was already accepted.
+     * Per-tool feature switches, enforced per request — a tool whose key is
+     * off vanishes from tools/list and is refused at dispatch.
      *
      * Keys are namespaced with "feature_" so they can be enumerated later.
      */
@@ -142,28 +80,12 @@ class Config(context: Context) {
     fun setPermissionAsked(key: String) =
         prefs.edit().putBoolean("asked_$key", true).apply()
 
-    /** Whether any listener is switched on — no listener wanted, no service. */
-    fun anyServerEnabled(): Boolean =
-        featureEnabled(FEATURE_MCP) || featureEnabled(FEATURE_WEBHOOK)
-
     /**
-     * The webhook listener's port, bound at service start; the Save button
-     * restarts the service to apply a change.
+     * Whether the user wants the server up: the state behind the UI's one
+     * switch, set when the service starts and cleared when it stops. Also
+     * what the boot receiver checks, so a server left on comes back after a
+     * reboot or an app update and one left off stays off.
      */
-    var webhookPort: Int
-        get() = prefs.getInt(KEY_WEBHOOK_PORT, PebbleWebhookServer.PORT)
-        set(value) = prefs.edit().putInt(KEY_WEBHOOK_PORT, value).apply()
-
-    /**
-     * Signature line appended to forwarded Telegram messages, on its own
-     * line. Read at pickup by TelegramDelivery, so an edit applies to
-     * queued items too. Blank appends nothing.
-     */
-    var telegramSignature: String
-        get() = prefs.getString(KEY_TG_SIGNATURE, "") ?: ""
-        set(value) = prefs.edit().putString(KEY_TG_SIGNATURE, value.trim()).apply()
-
-    /** Whether the user wants the server up — also what the boot receiver checks. */
     var enabled: Boolean
         get() = prefs.getBoolean(KEY_ENABLED, false)
         set(value) = prefs.edit().putBoolean(KEY_ENABLED, value).apply()
@@ -180,9 +102,7 @@ class Config(context: Context) {
         get() = prefs.getString(KEY_START_FAILURE, null)
         set(value) = prefs.edit().putString(KEY_START_FAILURE, value).apply()
 
-    fun regenerateMcpToken(): String = generateToken().also { mcpToken = it }
-
-    fun regenerateWebhookToken(): String = generateToken().also { webhookToken = it }
+    fun regenerateToken(): String = generateToken().also { token = it }
 
     private fun generateToken(): String {
         val bytes = ByteArray(24)
@@ -193,23 +113,10 @@ class Config(context: Context) {
     companion object {
         const val DEFAULT_PORT = 8910
 
-        /**
-         * Each listener as one feature key. The service runs while either is
-         * on; [anyServerEnabled] is the boot receiver's and the UI's question.
-         */
-        const val FEATURE_WEBHOOK = "webhook_server"
-        const val FEATURE_MCP = "mcp_server"
-
         private const val KEY_PORT = "port"
         private const val KEY_BIND = "bind_address"
         private const val KEY_TOKEN = "token"
-        private const val KEY_WEBHOOK_TOKEN = "webhook_token"
         private const val KEY_ENABLED = "enabled"
         private const val KEY_START_FAILURE = "last_start_failure"
-        private const val KEY_TG_CHAT = "telegram_chat_id"
-        private const val KEY_TG_CHAT_TITLE = "telegram_chat_title"
-        private const val KEY_TG_DB_KEY = "telegram_db_key"
-        private const val KEY_TG_SIGNATURE = "telegram_signature"
-        private const val KEY_WEBHOOK_PORT = "webhook_port"
     }
 }

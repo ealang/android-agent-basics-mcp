@@ -3,7 +3,6 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
@@ -20,7 +19,6 @@
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Clock apps guard their AlarmClock activities with this; holding it
          lets send_intent fire SET_TIMER and friends. A normal permission:
          granted at install, no prompt. -->
@@ -53,10 +51,9 @@
     </queries>
 
     <!-- No backups, and belt-and-braces exclusion rules besides. Everything
-         here is either a secret (SecretStore blobs, TDLib's session database),
-         queued user audio, or state that regenerates — and the SecretStore
-         key is stranded in this phone's Keystore, so a restored copy is
-         unreadable anyway. fullBackupContent covers API 26–30,
+         here is either a secret (the SecretStore blobs) or state that
+         regenerates — and the SecretStore key is stranded in this phone's
+         Keystore, so a restored copy is unreadable anyway. fullBackupContent covers API 26–30,
          dataExtractionRules covers 31+ including device-to-device transfer. -->
     <application
         android:allowBackup="false"

@@ -10,12 +10,9 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * One server, one log. The app is two applications bolted together — the
- * webhook receiver and the MCP server — and each [ServerLog] instance is the
- * complete story of one of them: the high-level events at info (a message
- * received and handed off; a tool called, and on what), the plumbing at
- * debug/warn/error (binds, socket deaths, auth rejections), all in one file
- * told apart by level.
+ * The server's log, the complete story in one file: the high-level events at
+ * info (a tool called, and on what), the plumbing at debug/warn/error (binds,
+ * socket deaths, auth rejections), told apart by level.
  *
  * JSONL on disk — `{ts, level, event, detail?, item?}` — appended from
  * whichever thread is doing the work; appends are serialized on the instance.
@@ -93,8 +90,6 @@ class ServerLog(root: File, name: String) {
             lines.takeLast(limit).asReversed().map { line ->
                 runCatching {
                     val json = JSONObject(line)
-                    // Absent on lines the retired PipelineLog wrote; the
-                    // pipeline's events were all ordinary happenings.
                     val level = json.optString("level", "info")
                     buildString {
                         append(json.optString("ts"))
@@ -126,31 +121,23 @@ class ServerLog(root: File, name: String) {
 }
 
 /**
- * The two instances, one per server, shared by everything that logs: the
- * activity, the service, the listeners, the pipeline. Container-level events
- * that belong to neither server alone (the service refused, foreground lost)
- * go to [both]. Initialized by whichever entry point runs first; idempotent,
- * so each just calls [init] on its own filesDir.
+ * The one instance, shared by everything that logs: the activity, the
+ * service, the server. Initialized by whichever entry point runs first;
+ * idempotent, so each just calls [init] on its own filesDir.
  */
 object Logs {
     @Volatile
-    private var instances: Pair<ServerLog, ServerLog>? = null
+    private var instance: ServerLog? = null
 
     fun init(root: File) {
-        if (instances == null) {
+        if (instance == null) {
             synchronized(this) {
-                if (instances == null) {
-                    instances = ServerLog(root, "webhook") to ServerLog(root, "mcp")
+                if (instance == null) {
+                    instance = ServerLog(root, "mcp")
                 }
             }
         }
     }
 
-    val webhook: ServerLog get() = instances!!.first
-    val mcp: ServerLog get() = instances!!.second
-
-    fun both(write: (ServerLog) -> Unit) {
-        write(webhook)
-        write(mcp)
-    }
+    val mcp: ServerLog get() = instance!!
 }

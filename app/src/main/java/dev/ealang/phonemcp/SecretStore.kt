@@ -32,7 +32,7 @@ import javax.crypto.spec.GCMParameterSpec
  *
  * If the Keystore key is ever invalidated (a factory reset restore, some
  * OEM security events), decryption fails and the secret reads as absent —
- * the bearer token regenerates and Telegram must be logged in again. That
+ * the bearer token regenerates. That
  * is the designed failure: inconvenient, never insecure.
  */
 class SecretStore(context: Context) {

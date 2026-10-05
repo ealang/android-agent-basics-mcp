@@ -197,39 +197,6 @@ marks which claims here are measured and which are still only read out of
 CoreApp's source; check it before relying on one. `docs/watch-timer-retry.md`
 has the reasoning behind this design and the alternatives left unbuilt.
 
-## Building TDLib
-
-The Telegram engine needs `libtdjni.so`, and it is **not in the repository** —
-`app/src/main/jniLibs/` is gitignored, because four ABIs is ~90 MB of binary
-and git never reclaims a blob. A fresh clone therefore builds fine and dies at
-`UnsatisfiedLinkError` the moment the Telegram engine starts.
-
-Build it with `./scripts/build-tdlib.sh` from the repo root. It clones tdlib/td
-at a pinned commit, builds OpenSSL and then TDLib once per ABI, and copies the
-results in — the four `.so` files plus `TdApi.java` and `Client.java`, which
-TDLib *generates* from its schema rather than ships. Those two Java files are
-committed, so the bindings and the binary can disagree if someone edits the pin
-without rerunning the script; if TDLib calls start failing to resolve, suspect
-that first.
-
-It is a long build. `ABIS="arm64-v8a" ./scripts/build-tdlib.sh` cuts it to a
-quarter and is enough for any real phone; the full set is for release builds.
-A partial build simply produces an APK that runs on fewer devices — quietly —
-so check what is in `jniLibs/` before shipping one.
-
-Having all four built does mean a debug APK of 107 MB, since one APK carries
-every ABI present. `DEV_ABIS=arm64-v8a` in `local.properties` narrows what a
-**debug** build packages, without rebuilding TDLib: the other `.so` files stay
-on disk, they just stop riding along. That is the APK to install. It is
-debug-only by design — release packaging is an undecided question
-(`docs/initial-release.md` §11), and a properties file must not be able to
-answer it by accident.
-
-Bumping `TDLIB_COMMIT` regenerates `TdApi.java`, which is a 60k-line file the
-engine compiles against. Treat a bump as a code change: compile, then log in on
-the device, because the auth state machine is where a TDLib change shows up
-first.
-
 ## Docs
 
 `docs/` holds the empirical findings behind the awkward parts — how each

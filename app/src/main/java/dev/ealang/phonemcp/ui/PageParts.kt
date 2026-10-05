@@ -6,15 +6,17 @@ import android.content.Intent
 import android.net.Uri
 import android.os.PowerManager
 import android.provider.Settings
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
@@ -22,8 +24,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -37,19 +37,17 @@ import dev.ealang.phonemcp.mcp.apps.Clock
 import dev.ealang.phonemcp.mcp.apps.Locator
 
 /**
- * Shared pieces of the two-tab layout: the server's own control at
- * the top of its page, the missing-setup card that appears directly under
- * it, and the token block each server settings card carries.
+ * The page's larger pieces: the server's own control at the top, the
+ * missing-setup card that appears directly under it, the token block in the
+ * settings card, and the grants the cards ask for.
  */
 
 /**
- * The page's headline control: the server this tab is about, its state
- * light, and its switch. Not in a card — it is the subject of the page,
- * not one item on it.
+ * The page's headline control: the server, its state light, and its switch.
+ * Not in a card — it is the subject of the page, not one item on it.
  */
 @Composable
 fun ServerHeader(
-    icon: ImageVector,
     title: String,
     on: Boolean,
     bound: Boolean,
@@ -63,15 +61,15 @@ fun ServerHeader(
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            modifier = Modifier.size(40.dp),
-            tint = when {
-                !on -> MaterialTheme.colorScheme.outline
-                bound -> Color(0xFF2E7D32)
-                else -> MaterialTheme.colorScheme.error
-            },
+        Box(
+            Modifier.size(16.dp).background(
+                when {
+                    !on -> MaterialTheme.colorScheme.outline
+                    bound -> okGreen
+                    else -> MaterialTheme.colorScheme.error
+                },
+                CircleShape,
+            ),
         )
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.titleLarge)
@@ -91,12 +89,11 @@ fun ServerHeader(
 
 /**
  * Whatever still needs granting, and nothing when nothing does — the card
- * disappears entirely rather than reporting success. Each page asks only
- * for the grants its own half of the app needs.
+ * disappears entirely rather than reporting success.
  *
  * [pointers] are one-line referrals for problems whose ask-and-button
- * live on another card lower on the page (a tool row's grant, the
- * Telegram login). The top card still announces them — it is the page's
+ * live on another card lower on the page (a tool row's grant). The top
+ * card still announces them — it is the page's
  * one "something needs you" summary — but it points
  * instead of duplicating, so each fix has exactly one button.
  */
@@ -210,7 +207,7 @@ val LOCATION_GRANT = Grant(
 )
 
 /**
- * The tab-top setup card's list: the grants that serve the surface as a
+ * The setup card's list: the grants that serve the surface as a
  * whole (launching rides on overlay, the media_* family on media, the
  * service on battery) rather than any one tool's row.
  */
@@ -221,7 +218,7 @@ val MCP_GRANTS = listOf(
 )
 
 /**
- * The HTTP counters line both tabs open with, counting since app start.
+ * The HTTP counters line the Logs card opens with, counting since app start.
  * Accepted and rejected are kept apart because an auth rejection still
  * counts as a request — folding them together made a 401 look like a
  * message that vanished. Every counter always shows, zeros included:
@@ -234,11 +231,7 @@ fun requestsLine(log: ServerLog): String {
     return "Server requests — accepted: $accepted   rejected: $rejected"
 }
 
-/**
- * A server's own bearer token, shown inside its settings card. Each server
- * has its own (split 2026-09-18): which one this block shows and regenerates
- * is the caller's choice, and regenerating one leaves the other alone.
- */
+/** The bearer token, shown inside the settings card. */
 @Composable
 fun TokenBlock(activity: MainActivity, token: () -> String, regenerate: () -> Unit) {
     StatusText("Clients send it in an Authorization: Bearer header.")

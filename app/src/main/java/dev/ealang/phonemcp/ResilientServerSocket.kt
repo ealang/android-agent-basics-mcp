@@ -18,7 +18,7 @@ import java.net.Socket
  * the socket. NanoHTTPD's loop exits on isClosed(), and [onDied] tells the
  * service to tear down and rebind rather than leave a dead server standing.
  */
-internal class ResilientServerSocket(
+class ResilientServerSocket(
     private val log: ServerLog,
     private val onDied: () -> Unit,
 ) : ServerSocket() {

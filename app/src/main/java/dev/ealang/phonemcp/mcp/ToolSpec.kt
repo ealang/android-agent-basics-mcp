@@ -17,7 +17,7 @@ class ToolSpec(
     /**
      * The Config `feature_*` key that switches this tool off. Null is allowed
      * and means always-on, but nothing uses it today: every tool has a row on
-     * the MCP tab, because a hidden tool is a surprise.
+     * the Tools card, because a hidden tool is a surprise.
      */
     val featureKey: String?,
     /** The tools/list schema entry, name and inputSchema included. */
