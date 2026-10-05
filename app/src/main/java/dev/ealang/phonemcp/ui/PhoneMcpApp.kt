@@ -11,6 +11,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -72,133 +73,142 @@ fun PhoneMcpApp(activity: MainActivity) {
 
     var logDialog by remember { mutableStateOf(false) }
 
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        ServerHeader(
-            title = "Phone MCP",
-            on = config.enabled,
-            bound = McpService.running,
-            offText = "Off — MCP clients get connection refused.",
-            boundText = "Listening on " +
-                "${config.bindAddress.ifBlank { "every interface" }}:${config.port}.",
-            failingText = "On but not listening — see the server log.",
-            onChange = { activity.setServerEnabled(it) },
-        )
-
-        // A grant already flagged on an enabled tool row below is not
-        // repeated up here — one visible ask per grant, and the row's is
-        // the more precisely placed; the card carries a pointer at the
-        // Tools card instead. A grant reappears here in full if its tool
-        // is switched off, because the hidden app-specific tools may
-        // still want it.
-        val onRows = GENERIC
-            .filter { config.featureEnabled(it.key) }
-            .flatMap { it.grants }
-        val toolNeedsGrant = GENERIC.any { f ->
-            config.featureEnabled(f.key) && f.grants.any { !it.granted(activity) }
-        }
-        SetupCard(
-            activity,
-            MCP_GRANTS.filterNot { it in onRows },
-            pointers = if (toolNeedsGrant) {
-                listOf("A tool is missing a permission — see the Tools card.")
-            } else {
-                emptyList()
-            },
-        )
-
-        SectionCard("Logs") {
-            // "Tool calls — failed", not plain "Failed": these are tools
-            // that ran and returned an error, a different thing from a
-            // request rejected at the door — those are in the line above.
-            StatusText(
-                requestsLine(Logs.mcp) + "\n" +
-                    "Tool calls — failed: ${Logs.mcp.count("failures")}",
+    // The Scaffold is here for what it does with no bars at all: it paints
+    // the theme's background and hands back the system-bar insets, so the
+    // page is not drawn under the status bar.
+    Scaffold { insets ->
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(insets)
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            ServerHeader(
+                title = "Phone MCP",
+                on = config.enabled,
+                bound = McpService.running,
+                offText = "Off — MCP clients get connection refused.",
+                boundText = "Listening on " +
+                    "${config.bindAddress.ifBlank { "every interface" }}:${config.port}.",
+                failingText = "On but not listening — see the server log.",
+                onChange = { activity.setServerEnabled(it) },
             )
-            OutlinedButton(onClick = { logDialog = true }) { Text("View server log") }
-        }
 
-        CollapsibleCard("Server settings") {
-            TokenBlock(
+            // A grant already flagged on an enabled tool row below is not
+            // repeated up here — one visible ask per grant, and the row's is
+            // the more precisely placed; the card carries a pointer at the
+            // Tools card instead. A grant reappears here in full if its tool
+            // is switched off, because the hidden app-specific tools may
+            // still want it.
+            val onRows = GENERIC
+                .filter { config.featureEnabled(it.key) }
+                .flatMap { it.grants }
+            val toolNeedsGrant = GENERIC.any { f ->
+                config.featureEnabled(f.key) && f.grants.any { !it.granted(activity) }
+            }
+            SetupCard(
                 activity,
-                token = { activity.config.token },
-                regenerate = { activity.regenerateToken() },
-            )
-
-            HorizontalDivider()
-
-            StatusText(
-                if (config.bindAddress.isNotEmpty()) {
-                    "Reachable only on ${config.bindAddress}:\n\n" +
-                        "http://${config.bindAddress}:${config.port}${McpServer.MCP_PATH}"
+                MCP_GRANTS.filterNot { it in onRows },
+                pointers = if (toolNeedsGrant) {
+                    listOf("A tool is missing a permission — see the Tools card.")
                 } else {
-                    val urls = McpService.localAddresses().joinToString("\n") {
-                        "http://${it.substringBefore(' ')}:${config.port}" +
-                            "${McpServer.MCP_PATH}  ${it.substringAfter(' ')}"
-                    }
-                    "Bound to every interface, this phone's LAN included:\n\n" +
-                        urls.ifEmpty { "(no network interface found)" }
+                    emptyList()
                 },
             )
-            OutlinedButton(onClick = {
-                val url = activity.mcpUrl()
-                if (url == null) {
-                    activity.toast("No address to build a URL from — is the phone on a network?")
-                } else {
-                    activity.copyToClipboard("MCP URL", url)
-                }
-            }) { Text("Copy MCP URL") }
 
-            var portText by remember { mutableStateOf(config.port.toString()) }
-            var bindText by remember { mutableStateOf(config.bindAddress) }
-            OutlinedTextField(
-                value = portText,
-                onValueChange = { portText = it },
-                label = { Text("Port") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedTextField(
-                value = bindText,
-                onValueChange = { bindText = it },
-                label = { Text("Bind address (blank = every interface)") },
-                placeholder = { Text("e.g. 100.x.y.z") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedButton(onClick = { activity.saveNetwork(portText, bindText) }) {
-                Text("Save and apply")
+            SectionCard("Logs") {
+                // "Tool calls — failed", not plain "Failed": these are tools
+                // that ran and returned an error, a different thing from a
+                // request rejected at the door — those are in the line above.
+                StatusText(
+                    requestsLine(Logs.mcp) + "\n" +
+                        "Tool calls — failed: ${Logs.mcp.count("failures")}",
+                )
+                OutlinedButton(onClick = { logDialog = true }) { Text("View server log") }
             }
-        }
 
-        // The card-level icon repeats the row-level one so the signal
-        // survives the card being folded shut.
-        CollapsibleCard("Tools", warn = toolNeedsGrant) {
-            GENERIC.forEachIndexed { i, feature ->
-                if (i > 0) HorizontalDivider()
-                val checked = config.featureEnabled(feature.key)
-                // A tool that is on but cannot work is flagged right here,
-                // on the row that was switched; grants for tools that are
-                // off nag nobody.
-                val missing = feature.grants.filterNot { it.granted(activity) }
-                SwitchRow(
-                    title = feature.title,
-                    supporting = feature.description,
-                    checked = checked,
-                    warn = checked && missing.isNotEmpty(),
-                    onChange = {
-                        config.setFeatureEnabled(feature.key, it)
-                        activity.bump()
+            CollapsibleCard("Server settings") {
+                TokenBlock(
+                    activity,
+                    token = { activity.config.token },
+                    regenerate = { activity.regenerateToken() },
+                )
+
+                HorizontalDivider()
+
+                StatusText(
+                    if (config.bindAddress.isNotEmpty()) {
+                        "Reachable only on ${config.bindAddress}:\n\n" +
+                            "http://${config.bindAddress}:${config.port}${McpServer.MCP_PATH}"
+                    } else {
+                        val urls = McpService.localAddresses().joinToString("\n") {
+                            "http://${it.substringBefore(' ')}:${config.port}" +
+                                "${McpServer.MCP_PATH}  ${it.substringAfter(' ')}"
+                        }
+                        "Bound to every interface, this phone's LAN included:\n\n" +
+                            urls.ifEmpty { "(no network interface found)" }
                     },
                 )
-                if (checked) {
-                    missing.forEach { grant ->
-                        StatusText(grant.ask, warn = true)
-                        OutlinedButton(onClick = { grant.open(activity) }) {
-                            Text(grant.button)
+                OutlinedButton(onClick = {
+                    val url = activity.mcpUrl()
+                    if (url == null) {
+                        activity.toast("No address to build a URL from — is the phone on a network?")
+                    } else {
+                        activity.copyToClipboard("MCP URL", url)
+                    }
+                }) { Text("Copy MCP URL") }
+
+                var portText by remember { mutableStateOf(config.port.toString()) }
+                var bindText by remember { mutableStateOf(config.bindAddress) }
+                OutlinedTextField(
+                    value = portText,
+                    onValueChange = { portText = it },
+                    label = { Text("Port") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = bindText,
+                    onValueChange = { bindText = it },
+                    label = { Text("Bind address (blank = every interface)") },
+                    placeholder = { Text("e.g. 100.x.y.z") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedButton(onClick = { activity.saveNetwork(portText, bindText) }) {
+                    Text("Save and apply")
+                }
+            }
+
+            // The card-level icon repeats the row-level one so the signal
+            // survives the card being folded shut.
+            CollapsibleCard("Tools", warn = toolNeedsGrant) {
+                GENERIC.forEachIndexed { i, feature ->
+                    if (i > 0) HorizontalDivider()
+                    val checked = config.featureEnabled(feature.key)
+                    // A tool that is on but cannot work is flagged right here,
+                    // on the row that was switched; grants for tools that are
+                    // off nag nobody.
+                    val missing = feature.grants.filterNot { it.granted(activity) }
+                    SwitchRow(
+                        title = feature.title,
+                        supporting = feature.description,
+                        checked = checked,
+                        warn = checked && missing.isNotEmpty(),
+                        onChange = {
+                            config.setFeatureEnabled(feature.key, it)
+                            activity.bump()
+                        },
+                    )
+                    if (checked) {
+                        missing.forEach { grant ->
+                            StatusText(grant.ask, warn = true)
+                            OutlinedButton(onClick = { grant.open(activity) }) {
+                                Text(grant.button)
+                            }
                         }
                     }
                 }
