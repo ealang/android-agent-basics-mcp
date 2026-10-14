@@ -6,9 +6,10 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-// The debug keystore lives outside the repo (path comes from local.properties),
-// so a rebuilt container signs with the same key and the APK still installs
-// over the copy already on the phone.
+// Optional: DEBUG_KEYSTORE in local.properties points debug builds at a
+// keystore of your own, so every build signs with the same key and the APK
+// installs over the copy already on the phone. Without it the SDK's default
+// debug key is used.
 val localProps = Properties().apply {
     val f = rootProject.file("local.properties")
     if (f.exists()) f.inputStream().use { load(it) }

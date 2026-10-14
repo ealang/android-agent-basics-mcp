@@ -294,10 +294,13 @@ that ships unauthenticated.
 ## Building
 
 ```bash
-./gradlew :app:assembleDebug --no-daemon
+./gradlew :app:assembleDebug     # debug APK, signed with the local debug key
+./gradlew :app:assembleRelease   # unsigned release APK; sign it however you ship
 ```
 
-`local.properties` (gitignored) supplies `sdk.dir` and `DEBUG_KEYSTORE`, which
-points at a keystore kept outside the repo. The keystore is pinned
-outside the ephemeral home directory so rebuilds keep the
-same signature and the APK installs over the copy already on the phone.
+Output lands under `app/build/outputs/apk/`. The build needs an Android SDK
+(`sdk.dir` in `local.properties`, which is gitignored). Optionally
+`local.properties` can also carry `DEBUG_KEYSTORE=/path/to/debug.keystore`
+to sign debug builds with a key of your choosing instead of the SDK's
+auto-generated one; Android's debug key is fine either way, as long as it stays
+the same key from build to build so each APK installs over the last one.
