@@ -181,6 +181,17 @@ fun PhoneMcpApp(activity: MainActivity) {
                 OutlinedButton(onClick = { activity.saveNetwork(portText, bindText) }) {
                     Text("Save and apply")
                 }
+
+                HorizontalDivider()
+
+                StatusText(
+                    "The persistent \"Phone MCP\" notification can be switched off. " +
+                        "If the server stays unable to listen, a separate " +
+                        "\"Server trouble\" notification still appears.",
+                )
+                OutlinedButton(onClick = { activity.openServiceNotificationSettings() }) {
+                    Text("Hide status notification")
+                }
             }
 
             // The card-level icon repeats the row-level one so the signal

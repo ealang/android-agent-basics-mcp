@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import dev.ealang.phonemcp.mcp.McpServer
 import dev.ealang.phonemcp.mcp.apps.Sound
@@ -30,8 +31,18 @@ class McpService : Service() {
     companion object {
         private const val TAG = "PhoneMcpService"
         private const val LEGACY_CHANNEL_ID = "phone-mcp-server"
-        private const val CHANNEL_ID = "phone-mcp-server-quiet"
-        private const val NOTIFICATION_ID = 1
+        /** The routine "server is up" notification. Users may block this one. */
+        const val QUIET_CHANNEL_ID = "phone-mcp-server-quiet"
+        /** Where the notification moves while the server cannot listen. */
+        const val TROUBLE_CHANNEL_ID = "phone-mcp-server-trouble"
+        private const val QUIET_NOTIFICATION_ID = 1
+        private const val TROUBLE_NOTIFICATION_ID = 2
+        /**
+         * How long binding may keep failing before it counts as trouble.
+         * Shorter than this is routine: the usual cause is Tailscale still
+         * coming up after a boot or a reconnect, which takes seconds.
+         */
+        private const val TROUBLE_AFTER_MS = 120_000L
 
         const val ACTION_STOP = "dev.ealang.phonemcp.STOP"
 
@@ -40,6 +51,46 @@ class McpService : Service() {
         private const val MAX_RETRY_MS = 60_000L
         /** Broadcast whenever the server starts or stops, so the UI can refresh. */
         const val ACTION_STATE_CHANGED = "dev.ealang.phonemcp.STATE_CHANGED"
+
+        /**
+         * Creates the notification channels if needed. Idempotent, and safe
+         * before the service has ever run — the activity calls it before
+         * opening a channel's settings screen, which needs the channel to
+         * exist.
+         */
+        fun ensureChannels(context: Context) {
+            val manager = context.getSystemService(NotificationManager::class.java)
+            // IMPORTANCE_MIN: the notification is a requirement of running in
+            // the foreground, not information — MIN keeps it out of the status
+            // bar entirely and collapses it into the shade's minimized section.
+            // Importance cannot be changed on an existing channel (it belongs
+            // to the user once created), so the move from IMPORTANCE_LOW was a
+            // new channel id; the old one is deleted so Settings shows one.
+            manager.deleteNotificationChannel(LEGACY_CHANNEL_ID)
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    QUIET_CHANNEL_ID,
+                    "MCP server",
+                    NotificationManager.IMPORTANCE_MIN,
+                ).apply {
+                    description = "Shown while the local MCP server is running. " +
+                        "Safe to turn off: trouble is reported on its own channel."
+                },
+            )
+            // IMPORTANCE_DEFAULT so it sounds the way the phone is set to; the
+            // user can tune this channel without touching the routine one.
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    TROUBLE_CHANNEL_ID,
+                    "Server trouble",
+                    NotificationManager.IMPORTANCE_DEFAULT,
+                ).apply {
+                    description = "The server has been unable to listen for more than " +
+                        "a couple of minutes — usually because its bind address " +
+                        "is gone, such as when the VPN is down."
+                },
+            )
+        }
 
         /** The service is up. Whether the socket is bound yet is [running]. */
         @Volatile
@@ -108,6 +159,18 @@ class McpService : Service() {
     private val retry = Runnable { attemptStart() }
     private var retryDelayMs = INITIAL_RETRY_MS
 
+    /** elapsedRealtime of the first failed bind in the current run of failures, 0 when bound. */
+    private var failingSince = 0L
+    /** Which notification is the foreground one right now — see [show]. */
+    private var showingTrouble = false
+    /**
+     * The foreground types [goForeground] actually got, or null below API 34
+     * where none are passed. A later `startForeground` must ask for exactly
+     * these: asking for the full set again from the background could be
+     * refused, and falling back would strip `location` off a healthy service.
+     */
+    private var foregroundTypes: Int? = null
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
@@ -173,7 +236,9 @@ class McpService : Service() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             // Types are not enforced before 34; asking for one is what breaks.
             return try {
-                startForeground(NOTIFICATION_ID, notification("Starting…"))
+                startForeground(QUIET_NOTIFICATION_ID, notification("Starting…", trouble = false))
+                foregroundTypes = null
+                showingTrouble = false
                 degraded = false
                 true
             } catch (e: Exception) {
@@ -186,7 +251,9 @@ class McpService : Service() {
             ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION or
             ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
         try {
-            startForeground(NOTIFICATION_ID, notification("Starting…"), full)
+            startForeground(QUIET_NOTIFICATION_ID, notification("Starting…", trouble = false), full)
+            foregroundTypes = full
+            showingTrouble = false
             if (degraded) Logs.mcp.info("location foreground type regained")
             degraded = false
             return true
@@ -196,10 +263,12 @@ class McpService : Service() {
 
         return try {
             startForeground(
-                NOTIFICATION_ID,
-                notification("Starting…"),
+                QUIET_NOTIFICATION_ID,
+                notification("Starting…", trouble = false),
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
             )
+            foregroundTypes = ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            showingTrouble = false
             degraded = true
             Logs.mcp.warn("started without location type; get_location may be limited")
             true
@@ -243,16 +312,29 @@ class McpService : Service() {
             server = instance
             running = true
             retryDelayMs = INITIAL_RETRY_MS
+            if (failingSince != 0L) Logs.mcp.info("bound after failing for ${sinceFailing()}")
+            failingSince = 0L
             Logs.mcp.info("listening on $listeningOn:${config.port}")
-            notify("Listening on $listeningOn:${config.port}")
+            show("Listening on $listeningOn:${config.port}", trouble = false)
             Log.i(TAG, "Listening on $listeningOn port ${config.port}")
         } catch (e: Exception) {
+            val reason = e.message ?: e::class.java.simpleName
             Log.w(TAG, "Could not bind $listeningOn port ${config.port}; will retry", e)
             Logs.mcp.warn(
                 "bind $listeningOn:${config.port} failed",
-                "${e.message ?: e::class.java.simpleName}; retry in ${retryDelayMs / 1000}s",
+                "$reason; retry in ${retryDelayMs / 1000}s",
             )
-            notify("Waiting to bind $listeningOn:${config.port}")
+            if (failingSince == 0L) failingSince = SystemClock.elapsedRealtime()
+            val trouble = SystemClock.elapsedRealtime() - failingSince >= TROUBLE_AFTER_MS
+            show(
+                if (trouble) {
+                    "Not listening for ${sinceFailing()}: cannot bind " +
+                        "$listeningOn:${config.port} ($reason). Retrying every minute."
+                } else {
+                    "Waiting to bind $listeningOn:${config.port}"
+                },
+                trouble,
+            )
             main.postDelayed(retry, retryDelayMs)
             retryDelayMs = (retryDelayMs * 2).coerceAtMost(MAX_RETRY_MS)
         }
@@ -289,29 +371,52 @@ class McpService : Service() {
         super.onDestroy()
     }
 
-    private fun notify(text: String) {
-        getSystemService(NotificationManager::class.java)
-            .notify(NOTIFICATION_ID, notification(text))
+    private fun sinceFailing(): String {
+        val minutes = (SystemClock.elapsedRealtime() - failingSince) / 60_000
+        return if (minutes < 60) "$minutes min" else "${minutes / 60} h ${minutes % 60} min"
     }
 
-    private fun notification(text: String): Notification {
-        val manager = getSystemService(NotificationManager::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            // IMPORTANCE_MIN: the notification is a requirement of running in
-            // the foreground, not information — MIN keeps it out of the status
-            // bar entirely and collapses it into the shade's minimized section.
-            // Importance cannot be changed on an existing channel (it belongs
-            // to the user once created), so the move from IMPORTANCE_LOW was a
-            // new channel id; the old one is deleted so Settings shows one.
-            manager.deleteNotificationChannel(LEGACY_CHANNEL_ID)
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "MCP server",
-                NotificationManager.IMPORTANCE_MIN,
-            )
-            channel.description = "Shown while the local MCP server is running."
-            manager.createNotificationChannel(channel)
+    /**
+     * Updates the one service notification, moving it between the quiet and
+     * trouble channels as needed.
+     *
+     * There is deliberately a single notification. Routine status lives on a
+     * channel the user is welcome to block; trouble has to be able to reach
+     * them anyway, so it is posted on a second channel — but as the *same*
+     * notification moved there, never as an extra one beside it. A posted
+     * notification cannot change channel in place, and the foreground
+     * notification cannot be cancelled while the service holds it, so the
+     * move is another `startForeground` under a different id: the system
+     * drops the previous foreground notification when the id changes.
+     *
+     * `setOnlyAlertOnce` on the builder means the trouble channel sounds once
+     * per outage, not once per retry; moving back to quiet cancels the
+     * trouble notification, so the next outage alerts afresh.
+     */
+    private fun show(text: String, trouble: Boolean) {
+        val n = notification(text, trouble)
+        val id = if (trouble) TROUBLE_NOTIFICATION_ID else QUIET_NOTIFICATION_ID
+        if (trouble == showingTrouble) {
+            getSystemService(NotificationManager::class.java).notify(id, n)
+            return
         }
+        try {
+            val types = foregroundTypes
+            if (types == null) startForeground(id, n) else startForeground(id, n, types)
+            showingTrouble = trouble
+            Log.i(TAG, "Service notification moved to ${if (trouble) "trouble" else "quiet"} channel")
+        } catch (e: Exception) {
+            // Keep whatever is showing rather than lose the notification.
+            Log.w(TAG, "Could not move the service notification; updating in place", e)
+            getSystemService(NotificationManager::class.java).notify(
+                if (showingTrouble) TROUBLE_NOTIFICATION_ID else QUIET_NOTIFICATION_ID,
+                notification(text, showingTrouble),
+            )
+        }
+    }
+
+    private fun notification(text: String, trouble: Boolean): Notification {
+        ensureChannels(this)
 
         val open = PendingIntent.getActivity(
             this,
@@ -326,9 +431,11 @@ class McpService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        return Notification.Builder(this, CHANNEL_ID)
-            .setContentTitle("Phone MCP")
+        return Notification.Builder(this, if (trouble) TROUBLE_CHANNEL_ID else QUIET_CHANNEL_ID)
+            .setContentTitle(if (trouble) "Phone MCP server is down" else "Phone MCP")
             .setContentText(text)
+            .setStyle(Notification.BigTextStyle().bigText(text))
+            .setOnlyAlertOnce(true)
             .setSmallIcon(R.drawable.ic_stat_pyramid)
             .setContentIntent(open)
             .addAction(Notification.Action.Builder(null, "Stop", stop).build())

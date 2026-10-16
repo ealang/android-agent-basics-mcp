@@ -273,6 +273,21 @@ class MainActivity : ComponentActivity() {
      * because an unprompted dialog beside per-tool
      * warnings read as two systems disagreeing.
      */
+    /**
+     * Opens Android's settings page for the routine service notification's
+     * channel, where it can be switched off. Linked from the app because
+     * some OEM Settings apps show only the app-level toggle and no way to
+     * reach a single channel.
+     */
+    fun openServiceNotificationSettings() {
+        McpService.ensureChannels(this)
+        startActivity(
+            Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+                .putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+                .putExtra(Settings.EXTRA_CHANNEL_ID, McpService.QUIET_CHANNEL_ID),
+        )
+    }
+
     fun requestNotifications() {
         val notifSettings = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
             .putExtra(Settings.EXTRA_APP_PACKAGE, packageName)

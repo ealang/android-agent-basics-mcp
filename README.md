@@ -220,6 +220,15 @@ The server runs in a foreground service; the persistent notification is a
 requirement of holding a socket open, not decoration. Android kills plain
 background services within minutes and the socket dies with them.
 
+That notification sits on a minimum-importance channel ("MCP server") which the
+user is welcome to block — the app's **Hide status notification** button opens
+that channel's settings page directly, since some OEM Settings apps never list
+channels. Blocking it must not hide a failing server, so once binding has been
+failing for more than two minutes the same notification moves to a second
+channel, "Server trouble", at default importance: it sounds once per outage the
+way the phone is set to, and moves back to the quiet channel when the bind
+succeeds. It is one notification moved between channels, never two.
+
 The service restarts on `BOOT_COMPLETED` if it was running when the phone shut
 down, and on `MY_PACKAGE_REPLACED` so an update does not leave the server off.
 Two caveats: `BOOT_COMPLETED` only reaches an app the user has launched at
