@@ -329,7 +329,7 @@ class McpService : Service() {
             show(
                 if (trouble) {
                     "Not listening for ${sinceFailing()}: cannot bind " +
-                        "$listeningOn:${config.port} ($reason). Retrying every minute."
+                        "$listeningOn:${config.port} ($reason)."
                 } else {
                     "Waiting to bind $listeningOn:${config.port}"
                 },
