@@ -59,7 +59,7 @@ class McpServer(
     private val config = Config(context)
 
     /**
-     * The Tools card's feature switches, honoured per request — SharedPreferences
+     * The MCP Tools card's feature switches, honoured per request — SharedPreferences
      * is an in-memory map after first load, so reading it fresh each time *is*
      * the real-time toggle, no restart involved. A null featureKey means
      * always on: a capability of the phone itself, with no switch to check.

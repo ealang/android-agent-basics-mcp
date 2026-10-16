@@ -116,7 +116,7 @@ fun SetupCard(
             Modifier.fillMaxWidth().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("Setup needed", style = MaterialTheme.typography.titleMedium)
+            Text("Permission requests", style = MaterialTheme.typography.titleMedium)
             missing.forEachIndexed { i, grant ->
                 if (i > 0) HorizontalDivider()
                 Text(grant.ask, style = MaterialTheme.typography.bodySmall)
@@ -218,7 +218,7 @@ val MCP_GRANTS = listOf(
 )
 
 /**
- * The HTTP counters line the Logs card opens with, counting since app start.
+ * The HTTP counters line the Server logs card opens with, counting since app start.
  * Accepted and rejected are kept apart because an auth rejection still
  * counts as a request — folding them together made a 401 look like a
  * message that vanished. Every counter always shows, zeros included:

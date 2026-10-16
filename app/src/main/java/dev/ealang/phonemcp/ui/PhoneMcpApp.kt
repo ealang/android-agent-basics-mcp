@@ -99,7 +99,7 @@ fun PhoneMcpApp(activity: MainActivity) {
             // A grant already flagged on an enabled tool row below is not
             // repeated up here — one visible ask per grant, and the row's is
             // the more precisely placed; the card carries a pointer at the
-            // Tools card instead. A grant reappears here in full if its tool
+            // MCP Tools card instead. A grant reappears here in full if its tool
             // is switched off, because the hidden app-specific tools may
             // still want it.
             val onRows = GENERIC
@@ -112,13 +112,13 @@ fun PhoneMcpApp(activity: MainActivity) {
                 activity,
                 MCP_GRANTS.filterNot { it in onRows },
                 pointers = if (toolNeedsGrant) {
-                    listOf("A tool is missing a permission — see the Tools card.")
+                    listOf("A tool is missing a permission — see the MCP Tools card.")
                 } else {
                     emptyList()
                 },
             )
 
-            SectionCard("Logs") {
+            SectionCard("Server logs") {
                 // "Tool calls — failed", not plain "Failed": these are tools
                 // that ran and returned an error, a different thing from a
                 // request rejected at the door — those are in the line above.
@@ -185,9 +185,8 @@ fun PhoneMcpApp(activity: MainActivity) {
                 HorizontalDivider()
 
                 StatusText(
-                    "The persistent \"Phone MCP\" notification can be switched off. " +
-                        "If the server stays unable to listen, a separate " +
-                        "\"Server trouble\" notification still appears.",
+                    "Hide the ever-present server notification. Errors are " +
+                        "reported in a separate notification.",
                 )
                 OutlinedButton(onClick = { activity.openServiceNotificationSettings() }) {
                     Text("Hide status notification")
@@ -196,7 +195,7 @@ fun PhoneMcpApp(activity: MainActivity) {
 
             // The card-level icon repeats the row-level one so the signal
             // survives the card being folded shut.
-            CollapsibleCard("Tools", warn = toolNeedsGrant) {
+            CollapsibleCard("MCP Tools", warn = toolNeedsGrant) {
                 GENERIC.forEachIndexed { i, feature ->
                     if (i > 0) HorizontalDivider()
                     val checked = config.featureEnabled(feature.key)

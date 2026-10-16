@@ -223,11 +223,12 @@ background services within minutes and the socket dies with them.
 That notification sits on a minimum-importance channel ("MCP server") which the
 user is welcome to block — the app's **Hide status notification** button opens
 that channel's settings page directly, since some OEM Settings apps never list
-channels. Blocking it must not hide a failing server, so once binding has been
-failing for more than two minutes the same notification moves to a second
-channel, "Server trouble", at default importance: it sounds once per outage the
-way the phone is set to, and moves back to the quiet channel when the bind
-succeeds. It is one notification moved between channels, never two.
+channels. It always carries the current state, including "not listening" once
+binding has been failing for more than two minutes. Blocking it must not hide
+that, so while in trouble, and only if the quiet channel is blocked, the same
+text is also posted on a second channel, "Server trouble", at default
+importance: it sounds once per outage the way the phone is set to, and is
+cancelled when the bind succeeds. Either way the user sees one notification.
 
 The service restarts on `BOOT_COMPLETED` if it was running when the phone shut
 down, and on `MY_PACKAGE_REPLACED` so an update does not leave the server off.
