@@ -112,13 +112,9 @@ object IntentExplorer {
         if (filters.isEmpty()) {
             sb.append(
                 "\n(Intent filters could not be read from this app's manifest; " +
-                    "components above are still callable by explicit name.)\n",
+                    "components above are still callable by explicit name.)",
             )
         }
-        sb.append(
-            "\nNot discoverable from outside: the extras each component reads, and " +
-                "provider paths and columns. Those come from the app's documentation or source.",
-        )
         return sb.toString()
     }
 
