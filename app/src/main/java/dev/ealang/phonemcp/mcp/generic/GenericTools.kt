@@ -195,22 +195,22 @@ object GenericTools {
                 ).put("description", "Typed extras. The type must match what the receiving app reads."),
             )
 
-        val intentScan = ToolSpec(
-            name = "intent_scan",
+        val inspect = ToolSpec(
+            name = "inspect",
             featureKey = "intents",
             definition = JSONObject()
-                .put("name", "intent_scan")
-                .put("description", "EXPERIMENTAL: scan an app's automation surface — its exported activities, receivers, and services with their intent filters and guarding permissions. With no package, lists every installed package.")
+                .put("name", "inspect")
+                .put("description", "EXPERIMENTAL: inspect an installed app's automation surface — its exported activities, receivers, services, and content providers, with intent filters and guarding permissions. With no package, lists every installed app by label and package name.")
                 .put(
                     "inputSchema",
                     JSONObject().put("type", "object").put(
                         "properties",
-                        JSONObject().put("package", JSONObject().put("type", "string").put("description", "Exact package name to scan; omit to list all packages.")),
+                        JSONObject().put("package", JSONObject().put("type", "string").put("description", "Exact package name to inspect; omit to list installed apps.")),
                     ),
                 ),
         ) { args ->
             val pkg = args.optString("package").trim()
-            val text = if (pkg.isEmpty()) IntentExplorer.listPackages(context) else IntentExplorer.scan(context, pkg)
+            val text = if (pkg.isEmpty()) IntentExplorer.listPackages(context) else IntentExplorer.inspect(context, pkg)
             text to text.startsWith("FAILED:")
         }
 
@@ -254,19 +254,19 @@ object GenericTools {
             featureKey = "content_providers",
             definition = JSONObject()
                 .put("name", "provider_query")
-                .put("description", "EXPERIMENTAL: read another app's state through its ContentProvider. With no uri, lists every exported provider on the device with its authority and permission guards. With a content:// uri, runs the query and returns rows as text.")
+                .put("description", "EXPERIMENTAL: read another app's state through its ContentProvider — run a query against a content:// uri and get rows back as text. inspect <package> lists an app's providers and their authorities.")
                 .put(
                     "inputSchema",
                     JSONObject().put("type", "object").put(
                         "properties",
                         JSONObject()
-                            .put("uri", JSONObject().put("type", "string").put("description", "content://<authority>/<path>. Omit to list all exported providers."))
+                            .put("uri", JSONObject().put("type", "string").put("description", "content://<authority>/<path>. Paths are not discoverable from outside: try the bare authority, then documented or guessed paths."))
                             .put("projection", JSONObject().put("type", "array").put("items", JSONObject().put("type", "string")).put("description", "Columns to return; omit for all."))
                             .put("selection", JSONObject().put("type", "string").put("description", "SQL-style WHERE clause, ? placeholders allowed."))
                             .put("selection_args", JSONObject().put("type", "array").put("items", JSONObject().put("type", "string")).put("description", "Values for the ? placeholders."))
                             .put("sort_order", JSONObject().put("type", "string").put("description", "SQL-style ORDER BY clause."))
                             .put("limit", JSONObject().put("type", "integer").put("description", "Max rows to show, default 50, cap 500.")),
-                    ),
+                    ).put("required", JSONArray().put("uri")),
                 ),
         ) { args ->
             val text = ProviderExplorer.query(context, args)
@@ -284,7 +284,7 @@ object GenericTools {
                     JSONObject().put("type", "object").put(
                         "properties",
                         JSONObject()
-                            .put("authority", JSONObject().put("type", "string").put("description", "The provider's authority, bare, no path — e.g. com.example.app.provider. Find it with provider_query's list."))
+                            .put("authority", JSONObject().put("type", "string").put("description", "The provider's authority, bare, no path — e.g. com.example.app.provider. Find it with inspect."))
                             .put("method", JSONObject().put("type", "string").put("description", "Method name the provider dispatches on."))
                             .put("arg", JSONObject().put("type", "string").put("description", "Optional string argument."))
                             .put("extras", JSONObject().put("type", "array").put("items", JSONObject().put("type", "object")).put("description", "Optional typed extras, same format as send_intent: [{key, type, value}] with type one of string, int, long, boolean, float, double, uri, string_array, int_array, long_array, int_arraylist, string_arraylist.")),
@@ -351,7 +351,7 @@ object GenericTools {
         return listOf(
             mediaApps, mediaBrowse, mediaPlay, mediaCommand, mediaSearch,
             mediaSessions, mediaKey,
-            intentScan, intentResolve, sendIntent, providerQuery, providerCall,
+            inspect, intentResolve, sendIntent, providerQuery, providerCall,
             postNotification, dismissNotification,
         )
     }

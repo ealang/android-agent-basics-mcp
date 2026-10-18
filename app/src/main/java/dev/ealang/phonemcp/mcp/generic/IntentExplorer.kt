@@ -17,7 +17,7 @@ import org.json.JSONObject
 import org.xmlpull.v1.XmlPullParser
 
 /**
- * Experimental: the generic intent surface — scan what any installed app
+ * Experimental: the generic intent surface — inspect what any installed app
  * declares as automatable (exported components and their intent filters),
  * dry-run resolution ("who would handle this intent"), and actually fire
  * an intent as an activity start, broadcast, or service start.
@@ -38,20 +38,20 @@ object IntentExplorer {
     private const val TAG = "phone-mcp"
     private const val ANDROID_NS = "http://schemas.android.com/apk/res/android"
 
-    // ---------------------------------------------------------------- scan
+    // ------------------------------------------------------------- inspect
 
-    /** No package: the full installed list, so a sweep knows what to scan. */
+    /** No package: the full installed list, so the agent can find the app the user named. */
     fun listPackages(context: Context): String {
         val pm = context.packageManager
         val apps = pm.getInstalledApplications(0)
             .map { it.loadLabel(pm).toString() to it.packageName }
             .sortedBy { it.first.lowercase() }
         val lines = apps.joinToString("\n") { (label, pkg) -> "$label — $pkg" }
-        return "${apps.size} installed packages (scan one with intent_scan package=<pkg>):\n$lines"
+        return "${apps.size} installed apps (inspect one with inspect package=<pkg>):\n$lines"
     }
 
-    /** One package: its exported components, permissions, and intent filters. */
-    fun scan(context: Context, pkg: String): String {
+    /** One package: its exported components, permissions, intent filters, and providers. */
+    fun inspect(context: Context, pkg: String): String {
         val pm = context.packageManager
         val info = try {
             pm.getPackageInfo(
@@ -60,7 +60,7 @@ object IntentExplorer {
                     PackageManager.GET_RECEIVERS or PackageManager.GET_PROVIDERS,
             )
         } catch (e: PackageManager.NameNotFoundException) {
-            return "FAILED: no installed package named \"$pkg\". intent_scan with no arguments lists every package."
+            return "FAILED: no installed package named \"$pkg\". inspect with no arguments lists every installed app."
         }
         val label = info.applicationInfo?.loadLabel(pm)?.toString() ?: pkg
         val filters = manifestFilters(context, pkg)
@@ -103,7 +103,7 @@ object IntentExplorer {
 
         val providers = info.providers?.filter { it.exported } ?: emptyList()
         if (providers.isNotEmpty()) {
-            sb.append("\nProviders: ${providers.size} exported (query with provider_query)\n")
+            sb.append("\nProviders: ${providers.size} exported (query with provider_query uri=content://<authority>/<path>)\n")
             for (p in providers) {
                 sb.append(ProviderExplorer.describeProvider(p, indent = "  "))
             }
@@ -112,9 +112,13 @@ object IntentExplorer {
         if (filters.isEmpty()) {
             sb.append(
                 "\n(Intent filters could not be read from this app's manifest; " +
-                    "components above are still callable by explicit name.)",
+                    "components above are still callable by explicit name.)\n",
             )
         }
+        sb.append(
+            "\nNot discoverable from outside: the extras each component reads, and " +
+                "provider paths and columns. Those come from the app's documentation or source.",
+        )
         return sb.toString()
     }
 

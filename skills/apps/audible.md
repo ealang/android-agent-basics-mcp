@@ -6,7 +6,7 @@ reachable through the media-button revival plus its session, which is
 the richest in the survey: any book by name via search, real absolute
 seek, and the full transport grammar.
 
-Self-contained: everything below runs without an `intent_scan`. The
+Self-contained: everything below runs without an `inspect`. The
 generic verbs (`play`, `pause`, read-backs) are in
 [../media-control.md](../media-control.md).
 

@@ -1,7 +1,6 @@
 package dev.ealang.phonemcp.mcp.generic
 
 import android.content.Context
-import android.content.pm.PackageManager
 import android.content.pm.ProviderInfo
 import android.database.Cursor
 import android.net.Uri
@@ -26,39 +25,7 @@ object ProviderExplorer {
     private const val DEFAULT_LIMIT = 50
     private const val MAX_CELL = 300
 
-    // ---------------------------------------------------------------- list
-
-    /**
-     * Every exported provider on the device, grouped by package, with its
-     * authority and permission guards. One call answers "what can be read
-     * at all"; the guards say what each attempt will hit. An authority
-     * with no read guard is open to any app — those are the interesting
-     * ones — but path-level permissions can still fence off parts of it,
-     * so open-looking authorities may refuse specific tables.
-     */
-    fun list(context: Context): String {
-        val pm = context.packageManager
-        val packages = pm.getInstalledPackages(PackageManager.GET_PROVIDERS)
-        val sections = mutableListOf<Pair<String, String>>() // label, body
-        var total = 0
-        for (info in packages) {
-            val providers = info.providers?.filter { it.exported } ?: continue
-            if (providers.isEmpty()) continue
-            val label = info.applicationInfo?.loadLabel(pm)?.toString() ?: info.packageName
-            val body = StringBuilder("$label (${info.packageName})\n")
-            for (p in providers) {
-                total++
-                body.append(describeProvider(p, indent = "  "))
-            }
-            sections.add(label.lowercase() to body.toString())
-        }
-        sections.sortBy { it.first }
-        return "$total exported providers on the device. Query one with " +
-            "provider_query uri=content://<authority>/<path> — paths are not " +
-            "discoverable from outside, so try the bare authority, then " +
-            "documented or guessed paths.\n\n" +
-            sections.joinToString("\n") { it.second }
-    }
+    // ----------------------------------------------------------- describe
 
     /** One provider's line(s): authority, guards, grant flag. */
     fun describeProvider(p: ProviderInfo, indent: String): String {
@@ -92,7 +59,9 @@ object ProviderExplorer {
      */
     fun query(context: Context, args: JSONObject): String {
         val uriStr = args.optString("uri").trim()
-        if (uriStr.isEmpty()) return list(context)
+        if (uriStr.isEmpty()) {
+            return "FAILED: uri is required, e.g. content://<authority>/<path>. inspect <package> lists an app's providers and their authorities."
+        }
         val uri = try {
             Uri.parse(uriStr)
         } catch (e: Exception) {

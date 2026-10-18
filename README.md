@@ -36,8 +36,10 @@ nothing to push, so every exchange is ordinary request/response JSON.
 
 ### Generic
 
-- `intent_scan(package?)` — what an installed app declares as automatable:
-  exported components and their intent filters, split APKs included.
+- `inspect(package?)` — what an installed app declares as automatable:
+  exported activities, receivers, services, and content providers, with
+  their intent filters and permission guards, split APKs included. With no
+  package, lists installed apps by label and package name.
 - `intent_resolve(...)` — dry run: who would handle an intent, without
   sending it.
 - `send_intent(...)` — build and fire an intent as an activity start,
@@ -45,10 +47,9 @@ nothing to push, so every exchange is ordinary request/response JSON.
   opt-in mechanism is `via_unlock_gate`, a fallback for intents that
   require the phone to be unlocked — the launch waits behind the user's
   unlock prompt instead of being silently discarded by the keyguard.
-- `provider_query(uri?)` — the read side: with no uri, every exported
-  ContentProvider on the device with its permission guards; with a
-  `content://` uri, run the query and get rows back. Intents are
-  fire-and-forget; providers are the generic way to read app state.
+- `provider_query(uri, ...)` — the read side: run a query against a
+  `content://` uri and get rows back. Intents are fire-and-forget;
+  providers are the generic way to read app state.
 - `media_apps` / `media_browse` / `media_play` / `media_command` /
   `media_search` — drive any app that exposes a MediaBrowserService.
   Per-app findings live in `skills/apps/`.

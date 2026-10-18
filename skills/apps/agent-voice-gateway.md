@@ -7,7 +7,7 @@ driven: it exports a ContentProvider for reads and commands, and a
 launch activity for starting sessions. No media session, no
 MediaBrowserService — do not approach it with the `media_*` tools.
 
-Self-contained: no `intent_scan` needed. The generic tools used here
+Self-contained: no `inspect` needed. The generic tools used here
 are `provider_query`, `provider_call`, and `send_intent`.
 
 ## Reads: two provider queries

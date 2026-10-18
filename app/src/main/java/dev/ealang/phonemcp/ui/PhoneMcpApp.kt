@@ -40,7 +40,7 @@ private data class Feature(
 // One row per switch-off-able slice of the tool surface. Every tool the
 // server offers is on one of these rows — nothing is hidden.
 private val GENERIC = listOf(
-    Feature("intents", "Intents", "send_intent, intent_scan, intent_resolve — raw Android intents, sent exactly as given.", listOf(OVERLAY_GRANT)),
+    Feature("intents", "Intents", "inspect, intent_resolve, send_intent — raw Android intents, sent exactly as given.", listOf(OVERLAY_GRANT)),
     Feature("content_providers", "Content providers", "provider_query, provider_call — reading other apps' automation surfaces and invoking the commands they expose."),
     Feature("media_control", "Media control", "The media_* family — sessions, playback, browse and search in any media app.", listOf(MEDIA_GRANT)),
     Feature("watch_control", "Pebble control", "The pebblekit_* family — launching watchapps and raw AppMessage delivery."),

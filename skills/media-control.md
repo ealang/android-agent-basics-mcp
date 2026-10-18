@@ -28,7 +28,7 @@ address it:
 ```
 send_intent
   mode: foreground_service        # plain service: Android refuses cross-app
-  component: <pkg>/<its media service>   # from intent_scan (MEDIA_BUTTON filter)
+  component: <pkg>/<its media service>   # from inspect (MEDIA_BUTTON filter)
   action: android.intent.action.MEDIA_BUTTON
   extras: [{key: android.intent.extra.KEY_EVENT, type: key_event, value: play}]
 ```
@@ -44,7 +44,7 @@ broadcast at the same app's exported MediaButtonReceiver was delivered
 and ignored, so prefer the service delivery. Whether an app honors it is
 per-app data; force-stopped apps stay unreachable even here.
 
-MEDIA_BUTTON is one instance of the general move: **`intent_scan` the
+MEDIA_BUTTON is one instance of the general move: **`inspect` the
 app for whatever service-level control surface it exports, and start
 the service with it via `foreground_service`.** Some apps declare a
 private action vocabulary instead of (or richer than) the media-button

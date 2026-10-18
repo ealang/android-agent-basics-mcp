@@ -1,7 +1,7 @@
 # Apps with no ability to be automated at all — don't re-probe
 
 This file is only for apps where **every** route has been exhausted:
-browser, session, and the exported-surface scan (`intent_scan` +
+browser, session, and the exported-surface scan (`inspect` +
 `send_intent foreground_service`). A refused browser route alone no
 longer qualifies — YouTube Music and Smart AudioBook Player both turned
 out fully drivable through other doors and have their own files.
@@ -10,7 +10,7 @@ out fully drivable through other doors and have their own files.
 
 `onGetRoot` signature allowlist (verified 2026-09-02/04) — that route
 is closed forever, but after the 2026-09-26 findings these need an
-`intent_scan` pass before they can be called unavailable:
+`inspect` pass before they can be called unavailable:
 
 - **Google app** (`com.google.android.googlequicksearchbox`)
 

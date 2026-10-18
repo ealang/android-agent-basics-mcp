@@ -3,7 +3,7 @@
 ## Generic-first: what the tool surface is
 
 The product is **generic tools plus skill files**. The tools —
-`send_intent`, `intent_scan`, `intent_resolve`, the `provider_*` and
+`inspect`, `send_intent`, `intent_resolve`, the `provider_*` and
 `media_*` families — are raw Android capabilities, remoted, for a
 capable agent. Per-app knowledge lives in `skills/`: an agent explores
 an app through the generic tools, and what it learns becomes a skill
@@ -53,7 +53,7 @@ what it cannot do.
 
 The generic tools are exempt from none of the *clarity* here, but their
 results may expose mechanics freely — their caller is assumed capable,
-and `intent_scan` output is mechanics by definition.
+and `inspect` output is mechanics by definition.
 
 ## Validation: what a first-class tool owes the caller
 
