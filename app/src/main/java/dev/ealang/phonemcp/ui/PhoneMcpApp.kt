@@ -96,21 +96,15 @@ fun PhoneMcpApp(activity: MainActivity) {
                 onChange = { activity.setServerEnabled(it) },
             )
 
-            // A grant already flagged on an enabled tool row below is not
-            // repeated up here — one visible ask per grant, and the row's is
-            // the more precisely placed; the card carries a pointer at the
-            // MCP Tools card instead. A grant reappears here in full if its tool
-            // is switched off, because the hidden app-specific tools may
-            // still want it.
-            val onRows = GENERIC
-                .filter { config.featureEnabled(it.key) }
-                .flatMap { it.grants }
+            // Tool grants are asked for on their rows in the MCP Tools card,
+            // one visible ask per grant; this card carries the server's own
+            // grants and a pointer down when a row is flagged.
             val toolNeedsGrant = GENERIC.any { f ->
                 config.featureEnabled(f.key) && f.grants.any { !it.granted(activity) }
             }
             SetupCard(
                 activity,
-                MCP_GRANTS.filterNot { it in onRows },
+                MCP_GRANTS,
                 pointers = if (toolNeedsGrant) {
                     listOf("A tool is missing a permission — see the MCP Tools card.")
                 } else {

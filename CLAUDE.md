@@ -188,7 +188,7 @@ ping already proves the app is listening before we send.
 channel that reports what the watchapp's C actually did. Use it when verifying a
 change; nothing else can see inside the app.
 
-## Docs
+## Skills
 
 `skills/` is current behaviour only, stated succinctly and rewritten in
 place when the device says otherwise. No changelog narrative, no discovery

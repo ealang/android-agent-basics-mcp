@@ -178,11 +178,7 @@ val MEDIA_GRANT = Grant(
     open = { it.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) },
 )
 
-/**
- * Posting to the shade — the notification tools' one grant. Not in
- * [MCP_GRANTS]: it surfaces on the Notifications tool row instead, the
- * first of the per-tool warnings.
- */
+/** Posting to the shade — the notification tools' one grant, asked for on their row. */
 val NOTIFICATIONS_GRANT = Grant(
     ask = "Notification permission missing.",
     button = "Allow notifications",
@@ -207,13 +203,11 @@ val LOCATION_GRANT = Grant(
 )
 
 /**
- * The setup card's list: the grants that serve the surface as a
- * whole (launching rides on overlay, the media_* family on media, the
- * service on battery) rather than any one tool's row.
+ * The setup card's list: grants that serve the server itself rather than
+ * any one tool. A tool's grant is asked for on its own row in the MCP
+ * Tools card, and only while that row is on.
  */
 val MCP_GRANTS = listOf(
-    OVERLAY_GRANT,
-    MEDIA_GRANT,
     BATTERY_GRANT,
 )
 
