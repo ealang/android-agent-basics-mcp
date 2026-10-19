@@ -8,7 +8,7 @@ The product is **generic tools plus skill files**. The tools —
 capable agent. Per-app knowledge lives in `skills/`: an agent explores
 an app through the generic tools, and what it learns becomes a skill
 file, not a new tool. Maps is the worked example — `send_intent`
-experiments → the findings notes → a skill file over geo URIs.
+experiments → recorded findings → a skill file over geo URIs.
 
 The generic tools execute exactly what they are told: no guards beyond
 our own grants, no protection against a send the target will silently
@@ -26,10 +26,9 @@ only kinds that should ever be added:
 - **Pebble platform tools** — the watch is a platform (there is no
   generic Android route to a BLE peripheral), so watch operations are
   first-class the way phone operations are: generic over *watchapps*,
-  specific to none.
 
 An integration that needs a permission gets a manifest line and
-grant-guiding UI, not a tool (open question).
+grant-guiding UI, not a tool.
 If a proposed tool names a third-party app, the answer is a skill file.
 
 ## Result strings assume a small model
@@ -125,8 +124,7 @@ to prop up an action tool.
 `SYSTEM_ALERT_WINDOW` grant and the companion holds nothing, so a launch intent
 has no return path and none can be invented. What changed is what we do about
 it: preflight the launch so the failures worth naming are named, and where the
-companion can offer a read-back, ask it for one. The findings notes have
-the full pattern, including the companion app's side.
+companion can offer a read-back, ask it for one.
 
 ## Driving a Pebble watchapp
 
@@ -177,8 +175,8 @@ edit away from silently doing something, ten times per request.
 - *ACK not NACK* ⇒ the watch's own answer, relayed. Not synthesised on the phone.
 - It does **not** prove the app's handler ran, let alone that it did anything.
   It is a delivery acknowledgement from the firmware's AppMessage layer. If you
-  need proof the app acted, the app has to send something back — Option B in
-  the findings notes, deferred, not foreclosed.
+  need proof the app acted, the app has to send something back — deferred,
+  not foreclosed.
 
 **Never retry the payload.** A missing ACK is ambiguous — it may have arrived
 and the ACK been lost — so a resend is how the user gets two timers. Retrying is
@@ -190,28 +188,10 @@ ping already proves the app is listening before we send.
 channel that reports what the watchapp's C actually did. Use it when verifying a
 change; nothing else can see inside the app.
 
-The findings notes have the transport and the CoreApp routing rules —
-including the three ways a watchapp quietly becomes unreachable, one of which is
-being a system app, which is why we fork. It also keeps the experiment log, and
-marks which claims here are measured and which are still only read out of
-CoreApp's source; check it before relying on one. The findings notes
-have the reasoning behind this design and the alternatives left unbuilt.
-
 ## Docs
 
-The findings notes behind the awkward parts — how each integration was
-arrived at, including the approaches that failed and the conclusions later
-proved wrong — are kept outside the repo. When behaviour changes on the device,
-update the relevant note alongside the code; the wrong turns are kept on
-purpose, because they are what stops the same dead ends being retried.
+`skills/` is current behaviour only, stated succinctly and rewritten in
+place when the device says otherwise. No changelog narrative, no discovery
+story — git keeps the history. The authoring rules are in
+`skills/README.md`; read them before adding or editing a skill file.
 
-`skills/` is the opposite contract: current behaviour only, stated
-succinctly and rewritten in place when the device says otherwise. No
-changelog narrative, no discovery story — that belongs in the notes and
-git. The authoring rules are in `skills/README.md`; read them before
-adding or editing a skill file.
-
-The findings notes on companion apps are written for agents working on the *other* side —
-a custom app that phone-mcp should be able to drive. Point them at it before
-they design an automation interface, and fold anything new we learn back into
-it.
