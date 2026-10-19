@@ -4,7 +4,7 @@
 - **Tier**: browser route refused; **fully drivable anyway** — revive
   with a targeted media-button intent, then play named content by
   `music.youtube.com` URL through the live session
-- **Verified on device**: 2026-09-26
+- **Verified on device**: 2026-10-19
 
 Mechanisms: [media-control.md](../media-control.md).
 
@@ -27,12 +27,18 @@ itself. It is the same mechanism the system uses to revive the last
 media app for a Bluetooth headset — done by hand, so the target is
 *chosen* instead of left to routing.
 
-Verified 2026-09-26, twice:
+Verified:
 
 - Revived a **stopped** session (the dead-handle state that ignores all
   session commands) to PLAYING, position advancing.
 - Worked with the **screen locked**, and took audio focus from a
   playing Pocket Casts (which paused, as focus rules dictate).
+- Works with **no session listed at all** (app not running): a session
+  appears within about a second, track loaded, state not yet reported —
+  and already accepts `uri:` (see the play recipe below).
+
+The press is `play`, so revival is audible: it resumes whatever was
+last loaded.
 
 What did **not** work, tested the same day — don't re-probe:
 
@@ -42,6 +48,8 @@ What did **not** work, tested the same day — don't re-probe:
 - `mode: service`: Android refuses the start itself — background apps
   may not start another app's plain service. `foreground_service` is
   the one delivery that both arrives and is honored.
+- `value: pause` (to revive silently): delivered, but no session ever
+  appears — nothing to send a URL to. Only `play` revives.
 
 Still untested: a process naturally dead for hours (both verified runs
 had a warm process). This is the platform's own revival path, so it is
@@ -60,24 +68,55 @@ app remains unreachable: platform stopped-state blocks even this.
   session within a minute. With the revival recipe above this no longer
   matters much — a dead session is one call from alive.
 
-## Named content — one route works: URI on the live session
+## Play a URL — the recipe
 
-**`play_from_uri` is honored** where everything else is refused.
-Verified 2026-09-26: on a live session,
+Content is chosen by URL only: a watch URL,
+`https://music.youtube.com/watch?v=<id>`, optionally with
+`&list=<playlist id>` to play it as part of that list. It is played
+through the session's `play_from_uri`, honored where every other
+content route is refused. Works with the screen locked.
+
+1. **Check** `media_sessions` for YouTube Music.
+2. **Playing or paused** → go to step 3.
+   **Not listed, or `stopped`** → revive (recipe above), poll
+   `media_sessions` until YouTube Music appears (about a second), and
+   go to step 3 at once — don't wait for a state. Until the URL lands
+   the previous track plays, so the shorter this gap, the shorter the
+   blip.
+3. **Send the URL:**
+
+   ```
+   media_command app: "youtube music", route: session,
+     action: "uri:https://music.youtube.com/watch?v=<id>[&list=<playlist id>]"
+   ```
+
+   The read-back shows PLAYING with the requested title within seconds.
+
+**Fallback — VIEW intent at the URL.** Opens the app and plays at
+once, even from not running, with no blip — but only on an unlocked
+phone:
 
 ```
-media_command app: "youtube music", route: session,
-  action: "uri:https://music.youtube.com/watch?v=<id>"
+send_intent
+  action: android.intent.action.VIEW
+  data: https://music.youtube.com/watch?v=<id>[&list=<playlist id>]
+  package: com.google.android.apps.youtube.music
 ```
 
-switched playback to the named track within seconds ("PLAYING,
-<title>, 1s of 359s"). Chained with the revival recipe
-above, "play this specific song" works from nothing, hands free:
-revive → wait for the session → `uri:` the watch URL.
+On a **locked** phone the launch is silently discarded (the call still
+reports "Started"); with `via_unlock_gate: true` it plays the moment
+the user unlocks. Use it when the recipe fails, or when the user is
+holding the phone and the blip matters.
 
-The missing half is name → URL, done out of band. Three ways, any
-search engine:
+The missing half is name → URL, done out of band. Four ways:
 
+- **Fetch the YT Music search page** —
+  `https://music.youtube.com/search?q=<query>` with a desktop
+  browser `User-Agent` returns HTML that embeds the result ids: video
+  ids as `"videoId":"<id>"` and playlist ids (`list=` values) as
+  `OLAK5uy_…`. No key, no browser. To tell playlists apart, fetch
+  `https://www.youtube.com/playlist?list=<id>` and read its `<title>`;
+  the same page lists the playlist's video ids in order.
 - Search `<artist/song> "music.youtube.com/watch"` (or
   `site:music.youtube.com`) — the quoted domain surfaces direct links.
 - **ID mapping**: video ids are shared with regular YouTube, so any
@@ -96,15 +135,11 @@ re-probe:
   **advertised but refused** — `search:<query>` answers `error: Cannot
   play track.` and pins the session in the error state (recoverable
   with a plain `play`).
-- `android.media.action.MEDIA_PLAY_FROM_SEARCH` at its main activity
-  (the Google Assistant voice-play intent, which its manifest accepts):
-  brings the app to the foreground and **silently ignores the query**
-  — no search, no playback. Tested unlocked 2026-09-26, both cold and
-  with the app running on a live session; app state makes no
-  difference.
+- `android.media.action.MEDIA_PLAY_FROM_SEARCH` (the Google Assistant
+  voice-play intent, which its manifest accepts): brings the app to
+  the foreground and **never plays**. Bare, at its main activity, it
+  ignores the query outright, cold or with a live session; targeted
+  by package with the standard `focus`/`artist`/`album` extras it
+  shows the search results and waits for a tap.
 - The browser route can never help: `onGetRoot` refuses non-allowlisted
   signatures (see [unavailable.md](unavailable.md)).
-
-Untested (and now redundant): VIEW intents at `music.youtube.com` URLs
-launching the activity — the session `uri:` route does the same job
-without needing the screen unlocked.
