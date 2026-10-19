@@ -144,9 +144,16 @@ private fun settingsFor(action: String): (MainActivity) -> Unit = { activity ->
     )
 }
 
+/**
+ * Every ask below has one shape — who needs the grant, what it is, and
+ * why — so the five read as one voice whether they appear here or on a
+ * tool row. The button names the grant in the words the user will see
+ * on the next screen.
+ */
 val BATTERY_GRANT = Grant(
-    ask = "Exempt the app from battery optimization, or aggressive power " +
-        "management can kill the service and with it the listening socket.",
+    ask = "The server needs to be exempt from battery optimization, or power " +
+        "management can stop it and close the listening socket. On the next " +
+        "screen, open Battery and choose Unrestricted.",
     button = "Battery settings",
     granted = {
         it.getSystemService(PowerManager::class.java)
@@ -157,17 +164,16 @@ val BATTERY_GRANT = Grant(
 
 /** The one background-activity-start exemption; every launch rides on it. */
 val OVERLAY_GRANT = Grant(
-    ask = "Grant \"Display over other apps\" so tools can open other apps " +
-        "from the background.",
+    ask = "The intent tools need \"Display over other apps\" to open another " +
+        "app while Phone MCP is in the background.",
     button = "Allow opening other apps",
     granted = { Clock.canStartFromBackground(it) },
     open = settingsFor(Settings.ACTION_MANAGE_OVERLAY_PERMISSION),
 )
 
 val MEDIA_GRANT = Grant(
-    ask = "Grant notification access so the media tools can control " +
-        "playback. It authorizes reading media sessions; no notifications " +
-        "are read.",
+    ask = "The media tools need notification access, which is what exposes " +
+        "other apps' media sessions. No notifications are read.",
     button = "Allow media control",
     granted = {
         it.getSystemService(NotificationManager::class.java)
@@ -180,7 +186,7 @@ val MEDIA_GRANT = Grant(
 
 /** Posting to the shade — the notification tools' one grant, asked for on their row. */
 val NOTIFICATIONS_GRANT = Grant(
-    ask = "Notification permission missing.",
+    ask = "The notification tools need permission to post notifications.",
     button = "Allow notifications",
     granted = {
         it.getSystemService(NotificationManager::class.java).areNotificationsEnabled()
@@ -194,7 +200,8 @@ val NOTIFICATIONS_GRANT = Grant(
  * view, and without it get_location silently returns nothing.
  */
 val LOCATION_GRANT = Grant(
-    ask = "Location permission missing (needs \"allow all the time\").",
+    ask = "get_location needs location access, set to \"Allow all the time\" " +
+        "so it works while the server runs in the background.",
     button = "Allow location",
     granted = { Locator.hasPermission(it) && Locator.hasBackgroundPermission(it) },
     open = {
