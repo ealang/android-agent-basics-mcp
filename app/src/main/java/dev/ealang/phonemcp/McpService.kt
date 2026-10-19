@@ -124,11 +124,7 @@ class McpService : Service() {
         fun start(context: Context) {
             val intent = Intent(context, McpService::class.java)
             try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    context.startForegroundService(intent)
-                } else {
-                    context.startService(intent)
-                }
+                context.startForegroundService(intent)
             } catch (e: Exception) {
                 val reason = "${e::class.java.simpleName}: ${e.message ?: "no detail"}"
                 Log.w(TAG, "Android refused to start the service", e)

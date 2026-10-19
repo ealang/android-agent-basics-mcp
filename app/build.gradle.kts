@@ -21,7 +21,10 @@ android {
 
     defaultConfig {
         applicationId = "dev.ealang.phonemcp"
-        minSdk = 26
+        // Android 10: the first release where background activity starts
+        // need the overlay grant and background location is its own
+        // permission, so the code has no older branch to carry.
+        minSdk = 29
         targetSdk = 35
         versionCode = 1
         versionName = "0.1"
@@ -87,4 +90,7 @@ dependencies {
     implementation(platform("androidx.compose:compose-bom:2024.09.03"))
     implementation("androidx.compose.material3:material3")
     implementation("androidx.activity:activity-compose:1.9.2")
+    // ContextCompat.registerReceiver: the exported flag on every Android,
+    // not only the ones whose framework method takes it.
+    implementation("androidx.core:core-ktx:1.13.1")
 }

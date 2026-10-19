@@ -1,7 +1,6 @@
 package dev.ealang.phonemcp.mcp.apps
 
 import android.content.Context
-import android.os.Build
 import android.provider.Settings
 
 /**
@@ -13,12 +12,12 @@ object Clock {
     /**
      * True when this app may start an activity from the background.
      *
-     * Since Android 10 that is forbidden by default, and a foreground service
-     * does not earn the right — but SYSTEM_ALERT_WINDOW does, and it is the
-     * only exemption a normal app can actually obtain.
+     * Forbidden by default, and a foreground service does not earn the
+     * right — but SYSTEM_ALERT_WINDOW does, and it is the only exemption a
+     * normal app can actually obtain.
      */
     fun canStartFromBackground(context: Context): Boolean =
-        Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || Settings.canDrawOverlays(context)
+        Settings.canDrawOverlays(context)
 
     fun humanize(seconds: Long): String {
         val h = seconds / 3600

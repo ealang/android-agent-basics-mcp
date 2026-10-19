@@ -17,7 +17,9 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.core.content.ContextCompat
 import dev.ealang.phonemcp.mcp.McpServer
 import dev.ealang.phonemcp.mcp.apps.Locator
 import dev.ealang.phonemcp.ui.PhoneMcpApp
@@ -59,6 +61,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Transparent system bars with icon contrast taken from the system's
+        // dark setting, on every Android rather than only 15 and up. The
+        // page's Scaffold pads the insets, so the bars sit over the theme
+        // background instead of over a strip of the platform's own color.
+        enableEdgeToEdge()
         config = Config(this)
         Logs.init(filesDir)
 
@@ -82,12 +89,15 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        val filter = IntentFilter(McpService.ACTION_STATE_CHANGED)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(stateChanged, filter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            registerReceiver(stateChanged, filter)
-        }
+        // Not exported: the service sends this to our own package, so no
+        // other app may deliver it. ContextCompat applies the flag on the
+        // Androids whose registerReceiver does not take one.
+        ContextCompat.registerReceiver(
+            this,
+            stateChanged,
+            IntentFilter(McpService.ACTION_STATE_CHANGED),
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
         bump()
 
         // A service started by boot or by an app update cannot hold the
