@@ -294,7 +294,7 @@ object AppTools {
                         "" to false
                     } catch (e: SecurityException) {
                         Log.w(TAG, "Not allowed to set the $stream stream", e)
-                        "FAILED: the phone refused to change that volume." to true
+                        "FAILED: the phone refused to change that volume; Do Not Disturb is in the way." to true
                     }
                 }
             }

@@ -45,9 +45,9 @@ object SessionExplorer {
     private val main = Handler(Looper.getMainLooper())
 
     private const val NO_ACCESS =
-        "FAILED: this app has not been given notification access, which is what " +
-            "exposes media sessions. Ask the user to enable Phone MCP under " +
-            "Settings > Notifications > Notification access."
+        "FAILED: this app does not have notification access, which is what " +
+            "exposes media sessions. Ask the user to open Phone MCP and tap " +
+            "\"Allow media control\"."
 
     /** Null means notification access has not been granted. */
     private fun controllers(context: Context): List<MediaController>? = try {
