@@ -26,7 +26,9 @@ itself, notifications.
 | Path | Auth | Purpose |
 |---|---|---|
 | `POST /mcp` | `Authorization: Bearer <token>` | JSON-RPC 2.0, MCP |
-| `GET /health` | none | `{"ok":true}` — tells "wrong port" apart from "wrong token" |
+
+This is the only endpoint. Every request, on any path, is answered 401
+without a valid token.
 
 `GET /mcp` returns 405. The Streamable HTTP transport permits answering a POST
 with an SSE stream, but these tools return a string in a millisecond and have
@@ -185,7 +187,7 @@ button.
 A **Requests** section shows a running total and the last few requests — time,
 caller, MCP method and tool, HTTP status. It is in-memory and resets with the
 process; it exists so "is anything actually hitting this?" is a glance rather
-than a guess, health probes and client retries included.
+than a guess, client retries included.
 
 A **Server events** section below it logs what the server itself did: every
 bind ("listening on …"), every bind failure and the retry it scheduled, accept

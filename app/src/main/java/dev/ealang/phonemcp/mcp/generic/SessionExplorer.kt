@@ -16,7 +16,7 @@ import java.util.concurrent.TimeUnit
 /**
  * Experimental: the two media avenues that do not go through a
  * MediaBrowserService, added because the browser route's survey
- * (docs/media-survey.md) found apps it cannot reach.
+ * (the media-survey findings note) found apps it cannot reach.
  *
  * **Active sessions** — [MediaSessionManager.getActiveSessions], the
  * notification-listener API: every live session on the phone,

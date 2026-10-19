@@ -21,8 +21,8 @@ import org.json.JSONObject
  * request/response JSON.
  *
  * The HTTP layer is here too: bearer-token auth, the resilient socket,
- * request logging, and the open /health probe, with the MCP dispatch past
- * them.
+ * request logging, with the MCP dispatch past them. Every path requires
+ * the token; nothing is answered without it.
  */
 class McpServer(
     private val context: Context,
@@ -103,22 +103,16 @@ class McpServer(
     private fun handle(session: IHTTPSession): Response {
         val uri = session.uri.trimEnd('/').ifEmpty { "/" }
 
-        // Open on purpose: something has to be probe-able to tell "wrong port"
-        // apart from "wrong token".
-        if (uri == "/health") {
-            return json(Response.Status.OK, JSONObject().put("ok", true).put("service", "phone-mcp"))
-        }
-
-        // Unknown paths 404 before auth is checked, so a probe of the wrong
-        // port learns "not here" rather than "token needed".
-        if (uri != MCP_PATH) {
-            return json(Response.Status.NOT_FOUND, JSONObject().put("error", "Not found: $uri"))
-        }
-
+        // Auth before routing: an unauthenticated caller learns nothing, not
+        // even which paths exist.
         if (!authorized(session)) {
             log.bump("rejected")
             log.warn("rejected an unauthorized request", "from ${session.remoteIpAddress}")
             return json(Response.Status.UNAUTHORIZED, JSONObject().put("error", "Unauthorized"))
+        }
+
+        if (uri != MCP_PATH) {
+            return json(Response.Status.NOT_FOUND, JSONObject().put("error", "Not found: $uri"))
         }
 
         if (session.method != Method.POST) {

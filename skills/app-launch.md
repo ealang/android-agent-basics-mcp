@@ -23,7 +23,7 @@ or a properly promoted foreground service; a background-woken process
 recording silence is the failure mode. These apps need a real launch,
 which is a purpose-built integration (phone-mcp holds
 `SYSTEM_ALERT_WINDOW` to start activities from the background), not a
-generic skill — see the per-app docs in `docs/` for those.
+generic skill — see the per-app skill files for those.
 
 ## Launch as a fallback for dead media routes
 

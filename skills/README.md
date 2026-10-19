@@ -26,7 +26,7 @@ next.
 - **Current state only.** State what works and the correct way to do
   it. Don't narrate how it was discovered, what the file used to say,
   or the bug that prompted the edit — when behavior changes, rewrite
-  the sentence. Git keeps the history, and `docs/` is where findings,
+  the sentence. Git keeps the history, and the findings notes are where findings,
   failed approaches and wrong turns are recorded; this directory is
   only the conclusions.
 - **One date survives:** the "verified on device" stamp, because it
