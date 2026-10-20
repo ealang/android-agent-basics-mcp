@@ -333,12 +333,4 @@ and suggest they look at the clock app.
 
 The watch tools reach a Pebble paired to that phone, by way of its companion
 app. Launching a watchapp cannot parameterise it — it opens in its default
-state, and the user drives it from there.
-
-get_location is the phone's own position, so it is where the user is. Call it
-rather than asking them where they are, and rather than assuming a city from
-earlier in the conversation.
-
-find_my_phone_play is loud and overrides silent mode, so use it only for a phone
-the user has actually lost. If they are reading the reply, they have their
-phone."""
+state, and the user drives it from there."""
