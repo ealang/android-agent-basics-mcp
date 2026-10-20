@@ -76,7 +76,6 @@ next.
 | Google Maps | [apps/google-maps.md](apps/google-maps.md) | start navigation hands-free via the navigation URI; everything else is one tap |
 | Samsung Clock | [apps/samsung-clock.md](apps/samsung-clock.md) | set timer works; dismiss is a silent no-op; stopwatch signature-locked — don't re-probe |
 | Sleep as Android | [apps/sleep-as-android.md](apps/sleep-as-android.md) | alarm provider closed to us and its WRITE signature-locked — no retime, enable or delete; don't re-probe |
-| Voice Recorder | [apps/voice-recorder.md](apps/voice-recorder.md) | designed for automation: start via trampoline activity, stop via broadcast; works with the screen locked |
 | Agent Voice Gateway | [apps/agent-voice-gateway.md](apps/agent-voice-gateway.md) | designed for automation: provider reads + `provider_call` stop + start intent |
 | Agent Timer (Pebble) | [apps/pebble/agent-timer.md](apps/pebble/agent-timer.md) | one `pebblekit_launch_and_send` call starts a timer; ping key 1, duration key 20 |
 | Eleven Reader, others | [apps/unavailable.md](apps/unavailable.md) | no usable route — don't re-probe |
