@@ -77,7 +77,7 @@ next.
 | Samsung Clock | [apps/samsung-clock.md](apps/samsung-clock.md) | set timer works; dismiss is a silent no-op; stopwatch signature-locked — don't re-probe |
 | Sleep as Android | [apps/sleep-as-android.md](apps/sleep-as-android.md) | alarm provider closed to us and its WRITE signature-locked — no retime, enable or delete; don't re-probe |
 | Agent Voice Gateway | [apps/agent-voice-gateway.md](apps/agent-voice-gateway.md) | designed for automation: provider reads + `provider_call` stop + start intent |
-| Agent Timer (Pebble) | [apps/pebble/agent-timer.md](apps/pebble/agent-timer.md) | one `pebblekit_launch_and_send` call starts a timer; ping key 1, duration key 20 |
+| Agent Timer (Pebble) | [apps/pebble/agent-timer.md](apps/pebble/agent-timer.md) | one `pebblekit_launch_and_send` call starts a timer; duration is key 20 as int32 seconds |
 | Eleven Reader, others | [apps/unavailable.md](apps/unavailable.md) | no usable route — don't re-probe |
 
 ## Future generic capabilities (not yet built)
