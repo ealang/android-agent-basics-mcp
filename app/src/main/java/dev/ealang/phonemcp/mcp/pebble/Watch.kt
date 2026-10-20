@@ -41,16 +41,6 @@ object Watch {
     /** Read-only, exported by CoreApp. The one thing here that can be read back. */
     private val STATE_URI: Uri = Uri.parse("content://com.getpebble.android.provider.basalt/state")
 
-    /**
-     * A fork of the stock Timer watchapp, which unlike the original will
-     * start a timer on request from the phone. Source and UUID:
-     * github.com/ealang/coredevices-pebble-timer
-     */
-    private const val TIMER_UUID = "6ba47813-25c2-4c9e-b93a-f6f24372b4c3"
-
-    /** Names for watchapps installed on the watch, so a UUID need not be quoted. */
-    val KNOWN_APPS = mapOf("timer" to TIMER_UUID)
-
     /** How long to keep trying to get the watchapp up, and how long each go gets. */
     private const val APP_LAUNCH_TIMEOUT_MS = 10_000L
     private const val LAUNCH_ATTEMPT_MS = 1_000L
@@ -64,7 +54,7 @@ object Watch {
     sealed interface Result {
         /** The broadcast was sent. The watch does not report back. */
         data object Sent : Result
-        data class UnknownApp(val given: String) : Result
+        data class NotAUuid(val given: String) : Result
     }
 
     sealed interface HandshakeResult {
@@ -76,7 +66,7 @@ object Watch {
         data object NoReply : HandshakeResult
         /** No ping was ever acknowledged; the payload was never sent. */
         data object NeverCameUp : HandshakeResult
-        data class UnknownApp(val given: String) : HandshakeResult
+        data class NotAUuid(val given: String) : HandshakeResult
         /** Never sent: the tuples do not fit CoreApp's wire format. */
         data class Malformed(val why: String) : HandshakeResult
     }
@@ -88,7 +78,7 @@ object Watch {
         data object Refused : SendResult
         /** Sent, and nothing came back within the wait. */
         data object NoReply : SendResult
-        data class UnknownApp(val given: String) : SendResult
+        data class NotAUuid(val given: String) : SendResult
         /** Never sent: the tuples do not fit CoreApp's wire format. */
         data class Malformed(val why: String) : SendResult
     }
@@ -105,9 +95,10 @@ object Watch {
      * drops it silently otherwise, so the app has to be launched first and the
      * launch is fire-and-forget — nothing reports when it finishes. Rather than
      * guess at a duration, wait for the app to say so itself: see
-     * [awaitWatchapp]. The [pingKey] is the caller's claim that the target app
-     * deliberately ignores that key — skill-file knowledge; a wrong one means
-     * the ping *does* something, up to ten times per call.
+     * [awaitWatchapp]. The [ping] is a message the target app does nothing
+     * with; the watch acknowledges and delivers every message alike, so a
+     * ping the app acts on *does* something, up to ten times per call. An
+     * empty message is inert for any app that only reacts to keys it knows.
      *
      * The payload is then sent exactly once and never repeated here. A repeat
      * could race a slow acknowledgement and apply the payload twice, and by
@@ -123,16 +114,17 @@ object Watch {
     fun launchAndSend(
         context: Context,
         app: String,
-        pingKey: Int,
+        ping: JSONArray,
         tuples: JSONArray,
     ): HandshakeResult {
-        val uuid = resolve(app) ?: return HandshakeResult.UnknownApp(app)
+        val uuid = resolve(app) ?: return HandshakeResult.NotAUuid(app)
+        checkWireFormat(ping)?.let { return HandshakeResult.Malformed("ping $it") }
         checkWireFormat(tuples)?.let { return HandshakeResult.Malformed(it) }
         val replies = Replies()
         registerForReplies(context, replies)
 
         return try {
-            if (!awaitWatchapp(context, replies, uuid, pingKey)) {
+            if (!awaitWatchapp(context, replies, uuid, ping)) {
                 return HandshakeResult.NeverCameUp
             }
 
@@ -172,7 +164,7 @@ object Watch {
      * the whole launch-ping-send pattern from [launchAndSend] instead.
      */
     fun sendMessage(context: Context, app: String, tuples: JSONArray): SendResult {
-        val uuid = resolve(app) ?: return SendResult.UnknownApp(app)
+        val uuid = resolve(app) ?: return SendResult.NotAUuid(app)
         checkWireFormat(tuples)?.let { return SendResult.Malformed(it) }
         val replies = Replies()
         registerForReplies(context, replies)
@@ -249,7 +241,7 @@ object Watch {
      * watchapp, so with the app closed there is no receiver, the broadcast lands
      * nowhere and nothing at all comes back. What an acknowledgement does not
      * prove is that the message meant anything — which is the point here,
-     * because [pingKey] is one the app deliberately ignores, so this can be
+     * because [ping] is a message the app does nothing with, so this can be
      * repeated as often as needed with no effect on the watch.
      *
      * The launch is retried alongside the ping rather than sent once up front:
@@ -260,7 +252,7 @@ object Watch {
         context: Context,
         replies: Replies,
         uuid: String,
-        pingKey: Int,
+        ping: JSONArray,
     ): Boolean {
         val deadline = SystemClock.elapsedRealtime() + APP_LAUNCH_TIMEOUT_MS
         while (true) {
@@ -268,7 +260,7 @@ object Watch {
 
             val transaction = nextTransaction()
             replies.expectPing(transaction)
-            context.sendBroadcast(message(uuid, transaction, int32Payload(pingKey, 0)))
+            context.sendBroadcast(message(uuid, transaction, ping.toString()))
 
             if (replies.watchappUp.await(LAUNCH_ATTEMPT_MS, TimeUnit.MILLISECONDS)) return true
             if (SystemClock.elapsedRealtime() >= deadline) {
@@ -324,19 +316,10 @@ object Watch {
             .putExtra(EXTRA_TRANSACTION_ID, transaction)
             .putExtra(EXTRA_MSG_DATA, payload)
 
-    /** The wire form PebbleKit Classic expects: one tuple, as a 4-byte signed int. */
-    private fun int32Payload(key: Int, value: Int): String = JSONArray().put(
-        JSONObject()
-            .put("key", key)
-            .put("type", "int")
-            .put("length", 4)
-            .put("value", value),
-    ).toString()
-
     private fun intentTo(action: String): Intent = Intent(action).setPackage(COREAPP_PACKAGE)
 
     private fun send(context: Context, action: String, app: String): Result {
-        val uuid = resolve(app) ?: return Result.UnknownApp(app)
+        val uuid = resolve(app) ?: return Result.NotAUuid(app)
         // Addressed to CoreApp rather than broadcast at large: nothing else
         // should see it, and an implicit broadcast is easier to lose.
         context.sendBroadcast(intentTo(action).putExtra(EXTRA_UUID, uuid))
@@ -344,11 +327,8 @@ object Watch {
         return Result.Sent
     }
 
-    private fun resolve(app: String): String? {
-        val trimmed = app.trim()
-        if (UUID_FORMAT.matches(trimmed)) return trimmed.lowercase()
-        return KNOWN_APPS[trimmed.lowercase()]
-    }
+    private fun resolve(app: String): String? =
+        app.trim().takeIf { UUID_FORMAT.matches(it) }?.lowercase()
 
     /**
      * Column 0 of the single row is a connected flag. Absent provider or empty

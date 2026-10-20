@@ -28,8 +28,7 @@ anywhere in Android.
   for the stopwatch either — their `START_STOPWATCH`-style actions are
   internal, on an unexported service. A tool built on a stopwatch
   action would rest on a contract that does not exist, which is why no
-  first-class `start_stopwatch` was added (decided with the owner,
-  2026-09-06).
+  first-class `start_stopwatch` was added (decided 2026-09-06).
 - Samsung's private `com.sec.android.app.clockpackage.INTENT_STOPWATCH`
   is handled only by `ClockPackageExecutable`, an internal entry activity
   (Bixby/Routines surface) guarded by

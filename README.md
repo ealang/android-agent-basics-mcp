@@ -72,19 +72,20 @@ All on the classic PebbleKit intent protocol, hence the prefix — a future
 PebbleKit 2 channel would be its own `pebblekit2_*` family.
 
 - `pebblekit_launch_app(app)` / `pebblekit_stop_app(app)` — start or stop
-  any Pebble watchapp, by UUID or by a name from `Watch.KNOWN_APPS`.
-  Fire-and-forget: the watch never acknowledges a launch.
+  any Pebble watchapp, by UUID. Fire-and-forget: the watch never
+  acknowledges a launch.
 - `pebblekit_send_message(app, tuples)` — the watch equivalent of
   `send_intent`: a raw AppMessage to any watchapp, tuples passed verbatim,
   the watch's own ACK or NACK returned. An ACK proves delivery to a
   running app, not that the keys meant anything — key tables are per-app
   knowledge and belong in `skills/`. A message to a watchapp that is not
   running vanishes silently.
-- `pebblekit_launch_and_send(app, ping_key, tuples)` — the handshake that
-  silent discard forces, in one call: launch, ping on a key the target
-  app deliberately ignores until the watch answers (any reply proves the
-  app is up), then deliver the payload exactly once. The ping key is
-  per-app knowledge from `skills/`.
+- `pebblekit_launch_and_send(app, tuples, ping?)` — the handshake that
+  silent discard forces, in one call: launch, send a ping until the watch
+  answers (any reply proves the app is up), then deliver the payload
+  exactly once. The ping is an empty message by default; `ping` overrides
+  it with tuples for an app whose handler acts on an empty message, which
+  is per-app knowledge from `skills/`.
 
 ### The permission that isn't about drawing
 

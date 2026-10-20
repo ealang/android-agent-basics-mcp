@@ -1,7 +1,7 @@
 # Sleep as Android (com.urbandroid.sleep)
 
-The alarm clock in use, so "move my wake time" means this app and not the
-stock clock. Verified on device 2026-10-04.
+When this app is the user's alarm clock, "move my wake time" means this
+app and not the stock clock. Verified on device 2026-10-04.
 
 ## The three surfaces, and why only one of them can retime an alarm
 

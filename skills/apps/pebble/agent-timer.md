@@ -1,24 +1,25 @@
 # Agent Timer (Pebble watchapp)
 
-UUID `6ba47813-25c2-4c9e-b93a-f6f24372b4c3`, known to the server by the
-short name `timer`. A fork of the stock Timer watchapp
-(github.com/ealang/coredevices-pebble-timer) — the fork exists because the
-stock one is a system app and system apps cannot be sent to at all.
+UUID `6ba47813-25c2-4c9e-b93a-f6f24372b4c3`. A fork of the stock Timer
+watchapp (github.com/ealang/coredevices-pebble-timer) that starts a timer
+on request from the phone — the fork exists because the stock one is a
+system app and system apps cannot be sent to at all.
 
 ## Keys
 
 | Key | Name | Type | Effect |
 |---|---|---|---|
-| 1 | `KEY_PING` | any | **Nothing, by design.** The safe ping key for `pebblekit_launch_and_send`. |
+| 1 | `KEY_PING` | any | **Nothing, by design.** |
 | 20 | `KEY_START_TIMER` | `int` (int32, seconds) | Starts a timer and shows its detail screen. |
 
 Declared in `package.json` but unread by the inbox handler: 5
-(`KEY_DURATION`), 10 (`KEY_UNIQUEID`), 15 (`KEY_TOTAL_TIME`). Do not use
-them as a ping — they are inert only by accident, and one edit from
-meaning something.
+(`KEY_DURATION`), 10 (`KEY_UNIQUEID`), 15 (`KEY_TOTAL_TIME`). They are
+inert only by accident, and one edit from meaning something.
 
 The handler returns early on key 1, then acts only if key 20 is present;
-anything else is delivered, ACKed, and ignored.
+anything else — including an empty message, so the default ping of
+`pebblekit_launch_and_send` is safe here — is delivered, ACKed, and
+ignored.
 
 ## Start a timer
 
@@ -27,8 +28,7 @@ once — via `pebblekit_launch_and_send`:
 
 ```json
 {
-  "app": "timer",
-  "ping_key": 1,
+  "app": "6ba47813-25c2-4c9e-b93a-f6f24372b4c3",
   "tuples": [{"key": 20, "type": "int", "length": 4, "value": 300}]
 }
 ```

@@ -198,7 +198,7 @@ class MainActivity : ComponentActivity() {
 
     /**
      * The one routing rule behind every permission button whose grant has
-     * a system dialog (same mechanism for all of them):
+     * a system dialog (the same mechanism for all of them):
      * show the dialog while it can still appear, deep-link to [settings]
      * once it cannot. "Cannot" means permanently denied, which the
      * platform reports identically to never-asked — rationale false for
@@ -279,9 +279,9 @@ class MainActivity : ComponentActivity() {
      * while it can still appear, the app's notification Settings screen
      * otherwise — which also covers notifications switched off there after
      * the grant, and phones older than the runtime permission. This button
-     * is the only place the app asks; the launch-time auto-prompt is gone
-     * because an unprompted dialog beside per-tool
-     * warnings read as two systems disagreeing.
+     * is the only place the app asks; there is no launch-time auto-prompt,
+     * because an unprompted dialog beside per-tool warnings reads as two
+     * systems disagreeing.
      */
     /**
      * Opens Android's settings page for the routine service notification's

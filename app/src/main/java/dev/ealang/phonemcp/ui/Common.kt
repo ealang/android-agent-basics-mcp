@@ -165,10 +165,10 @@ fun StatusText(text: String, warn: Boolean = false) {
 /**
  * The "this is fine" green for status text, beside [StatusText]'s red.
  * Deliberately not a theme slot: the app uses Material You dynamic
- * color, so `tertiary` is derived from the user's wallpaper — it came
- * out red on the test phone (2026-09-19), which read as an alarm on a
- * healthy line. A palette position carries no meaning; only a literal
- * color does. Two shades so it stays legible on either background.
+ * color, so `tertiary` is derived from the user's wallpaper and can
+ * come out red, which reads as an alarm on a healthy line. A palette
+ * position carries no meaning; only a literal color does. Two shades so
+ * it stays legible on either background.
  */
 val okGreen: Color
     @Composable get() = if (isSystemInDarkTheme()) Color(0xFF7BC67E) else Color(0xFF2E7D32)
