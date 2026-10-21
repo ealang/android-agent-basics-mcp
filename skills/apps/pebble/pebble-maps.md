@@ -1,9 +1,10 @@
 # Pebble Maps (Pebble watchapp)
 
 UUID `cce60bc9-e29f-4988-a83b-b4652291650d`. Google Maps search and
-turn-by-turn directions on the watch (github.com/TomBolger/PebbleMaps).
-Driving it from the phone needs a build that has its API; the store
-version ignores these messages. Verified on device 2026-10-20.
+turn-by-turn directions on the watch. Driving it from the phone needs the
+fork github.com/ealang/TomBolger-PebbleMaps, which adds the API below to
+github.com/TomBolger/PebbleMaps; the store version ignores these
+messages. Verified on device 2026-10-20.
 
 Two things it can do, each one `pebblekit_launch_and_send` call with an
 empty message as the ping: show search results, or start navigation.
