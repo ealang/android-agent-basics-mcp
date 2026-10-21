@@ -5,30 +5,15 @@ watchapp (github.com/ealang/coredevices-pebble-timer) that starts a timer
 on request from the phone — the fork exists because the stock one is a
 system app and system apps cannot be sent to at all.
 
-## Keys
-
-| Key | Name | Type | Effect |
-|---|---|---|---|
-| 1 | `KEY_PING` | any | **Nothing, by design.** |
-| 20 | `KEY_START_TIMER` | `int` (int32, seconds) | Starts a timer and shows its detail screen. |
-
-Declared in `package.json` but unread by the inbox handler: 5
-(`KEY_DURATION`), 10 (`KEY_UNIQUEID`), 15 (`KEY_TOTAL_TIME`). They are
-inert only by accident, and one edit from meaning something.
-
-The handler returns early on key 1, then acts only if key 20 is present;
-anything else — including an empty message, so the default ping of
-`pebblekit_launch_and_send` is safe here — is delivered, ACKed, and
-ignored.
-
 ## Start a timer
 
-One call does the whole dance — launch, ping until the app is up, deliver
-once — via `pebblekit_launch_and_send`:
+One `pebblekit_launch_and_send` call, with an empty message as the ping
+and the duration in key 20 (int32 seconds):
 
 ```json
 {
   "app": "6ba47813-25c2-4c9e-b93a-f6f24372b4c3",
+  "ping": [],
   "tuples": [{"key": 20, "type": "int", "length": 4, "value": 300}]
 }
 ```
