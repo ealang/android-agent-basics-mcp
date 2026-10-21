@@ -123,7 +123,7 @@ object PebbleTools {
                 .put("name", "pebblekit_launch_and_send")
                 .put(
                     "description",
-                    "Get a Pebble watchapp running, prove it is up, then deliver one AppMessage: launches the app and sends a ping (about once a second, up to 10s) until the watch ACKs one, then sends the tuples exactly once and reports the watch's answer. The ping is an empty message unless `ping` is given; any message is acknowledged by the watch and handed to the watchapp, so the ping must be one the app does nothing with, and an empty one is that for an app that only reacts to keys it knows. Use this when the watchapp may not be running; pebblekit_send_message alone is enough when it is.",
+                    "Get a Pebble watchapp running, prove it is up, then deliver one AppMessage: launches the app and sends the ping (about once a second, up to 10s) until the watch ACKs one, then sends the tuples exactly once and reports the watch's answer. Any message is acknowledged by the watch and handed to the watchapp, so the ping must be one the app does nothing with — usually an empty message, []. Which ping is safe for an app is skill-file knowledge. Use this when the watchapp may not be running; pebblekit_send_message alone is enough when it is.",
                 )
                 .put(
                     "inputSchema",
@@ -136,20 +136,21 @@ object PebbleTools {
                                 tuplesProperty(
                                     "The message sent repeatedly until the watchapp is up, " +
                                         "so it must be one the app does nothing with. " +
-                                        "Defaults to an empty message; give one only for an " +
-                                        "app whose handler acts on an empty message.",
+                                        "Usually empty: [].",
                                 ),
                             )
                             .put("tuples", payloadProperty),
-                    ).put("required", JSONArray().put("app").put("tuples")),
+                    ).put("required", JSONArray().put("app").put("ping").put("tuples")),
                 ),
         ) { args ->
             blocked(Preflight.watch(context)) ?: run {
+                val ping = args.optJSONArray("ping")
                 val tuples = args.optJSONArray("tuples")
-                if (tuples == null) {
+                if (ping == null) {
+                    "FAILED: give ping, the message to repeat until the watchapp is up — usually []." to true
+                } else if (tuples == null) {
                     "FAILED: give tuples, an array of {key, type, length, value}." to true
                 } else {
-                    val ping = args.optJSONArray("ping") ?: JSONArray()
                     val result = Watch.launchAndSend(context, args.optString("app"), ping, tuples)
                     when (result) {
                         Watch.HandshakeResult.Acknowledged ->

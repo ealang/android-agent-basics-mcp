@@ -97,8 +97,8 @@ object Watch {
      * guess at a duration, wait for the app to say so itself: see
      * [awaitWatchapp]. The [ping] is a message the target app does nothing
      * with; the watch acknowledges and delivers every message alike, so a
-     * ping the app acts on *does* something, up to ten times per call. An
-     * empty message is inert for any app that only reacts to keys it knows.
+     * ping the app acts on *does* something, up to ten times per call.
+     * Which ping is inert for an app is the caller's knowledge.
      *
      * The payload is then sent exactly once and never repeated here. A repeat
      * could race a slow acknowledgement and apply the payload twice, and by

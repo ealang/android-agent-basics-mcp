@@ -18,9 +18,9 @@ all.
   byte width (1, 2 or 4 for int/uint). An empty array is a valid message.
   Sent verbatim once it fits the wire format; a tuple that does not is
   refused without being sent.
-- `pebblekit_launch_and_send(app, tuples, ping?)` — the launch-ping-send
+- `pebblekit_launch_and_send(app, ping, tuples)` — the launch-ping-send
   loop below, in one call. Use it whenever the watchapp may not be
-  running. `ping` is optional and takes the same tuple array.
+  running. `ping` is a tuple array like `tuples`, usually `[]`.
 
 ## The one rule that catches everyone
 
@@ -40,11 +40,10 @@ do, which only the caller knows.
 
 The ping matters: the watch acknowledges and hands over every message
 alike, so the ping must be one **the target app does nothing with**, and
-it is sent repeatedly, so a wrong one does something several times. The
-default is an empty message — no tuples — which is inert for any app
-whose handler only reacts to keys it knows. If an app acts on an empty
-message, pass `ping` with a tuple on a key the app ignores, per its file
-in `apps/pebble/`. If no inert message is known, there is no safe ping —
+it is sent repeatedly, so a wrong one does something several times. Take
+it from the app's file in `apps/pebble/`. It is usually an empty message,
+`[]`, which is inert for any app whose handler only reacts to keys it
+knows. If no inert message is known, there is no safe ping —
 `pebblekit_launch_app`, wait a couple of seconds, send with
 `pebblekit_send_message`, and accept that it is best-effort.
 
@@ -70,7 +69,7 @@ them. The key table for each watchapp lives in `apps/pebble/`, one file
 per app. If there is no file, the keys have to come from the watchapp's
 own `package.json` (`messageKeys`) and its inbox handler — reading the C
 is the only way to learn what the handler does with a message it was not
-expecting, which decides whether the default empty ping is safe.
+expecting, which decides whether an empty ping is safe.
 
 ## Watchapps that cannot be reached at all
 

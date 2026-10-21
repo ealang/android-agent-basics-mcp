@@ -26,6 +26,7 @@ only kinds that should ever be added:
 - **Pebble platform tools** — the watch is a platform (there is no
   generic Android route to a BLE peripheral), so watch operations are
   first-class the way phone operations are: generic over *watchapps*,
+  specific to none.
 
 An integration that needs a permission gets a manifest line and
 grant-guiding UI, not a tool.

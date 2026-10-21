@@ -80,12 +80,11 @@ PebbleKit 2 channel would be its own `pebblekit2_*` family.
   running app, not that the keys meant anything — key tables are per-app
   knowledge and belong in `skills/`. A message to a watchapp that is not
   running vanishes silently.
-- `pebblekit_launch_and_send(app, tuples, ping?)` — the handshake that
-  silent discard forces, in one call: launch, send a ping until the watch
-  answers (any reply proves the app is up), then deliver the payload
-  exactly once. The ping is an empty message by default; `ping` overrides
-  it with tuples for an app whose handler acts on an empty message, which
-  is per-app knowledge from `skills/`.
+- `pebblekit_launch_and_send(app, ping, tuples)` — the handshake that
+  silent discard forces, in one call: launch, send the ping until the
+  watch answers (any reply proves the app is up), then deliver the payload
+  exactly once. The ping is a message the app does nothing with, usually
+  empty; which one is safe is per-app knowledge from `skills/`.
 
 ### The permission that isn't about drawing
 
