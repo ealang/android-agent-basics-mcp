@@ -28,12 +28,13 @@ in progress.
 
 ## Navigate
 
-`cmd` 121 with the destination in `text`: a street address, a place name
+`cmd` 121 with the destination in `text`: the name of one of the user's
+Pebble Maps favorites ("Home", "Work"), a street address, a place name
 ("Empire State Building"), or `lat,lng` — the app finds the place, so
 there is no need to convert to coordinates. Directions start straight
 away, replacing any navigation already running. `mode` (key 10003) is
-optional — 0 drive, 1 walk, 2 bike, 3 transit; without it the user's
-default mode from Settings.
+optional — 0 drive, 1 walk, 2 bike, 3 transit; without it the
+favorite's mode, or else the user's default mode from Settings.
 
 ```json
 {
