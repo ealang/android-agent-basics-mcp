@@ -70,13 +70,13 @@ object ProviderExplorer {
         if (uri.scheme != "content") {
             return "FAILED: provider URIs use the content:// scheme, e.g. content://<authority>/<path>."
         }
-        val projection = args.optJSONArray("projection")?.let { a ->
-            Array(a.length()) { a.getString(it) }
-        }
+        val (projArr, projProblem) = Args.array(args, "projection", "column names")
+        if (projProblem != null) return "FAILED: $projProblem"
+        val projection = projArr?.let { a -> Array(a.length()) { a.getString(it) } }
         val selection = args.optString("selection").takeIf { it.isNotBlank() }
-        val selectionArgs = args.optJSONArray("selection_args")?.let { a ->
-            Array(a.length()) { a.getString(it) }
-        }
+        val (selArr, selProblem) = Args.array(args, "selection_args", "strings")
+        if (selProblem != null) return "FAILED: $selProblem"
+        val selectionArgs = selArr?.let { a -> Array(a.length()) { a.getString(it) } }
         val sortOrder = args.optString("sort_order").takeIf { it.isNotBlank() }
         val limit = args.optInt("limit", DEFAULT_LIMIT).coerceIn(1, 500)
 
@@ -139,7 +139,9 @@ object ProviderExplorer {
         val method = args.optString("method").trim()
         if (method.isEmpty()) return "FAILED: method is required."
         val arg = args.optString("arg").takeIf { it.isNotBlank() }
-        val extras = args.optJSONArray("extras")?.let { a ->
+        val (extrasArr, extrasProblem) = Args.array(args, "extras", "{key, type, value} objects")
+        if (extrasProblem != null) return "FAILED: $extrasProblem"
+        val extras = extrasArr?.let { a ->
             val (bundle, problem) = IntentExplorer.parseExtras(a)
             bundle ?: return "FAILED: $problem"
         }

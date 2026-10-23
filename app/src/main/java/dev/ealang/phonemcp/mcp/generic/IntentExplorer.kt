@@ -372,9 +372,9 @@ object IntentExplorer {
             type != null -> intent.type = type
         }
         if (data != null || type != null) any = true
-        args.optJSONArray("categories")?.let { cats ->
-            for (i in 0 until cats.length()) intent.addCategory(cats.getString(i))
-        }
+        val (cats, catsProblem) = Args.array(args, "categories", "category strings")
+        if (catsProblem != null) return null to catsProblem
+        cats?.let { for (i in 0 until it.length()) intent.addCategory(it.getString(i)) }
         args.optString("package").takeIf { it.isNotBlank() }?.let { intent.`package` = it; any = true }
         args.optString("component").takeIf { it.isNotBlank() }?.let { spec ->
             val slash = spec.indexOf('/')
@@ -387,8 +387,10 @@ object IntentExplorer {
         }
         if (!any) return null to "give at least an action, a data URI, or a component."
 
-        args.optJSONArray("extras")?.let { extras ->
-            val (bundle, problem) = parseExtras(extras)
+        val (extras, extrasProblem) = Args.array(args, "extras", "{key, type, value} objects")
+        if (extrasProblem != null) return null to extrasProblem
+        extras?.let {
+            val (bundle, problem) = parseExtras(it)
             if (bundle == null) return null to problem
             intent.putExtras(bundle)
         }
@@ -487,12 +489,21 @@ object IntentExplorer {
 
     private fun stringArray(a: JSONArray): Array<String> = Array(a.length()) { a.getString(it) }
 
+    /**
+     * The intent as sent, extras included, so a result string shows what
+     * actually went out: an extra the caller meant to attach but did not
+     * is visible as its absence here.
+     */
     private fun describeIntent(intent: Intent): String {
         val parts = mutableListOf<String>()
         intent.action?.let { parts.add(it) }
         intent.dataString?.let { parts.add(it) }
         intent.component?.let { parts.add(it.flattenToShortString()) }
             ?: intent.`package`?.let { parts.add("→ $it") }
+        intent.extras?.takeIf { !it.isEmpty }?.let { b ->
+            @Suppress("DEPRECATION")
+            parts.add("with extras " + b.keySet().sorted().joinToString(", ") { k -> "$k=${Args.brief(b.get(k))}" })
+        }
         return parts.joinToString(" ")
     }
 }
