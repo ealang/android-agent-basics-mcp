@@ -68,6 +68,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         config = Config(this)
         Logs.init(filesDir)
+        ExitReasons.logLast(this, Logs.mcp)
 
         // First contact with the Keystore can take seconds (it generates the
         // wrapping key on the very first launch), so it goes to a worker

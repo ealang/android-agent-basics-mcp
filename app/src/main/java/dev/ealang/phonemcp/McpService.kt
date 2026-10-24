@@ -180,6 +180,7 @@ class McpService : Service() {
         super.onCreate()
         // Idempotent; the activity does the same. Whoever runs first wins.
         Logs.init(filesDir)
+        ExitReasons.logLast(this, Logs.mcp)
         val filter = IntentFilter(NotificationManager.ACTION_NOTIFICATION_CHANNEL_BLOCK_STATE_CHANGED)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(channelStateChanged, filter, Context.RECEIVER_EXPORTED)
