@@ -180,14 +180,16 @@ fun LogDialog(
     lines: List<String>,
     onDismiss: () -> Unit,
     onClear: (() -> Unit)? = null,
+    onCopy: ((String) -> Unit)? = null,
 ) {
+    val text = lines.joinToString("\n")
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
             Box(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
                 Text(
-                    if (lines.isEmpty()) "(nothing yet)" else lines.joinToString("\n"),
+                    if (lines.isEmpty()) "(nothing yet)" else text,
                     fontFamily = FontFamily.Monospace,
                     fontSize = 12.sp,
                     lineHeight = 16.sp,
@@ -195,9 +197,16 @@ fun LogDialog(
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
-        dismissButton = onClear?.let {
+        dismissButton = if (onClear == null && onCopy == null) null else {
             {
-                TextButton(onClick = { it(); onDismiss() }) { Text("Clear") }
+                Row {
+                    if (onClear != null) {
+                        TextButton(onClick = { onClear(); onDismiss() }) { Text("Clear") }
+                    }
+                    if (onCopy != null && lines.isNotEmpty()) {
+                        TextButton(onClick = { onCopy(text) }) { Text("Copy") }
+                    }
+                }
             }
         },
     )

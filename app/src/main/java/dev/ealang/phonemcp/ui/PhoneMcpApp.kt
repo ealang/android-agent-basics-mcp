@@ -229,6 +229,7 @@ fun PhoneMcpApp(activity: MainActivity) {
                 Logs.mcp.clear()
                 activity.toast("Log cleared")
             },
+            onCopy = { text -> activity.copyToClipboard("server log", text, echo = "Log copied") },
         )
     }
 }

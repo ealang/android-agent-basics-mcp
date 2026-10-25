@@ -187,12 +187,15 @@ class MainActivity : ComponentActivity() {
         bumpSoon()
     }
 
-    fun copyToClipboard(label: String, text: String) {
+    /**
+     * [echo] is the toast. By default it repeats the text, so a copy made
+     * with a stale field or no network is caught at a glance; a multi-line
+     * copy passes something shorter.
+     */
+    fun copyToClipboard(label: String, text: String, echo: String = "Copied $text") {
         getSystemService(ClipboardManager::class.java)
             .setPrimaryClip(ClipData.newPlainText(label, text))
-        // Echo what actually landed on the clipboard, so a copy made with a
-        // stale field or no network is caught at a glance.
-        toast("Copied $text")
+        toast(echo)
     }
 
     fun toast(text: String) = Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
