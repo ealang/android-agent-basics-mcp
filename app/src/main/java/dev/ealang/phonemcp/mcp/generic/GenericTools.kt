@@ -180,7 +180,7 @@ object GenericTools {
                 "properties",
                 JSONObject()
                     .put("key", JSONObject().put("type", "string"))
-                    .put("type", JSONObject().put("type", "string").put("enum", JSONArray().put("string").put("int").put("long").put("boolean").put("float").put("double").put("uri").put("string_array").put("int_array").put("long_array").put("int_arraylist").put("string_arraylist").put("key_event")).put("description", "Defaults to string. The _arraylist types send an ArrayList, which some extras require. For key_event the value is a key name, KEYCODE_MEDIA_PLAY or just play, prefixed up: for a key-up event."))
+                    .put("type", JSONObject().put("type", "string").put("enum", JSONArray().put("string").put("int").put("long").put("boolean").put("float").put("double").put("uri").put("string_array").put("int_array").put("long_array").put("int_arraylist").put("string_arraylist").put("key_event")).put("description", "Defaults to string. The _arraylist types send an ArrayList, which some extras require. For key_event the value is the name of an android.view.KeyEvent key constant, with or without the KEYCODE_ prefix (KEYCODE_MEDIA_PLAY, media_play, or the shorthand play, pause, play_pause, next, previous, stop, fast_forward, rewind). It is a key-down event unless the name is prefixed up: (up:play)."))
                     .put("value", JSONObject().put("description", "The value, matching the type.")),
             ).put("required", JSONArray().put("key").put("value")),
         ).put("description", "Typed extras. The type must match what the receiving app reads.")
