@@ -438,7 +438,7 @@ class McpService : Service() {
             .setContentText(text)
             .setStyle(Notification.BigTextStyle().bigText(text))
             .setOnlyAlertOnce(true)
-            .setSmallIcon(R.drawable.ic_stat_pyramid)
+            .setSmallIcon(R.drawable.ic_stat_claw)
             .setContentIntent(open)
             .addAction(Notification.Action.Builder(null, "Stop", stop).build())
             .setOngoing(true)

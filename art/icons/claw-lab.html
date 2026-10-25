@@ -1,0 +1,292 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Claw lab — phone-mcp launcher</title>
+<style>
+  body { font-family: -apple-system, system-ui, sans-serif; background: #F0EFEA; color: #222; margin: 0; padding: 20px; }
+  h1 { font-size: 18px; margin: 0 0 12px; }
+  .row { display: flex; gap: 28px; align-items: flex-start; flex-wrap: wrap; }
+  #stage { width: 512px; height: 512px; touch-action: none; cursor: grab; border-radius: 112px; box-shadow: 0 2px 12px rgba(0,0,0,.15); }
+  #stage.dragging { cursor: grabbing; }
+  .previews { display: flex; gap: 20px; align-items: flex-end; margin-top: 14px; }
+  .previews div { text-align: center; font-size: 11px; color: #666; }
+  .panel { width: 360px; }
+  label { display: grid; grid-template-columns: 120px 1fr 56px; gap: 10px; align-items: center; margin: 8px 0; font-size: 13px; }
+  label.chk { grid-template-columns: 120px 1fr; }
+  input[type=range] { width: 100%; }
+  .val { text-align: right; font-variant-numeric: tabular-nums; }
+  textarea { width: 100%; height: 150px; font: 12px/1.4 ui-monospace, monospace; box-sizing: border-box; margin-top: 10px; }
+  button { font-size: 13px; padding: 6px 12px; margin-right: 8px; margin-top: 8px; }
+  .hint { font-size: 12px; color: #666; margin-top: 10px; line-height: 1.5; }
+  .sel { font-size: 12px; margin-top: 6px; color: #444; }
+  fieldset { border: 1px solid #ccc; border-radius: 8px; margin: 10px 0; padding: 6px 12px 10px; }
+  legend { font-size: 12px; color: #666; padding: 0 4px; }
+</style>
+</head>
+<body>
+<h1>Claw lab — drag the claw or the phone, use the sliders, then copy the parameters</h1>
+<div class="row">
+  <div>
+    <svg id="stage" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div class="previews">
+      <div><svg id="p96" viewBox="0 0 256 256" width="96" height="96"></svg><br>96 px</div>
+      <div><svg id="p48" viewBox="0 0 256 256" width="48" height="48"></svg><br>48 px</div>
+      <div><svg id="pcircle" viewBox="0 0 256 256" width="160" height="160"></svg><br>circle mask (adaptive)</div>
+      <div><svg id="psquircle" viewBox="0 0 256 256" width="160" height="160"></svg><br>squircle mask</div>
+    </div>
+  </div>
+  <div class="panel">
+    <fieldset><legend>Claw</legend>
+      <label>scale <input type="range" id="cs" min="0.5" max="1.8" step="0.01"><span class="val" id="cs_v"></span></label>
+      <label>rotation (°) <input type="range" id="ang" min="-100" max="40" step="1"><span class="val" id="ang_v"></span></label>
+      <label>jaw length <input type="range" id="jl" min="0.6" max="1.6" step="0.01"><span class="val" id="jl_v"></span></label>
+      <label>girth <input type="range" id="gi" min="0.6" max="1.6" step="0.01"><span class="val" id="gi_v"></span></label>
+      <label>jaw opening (°) <input type="range" id="op" min="-20" max="40" step="1"><span class="val" id="op_v"></span></label>
+      <label>wrist x <input type="range" id="wx" min="-200" max="300" step="1"><span class="val" id="wx_v"></span></label>
+      <label>wrist y <input type="range" id="wy" min="-100" max="400" step="1"><span class="val" id="wy_v"></span></label>
+      <label class="chk">lower teeth <input type="checkbox" id="lo"></label>
+    </fieldset>
+    <fieldset><legend>Phone</legend>
+      <label>rotation (°) <input type="range" id="tilt" min="-60" max="60" step="1"><span class="val" id="tilt_v"></span></label>
+      <label>centre x <input type="range" id="px" min="40" max="220" step="1"><span class="val" id="px_v"></span></label>
+      <label>centre y <input type="range" id="py" min="40" max="220" step="1"><span class="val" id="py_v"></span></label>
+    </fieldset>
+    <fieldset><legend>Frame</legend>
+      <label>zoom <input type="range" id="z" min="0.8" max="1.6" step="0.01"><span class="val" id="z_v"></span></label>
+    </fieldset>
+    <div class="sel" id="sel">Selected: claw (arrow keys nudge by 1, shift = 5)</div>
+    <button id="reset">Reset to current icon</button>
+    <button id="copy">Copy parameters</button>
+    <button id="load" data-label="Load parameters">Load parameters</button>
+    <button id="center">Centre phone</button>
+    <button id="svg">Download adaptive SVG</button>
+    <textarea id="out" spellcheck="false"></textarea>
+    <div class="hint">
+      Drag on the claw moves the claw; drag on the phone moves the phone. Rotating the claw turns it about its wrist, so
+      the pincers swing. Scaling the claw grows it about the wrist. The parameters are in the 256-unit design space; paste
+      the block back and it can be reproduced exactly. To restore a saved block, paste it over the
+      text box and press "Load parameters" (the grip block on its own works too).
+    </div>
+  </div>
+</div>
+<script>
+const RED = "#E0392B", RED_DK = "#B8291E", RED_HI = "#F27A6A", BLACK = "#121212", SCREEN_DK = "#2E2E2E", CREAM = "#FFF6E9";
+const PSYCH = ["#FF2E88", "#FF7A00", "#FFE600", "#5CFF3A", "#00E5FF", "#7A3BFF", "#FF3AF2"];
+const CLAW = "M0,50 C25,30 60,18 100,16 C150,14 192,32 215,58 C219,63 215,70 209,68 C185,52 142,48 110,60 C102,64 100,76 108,82 C140,96 185,98 205,112 C211,118 209,127 201,126 C170,124 135,132 95,130 C55,128 22,112 0,92 Z";
+const CLAW_JOINT = "M100,18 C110,34 112,50 106,62";
+const FOREARM = "M-200,50 L0,50 L0,92 L-200,92 Z";
+const JAWS = "M98,-60 C112,10 116,60 106,90 C100,110 96,130 98,200 L400,200 L400,-60 Z";
+const HI_UPPER = "M-200,56 L0,56 C25,36 60,24 100,22 C150,20 188,36 210,60";
+const UPPER_INNER = [[209,68],[185,52],[142,48],[110,60]];
+const LOWER_INNER = [[108,82],[140,96],[185,98],[205,112]];
+
+function bez(P, t) {
+  const [[x0,y0],[x1,y1],[x2,y2],[x3,y3]] = P, u = 1-t;
+  const x = u**3*x0 + 3*u*u*t*x1 + 3*u*t*t*x2 + t**3*x3, y = u**3*y0 + 3*u*u*t*y1 + 3*u*t*t*y2 + t**3*y3;
+  const dx = 3*u*u*(x1-x0) + 6*u*t*(x2-x1) + 3*t*t*(x3-x2), dy = 3*u*u*(y1-y0) + 6*u*t*(y2-y1) + 3*t*t*(y3-y2);
+  const L = Math.hypot(dx,dy); return [x, y, dx/L, dy/L];
+}
+function teeth(P, ts, intoDown, half=5.5, depth=9, sink=3) {
+  let out = "";
+  for (const t of ts) {
+    let [x,y,tx,ty] = bez(P,t); let nx = -ty, ny = tx;
+    if ((ny < 0) === intoDown) { nx = -nx; ny = -ny; }
+    const bx = x-nx*sink, by = y-ny*sink;
+    out += `<polygon points="${(bx-tx*half).toFixed(1)},${(by-ty*half).toFixed(1)} ${(bx+tx*half).toFixed(1)},${(by+ty*half).toFixed(1)} ${(x+nx*depth).toFixed(1)},${(y+ny*depth).toFixed(1)}"/>`;
+  }
+  return out;
+}
+const TEETH_UP = teeth(UPPER_INNER, [0.12,0.32,0.52,0.72], true);
+const TEETH_LO = teeth(LOWER_INNER, [0.28,0.48,0.68,0.86], false);
+
+// jaw length: stretch everything beyond the hinge (local x > 100) along the pincers' direction;
+// girth: scale the whole claw across its axis (local y = 71), so it gets chunkier or slimmer
+const HINGE_X = 100, AXIS_Y = 71;
+// jaw opening: swing the upper jaw up and the lower jaw down about the hinge (100,71) by half the angle each,
+// blended in over local x 70..130 so the bend is smooth rather than a crease at the hinge
+const smooth = t => t <= 0 ? 0 : t >= 1 ? 1 : t*t*(3 - 2*t);
+const stretchPt = (jl, gi = 1, op = 0) => ([x, y]) => {
+  const w = smooth((x - 70)/60), side = y < AXIS_Y ? -1 : y > AXIS_Y ? 1 : 0;
+  let X = x > HINGE_X ? HINGE_X + (x - HINGE_X)*jl : x, Y = AXIS_Y + (y - AXIS_Y)*gi;
+  if (op && side && w) {
+    const a = side*w*op/2*Math.PI/180, dx = X - HINGE_X, dy = Y - AXIS_Y;
+    X = HINGE_X + dx*Math.cos(a) - dy*Math.sin(a); Y = AXIS_Y + dx*Math.sin(a) + dy*Math.cos(a);
+  }
+  return [X, Y];
+};
+function stretchPath(d, jl, gi = 1, op = 0) { return d.replace(/(-?\d+\.?\d*),(-?\d+\.?\d*)/g, (m, x, y) => { const p = stretchPt(jl, gi, op)([+x, +y]); return p[0].toFixed(2) + "," + p[1].toFixed(2); }); }
+// Which part of the claw is drawn in front of the phone: the upper jaw, taken as everything above the mouth's
+// midline (the average of the two inner edges after jaw length / girth / opening are applied). A fixed horizontal
+// split at the axis cut the upper jaw's tip and teeth off once the jaws moved.
+function frontRegion(f) {
+  const U = UPPER_INNER.map(f), Lr = LOWER_INNER.slice().reverse().map(f);
+  const M = U.map((p, i) => [(p[0] + Lr[i][0])/2, (p[1] + Lr[i][1])/2]);   // tip -> throat
+  const pts = [[60, -400], [60, AXIS_Y], [HINGE_X, AXIS_Y]];
+  for (let i = 12; i >= 0; i--) { const b = bez(M, i/12); pts.push([b[0], b[1]]); }   // throat -> tip
+  pts.push([600, M[0][1]], [600, -400]);
+  return pts;
+}
+let _geom = {};
+function geom(jl, gi, op) {
+  if (_geom.jl === jl && _geom.gi === gi && _geom.op === op) return _geom;
+  const f = stretchPt(jl, gi, op);
+  _geom = { jl, gi, op, claw: stretchPath(CLAW, jl, gi, op), joint: stretchPath(CLAW_JOINT, jl, gi, op), hiUpper: stretchPath(HI_UPPER, jl, gi, op),
+            forearm: stretchPath(FOREARM, jl, gi, op), jaws: stretchPath(JAWS, jl, gi),
+            frontPts: frontRegion(f).map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" "),
+            teethUp: teeth(UPPER_INNER.map(f), [0.12,0.32,0.52,0.72], true), teethLo: teeth(LOWER_INNER.map(f), [0.28,0.48,0.68,0.86], false) };
+  return _geom;
+}
+let _uid = 0; const uid = p => `${p}${++_uid}`;
+
+function bgSunburst() {
+  let s = ""; const n = 28, cx = 128, cy = 128;
+  for (let i = 0; i < n; i++) {
+    const a0 = i*360/n, a1 = (i+1)*360/n;
+    const pts = [[cx,cy], ...[a0,(a0+a1)/2,a1].map(a => [cx+300*Math.cos(a*Math.PI/180), cy+300*Math.sin(a*Math.PI/180)])];
+    s += `<polygon points="${pts.map(p => p[0].toFixed(1)+","+p[1].toFixed(1)).join(" ")}" fill="${PSYCH[i % PSYCH.length]}"/>`;
+  }
+  for (let r = 20; r < 200; r += 24) s += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="white" stroke-width="7" opacity="0.28"/>`;
+  s += `<rect width="256" height="256" fill="${CREAM}" opacity="0.70"/>`;
+  return s;
+}
+const BG = bgSunburst();
+
+function claw(x, y, scale, rot, fill, {clip=null, stroke=null, sw=0, twoTone=false, shade=null, hit=false, lo=false, jl=1, gi=1, op=0} = {}) {
+  const g = geom(jl, gi, op);
+  const st = stroke ? ` stroke="${stroke}" stroke-width="${sw}" stroke-linejoin="round" stroke-linecap="round"` : "";
+  let s = `<g ${hit ? 'data-drag="claw"' : ""} transform="translate(${x},${y}) rotate(${rot}) scale(${scale}) translate(0,-71)">`;
+  if (clip === "upper") { const c = uid("c"); s += `<clipPath id="${c}"><polygon points="${g.frontPts}"/></clipPath><g clip-path="url(#${c})">`; }
+  const shape = `<path d="${g.forearm}"/><path d="${g.claw}"/>${g.teethUp}${lo ? g.teethLo : ""}`;
+  s += `<g fill="${fill}"${st}>${shape}</g>`;
+  if (!stroke) {
+    if (twoTone) { const j = uid("j"); s += `<clipPath id="${j}"><path d="${g.jaws}"/></clipPath><g clip-path="url(#${j})" fill="${RED}">${shape}</g>`; }
+    if (shade) { const k = uid("k"); s += `<clipPath id="${k}">${shape}</clipPath><g clip-path="url(#${k})" fill="none" stroke-linecap="round"><path d="${g.hiUpper}" stroke="${RED_HI}" stroke-width="7" opacity="0.9"/></g>`; }
+    s += `<path d="${g.joint}" fill="none" stroke="rgba(0,0,0,0.22)" stroke-width="6" stroke-linecap="round"/>`;
+  }
+  if (clip) s += "</g>";
+  return s + "</g>";
+}
+function phone(x, y, w, h, rot, {body=BLACK, screen=SCREEN_DK, stroke=null, sw=0, hit=false} = {}) {
+  const r = w*0.2, st = stroke ? ` stroke="${stroke}" stroke-width="${sw}"` : "";
+  let s = `<g ${hit ? 'data-drag="phone"' : ""} transform="translate(${x},${y}) rotate(${rot}) translate(${-w/2},${-h/2})"><rect width="${w}" height="${h}" rx="${r}" fill="${body}"${st}/>`;
+  if (!stroke) s += `<rect x="${w*0.08}" y="${h*0.07}" width="${w*0.84}" height="${h*0.82}" rx="${r*0.5}" fill="${screen}"/><rect x="${w*0.38}" y="${h*0.028}" width="${w*0.24}" height="${h*0.02}" rx="2" fill="${screen}"/>`;
+  return s + "</g>";
+}
+
+// ---- state: the launcher icon as shipped
+const PW = 100, PH = 180;
+function lockedState() {
+  return { cs: 1.14, ang: -40, tilt: -10, px: 142, py: 122, wx: 9.16, wy: 239.33, z: 1.15, lo: true, jl: 1, gi: 1.18, op: -20 };
+}
+let S = lockedState();
+const KEYS = ["cs","ang","jl","gi","op","wx","wy","tilt","px","py","z"];
+
+function body(hit) {
+  let b = "";
+  b += claw(S.wx, S.wy, S.cs, S.ang, CREAM, {stroke: CREAM, sw: 18/S.cs, lo: S.lo, jl: S.jl, gi: S.gi, op: S.op});
+  b += phone(S.px, S.py, PW, PH, S.tilt, {body: CREAM, stroke: CREAM, sw: 18});
+  b += claw(S.wx, S.wy, S.cs, S.ang, RED_DK, {twoTone: true, shade: "hi", hit, lo: S.lo, jl: S.jl, gi: S.gi, op: S.op});
+  b += phone(S.px, S.py, PW, PH, S.tilt, {hit});
+  b += claw(S.wx, S.wy, S.cs, S.ang, RED_DK, {clip: "upper", twoTone: true, shade: "hi", hit, lo: S.lo, jl: S.jl, gi: S.gi, op: S.op});
+  return `<g transform="translate(128,128) scale(${S.z}) translate(-142,-122)">${b}</g>`;
+}
+function tile(hit, maskId) {
+  const m = uid("m");
+  return `<clipPath id="${m}">${maskId === "circle" ? '<circle cx="128" cy="128" r="117"/>' : maskId === "squircle" ? '<rect x="11" y="11" width="234" height="234" rx="70"/>' : '<rect width="256" height="256" rx="56"/>'}</clipPath>` +
+         `<g clip-path="url(#${m})"><rect width="256" height="256" fill="${CREAM}"/>` +
+         (maskId ? `<g transform="translate(128,128) scale(0.93) translate(-128,-128)">${BG}${body(false)}</g>` : BG + body(hit)) + `</g>`;
+}
+
+// The adaptive-icon foreground: the 108 dp canvas (256-unit design = the 72 dp safe zone, so -64..320), background
+// and art shrunk 0.93 about the centre so the phone clears a 66 dp circle mask. render-launcher.py rasterises this
+// at 432 px and downsamples it into the mipmaps.
+function adaptiveSvg() {
+  const A0 = -64, A1 = 384, FIT = 0.93;
+  const bg = BG.replace(`<rect width="256" height="256" fill="${CREAM}" opacity="0.70"/>`, `<rect x="${A0}" y="${A0}" width="${A1}" height="${A1}" fill="${CREAM}" opacity="0.70"/>`);
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${A0} ${A0} ${A1} ${A1}" width="${A1}" height="${A1}">` +
+         `<rect x="${A0}" y="${A0}" width="${A1}" height="${A1}" fill="${CREAM}"/>` +
+         `<g transform="translate(128,128) scale(${FIT}) translate(-128,-128)">${bg}${body(false)}</g></svg>`;
+}
+const $ = id => document.getElementById(id);
+function render() {
+  $("stage").innerHTML = tile(true);
+  const t = tile(false); $("p96").innerHTML = t; $("p48").innerHTML = t;
+  $("pcircle").innerHTML = tile(false, "circle"); $("psquircle").innerHTML = tile(false, "squircle");
+  $("lo").checked = S.lo;
+  for (const k of KEYS) { $(k).value = S[k]; $(k + "_v").textContent = (k === "cs" || k === "z" || k === "jl" || k === "gi") ? S[k].toFixed(2) : Math.round(S[k]); }
+  // derived: intersection of the claw axis (from the wrist, along ang) with the phone's long axis,
+  // expressed as the grip block's G (axis distance in claw units) and up (fraction of phone height from the bottom).
+  const ra = S.ang*Math.PI/180, rt = -S.tilt*Math.PI/180;
+  const ux = Math.cos(ra), uy = Math.sin(ra), vx = Math.sin(rt), vy = Math.cos(rt);
+  const rx = S.px - S.wx, ry = S.py - S.wy, den = ux*vy - uy*vx;
+  const sdist = (rx*vy - ry*vx) / den, d = (rx*uy - ry*ux) / den;
+  const G = sdist / S.cs, up = 0.5 - d/PH;
+  $("out").value = JSON.stringify({
+    claw: { scale: +S.cs.toFixed(2), rotation: Math.round(S.ang), wrist_x: +S.wx.toFixed(2), wrist_y: +S.wy.toFixed(2), lower_teeth: S.lo, jaw_length: +S.jl.toFixed(2), girth: +S.gi.toFixed(2), jaw_open: Math.round(S.op) },
+    phone: { rotation: Math.round(S.tilt), centre_x: Math.round(S.px), centre_y: Math.round(S.py), width: PW, height: PH },
+    frame: { zoom: +S.z.toFixed(2), zoom_about: [142, 122] },
+    grip: { ang: Math.round(S.ang), tilt: Math.round(S.tilt), cs: +S.cs.toFixed(2), G: +G.toFixed(1), up: +up.toFixed(3), px: Math.round(S.px), py: Math.round(S.py), pdy: 0, z: +S.z.toFixed(2), lower_teeth: S.lo, jaw_length: +S.jl.toFixed(2), girth: +S.gi.toFixed(2), jaw_open: Math.round(S.op) }
+  }, null, 2);
+}
+for (const k of KEYS) $(k).addEventListener("input", e => { S[k] = parseFloat(e.target.value); render(); });
+$("lo").addEventListener("change", e => { S.lo = e.target.checked; render(); });
+
+// ---- dragging
+let drag = null, selected = "claw";
+const stage = $("stage");
+function toDesign(e) { const r = stage.getBoundingClientRect(); return [(e.clientX - r.left) * 256 / r.width, (e.clientY - r.top) * 256 / r.height]; }
+stage.addEventListener("pointerdown", e => {
+  const g = e.target.closest("[data-drag]");
+  if (!g) return;
+  selected = g.dataset.drag; $("sel").textContent = `Selected: ${selected} (arrow keys nudge by 1, shift = 5)`;
+  drag = { what: selected, last: toDesign(e) };
+  stage.setPointerCapture(e.pointerId); stage.classList.add("dragging"); e.preventDefault();
+});
+stage.addEventListener("pointermove", e => {
+  if (!drag) return;
+  const p = toDesign(e), dx = (p[0] - drag.last[0]) / S.z, dy = (p[1] - drag.last[1]) / S.z; drag.last = p;
+  if (drag.what === "claw") { S.wx += dx; S.wy += dy; } else { S.px += dx; S.py += dy; }
+  render();
+});
+const endDrag = () => { drag = null; stage.classList.remove("dragging"); };
+stage.addEventListener("pointerup", endDrag); stage.addEventListener("pointercancel", endDrag);
+window.addEventListener("keydown", e => {
+  const step = e.shiftKey ? 5 : 1; let dx = 0, dy = 0;
+  if (e.key === "ArrowLeft") dx = -step; else if (e.key === "ArrowRight") dx = step; else if (e.key === "ArrowUp") dy = -step; else if (e.key === "ArrowDown") dy = step; else return;
+  if (document.activeElement && document.activeElement.tagName === "INPUT") return;
+  if (selected === "claw") { S.wx += dx; S.wy += dy; } else { S.px += dx; S.py += dy; }
+  e.preventDefault(); render();
+});
+$("reset").onclick = () => { S = lockedState(); render(); };
+$("center").onclick = () => { S.px = 142; S.py = 122; render(); };
+$("svg").onclick = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([adaptiveSvg()], { type: "image/svg+xml" })); a.download = "adaptive.svg"; a.click(); URL.revokeObjectURL(a.href); };
+$("copy").onclick = async () => { try { await navigator.clipboard.writeText($("out").value); $("copy").textContent = "Copied"; setTimeout(() => $("copy").textContent = "Copy parameters", 1200); } catch (_) { $("out").select(); } };
+// Restore the state from a pasted parameter block: the full readout (claw / phone / frame), or just its grip
+// block. Only the keys present are applied, so a partial block adjusts rather than resets.
+const num = v => (typeof v === "number" && isFinite(v)) ? v : undefined;
+function applyParams(o) {
+  const c = o.claw || {}, p = o.phone || {}, f = o.frame || {}, g = o.grip || (o.ang !== undefined ? o : {});
+  const set = (k, ...vals) => { for (const v of vals) { const n = num(v); if (n !== undefined) { S[k] = n; return; } } };
+  set("cs", c.scale, g.cs); set("ang", c.rotation, g.ang); set("jl", c.jaw_length, g.jaw_length);
+  set("gi", c.girth, g.girth); set("op", c.jaw_open, g.jaw_open);
+  set("tilt", p.rotation, g.tilt); set("px", p.centre_x, g.px); set("py", p.centre_y, g.py);
+  if (num(g.pdy) !== undefined && num(g.py) !== undefined && num(p.centre_y) === undefined) S.py = g.py + g.pdy;
+  set("z", f.zoom, g.z);
+  const lo = c.lower_teeth !== undefined ? c.lower_teeth : g.lower_teeth; if (typeof lo === "boolean") S.lo = lo;
+  if (num(c.wrist_x) !== undefined && num(c.wrist_y) !== undefined) { S.wx = c.wrist_x; S.wy = c.wrist_y; }
+  else if (num(g.G) !== undefined && num(g.up) !== undefined) {   // the grip block: wrist placed from G and up
+    const down = PH/2 - PH*g.up, rt = -S.tilt*Math.PI/180, ra = S.ang*Math.PI/180;
+    const gx = S.px + down*Math.sin(rt), gy = S.py + down*Math.cos(rt);
+    S.wx = gx - g.G*S.cs*Math.cos(ra); S.wy = gy - g.G*S.cs*Math.sin(ra);
+  }
+}
+$("load").onclick = () => {
+  let o; try { o = JSON.parse($("out").value); } catch (_) { flash($("load"), "Not valid JSON"); return; }
+  applyParams(o); render(); flash($("load"), "Loaded");
+};
+function flash(btn, text) { const was = btn.dataset.label; btn.textContent = text; setTimeout(() => btn.textContent = was, 1200); }
+render();
+</script>
+</body>
+</html>

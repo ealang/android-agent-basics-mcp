@@ -188,7 +188,7 @@ object Sound {
         val notification = Notification.Builder(context, Notifier.infoChannel(context))
             .setContentTitle("Phone is ringing")
             .setContentText("Tap to stop the sound.")
-            .setSmallIcon(R.drawable.ic_stat_info)
+            .setSmallIcon(R.drawable.ic_stat_claw)
             .setContentIntent(stop)
             // Not swipeable: the only way it leaves is by the ring ending, so
             // it cannot be dismissed while the noise carries on.

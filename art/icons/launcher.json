@@ -1,0 +1,41 @@
+{
+  "claw": {
+    "scale": 1.14,
+    "rotation": -40,
+    "wrist_x": 9.16,
+    "wrist_y": 239.33,
+    "lower_teeth": true,
+    "jaw_length": 1,
+    "girth": 1.18,
+    "jaw_open": -20
+  },
+  "phone": {
+    "rotation": -10,
+    "centre_x": 142,
+    "centre_y": 122,
+    "width": 100,
+    "height": 180
+  },
+  "frame": {
+    "zoom": 1.15,
+    "zoom_about": [
+      142,
+      122
+    ]
+  },
+  "grip": {
+    "ang": -40,
+    "tilt": -10,
+    "cs": 1.14,
+    "G": 153.1,
+    "up": 0.471,
+    "px": 142,
+    "py": 122,
+    "pdy": 0,
+    "z": 1.15,
+    "lower_teeth": true,
+    "jaw_length": 1,
+    "girth": 1.18,
+    "jaw_open": -20
+  }
+}

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Status-bar icon for agent alert notifications: Material Symbols "warning"
-     (Apache 2.0), copied in for the same reason as ic_stat_info. -->
+     (Apache 2.0), copied in because notification small icons must live in our
+     own APK — there is no system icon with a stability promise to link to. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"

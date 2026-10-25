@@ -85,7 +85,7 @@ object Notifier {
             // triangle. The pyramid stays the service's alone, so agent
             // notifications are tellable from it at a glance.
             .setSmallIcon(
-                if (alert) R.drawable.ic_stat_warning else R.drawable.ic_stat_info,
+                if (alert) R.drawable.ic_stat_warning else R.drawable.ic_stat_claw,
             )
             .setContentIntent(open)
             .setAutoCancel(true)

@@ -1,0 +1,412 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Status icon lab — phone-mcp</title>
+<style>
+  html, body { height: 100%; }
+  body { font-family: -apple-system, system-ui, sans-serif; background: #F0EFEA; color: #222; margin: 0; padding: 0;
+         display: flex; flex-direction: column; overflow: hidden; }
+  h1 { font-size: 15px; margin: 0; padding: 10px 12px 6px; flex: none; }
+  /* two panes, each scrolling on its own: the previews stay in view while the controls scroll */
+  .row { display: flex; flex-direction: column; align-items: stretch; flex: 1; min-height: 0; }
+  .preview-pane { flex: none; max-height: 45vh; overflow: auto; padding: 4px 12px 10px; border-bottom: 1px solid #ccc; background: #E8E7E1; }
+  .panel-wrap { flex: 1; min-height: 0; overflow: auto; padding: 4px 12px 24px; }
+  #stage { width: 144px; height: 144px; background: #1b1b1b; border-radius: 10px; touch-action: none; cursor: grab; box-shadow: 0 2px 12px rgba(0,0,0,.15); flex: none; }
+  #stage.dragging { cursor: grabbing; }
+  .previews { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+  .previews > div { text-align: center; font-size: 11px; color: #666; }
+  .dark { background: #1b1b1b; padding: 8px; border-radius: 8px; display: inline-block; line-height: 0; }
+  .bar { background: #000; color: #fff; padding: 6px 10px; border-radius: 14px; display: flex; gap: 10px; align-items: center; font-size: 12px; width: 180px; box-sizing: border-box; }
+  .bar svg { display: block; }
+  .bars { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; margin-top: 6px; }
+  .bar.x2 { transform: scale(2); transform-origin: left top; margin-right: 180px; margin-bottom: 30px; }
+  .panel { width: 100%; max-width: 560px; }
+  label { display: grid; grid-template-columns: 96px 1fr 44px; gap: 8px; align-items: center; margin: 6px 0; font-size: 13px; }
+  label.chk { grid-template-columns: 96px 1fr; }
+  label.chk input[type=checkbox] { width: 22px; height: 22px; justify-self: start; }
+  select { font-size: 13px; max-width: 100%; }
+  input[type=range] { width: 100%; height: 28px; margin: 0; }
+  .val { text-align: right; font-variant-numeric: tabular-nums; }
+  textarea { width: 100%; font: 11px/1.4 ui-monospace, monospace; box-sizing: border-box; margin-top: 8px; }
+  #out { height: 120px; } #xml { height: 110px; }
+  button { font-size: 13px; padding: 6px 12px; margin-right: 8px; margin-top: 8px; }
+  .hint { font-size: 12px; color: #666; margin-top: 10px; line-height: 1.5; }
+  .sel { font-size: 12px; margin-top: 6px; color: #444; }
+  fieldset { border: 1px solid #ccc; border-radius: 8px; margin: 10px 0; padding: 6px 12px 10px; }
+  legend { font-size: 12px; color: #666; padding: 0 4px; }
+</style>
+</head>
+<body>
+<h1>Status icon lab</h1>
+<div class="row">
+  <div class="preview-pane">
+    <div class="previews">
+      <div><svg id="stage" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"></svg><br>144 px, drag here</div>
+      <div><span class="dark"><svg id="p96" viewBox="0 0 24 24" width="96" height="96"></svg></span><br>96 px</div>
+      <div><span class="dark"><svg id="p48" viewBox="0 0 24 24" width="48" height="48"></svg></span><br>48 px</div>
+      <div><span class="dark"><svg id="p24" viewBox="0 0 24 24" width="24" height="24"></svg></span><br>24 px</div>
+    </div>
+    <div class="bars">
+      <div class="bar x2" id="bar2"></div>
+      <div><div class="bar" id="bar1"></div><div style="margin-top:4px;font-size:11px;color:#666">status bar, 1× and 2×</div></div>
+    </div>
+  </div>
+  <div class="panel-wrap"><div class="panel">
+    <fieldset><legend>Claw</legend>
+      <label>scale <input type="range" id="cs" min="0.5" max="2.0" step="0.01"><span class="val" id="cs_v"></span></label>
+      <label>rotation (°) <input type="range" id="ang" min="-100" max="60" step="1"><span class="val" id="ang_v"></span></label>
+      <label>jaw length <input type="range" id="jl" min="0.6" max="1.6" step="0.01"><span class="val" id="jl_v"></span></label>
+      <label>girth <input type="range" id="gi" min="0.6" max="1.6" step="0.01"><span class="val" id="gi_v"></span></label>
+      <label>jaw opening (°) <input type="range" id="op" min="-20" max="40" step="1"><span class="val" id="op_v"></span></label>
+      <label>wrist x <input type="range" id="wx" min="-300" max="300" step="1"><span class="val" id="wx_v"></span></label>
+      <label>wrist y <input type="range" id="wy" min="-200" max="400" step="1"><span class="val" id="wy_v"></span></label>
+      <label class="chk">upper teeth <input type="checkbox" id="teeth"></label>
+      <label class="chk">lower teeth <input type="checkbox" id="lo"></label>
+      <label class="chk">joint line <input type="checkbox" id="jt"></label>
+      <label>joint width (dp) <input type="range" id="jw" min="0.3" max="2" step="0.1"><span class="val" id="jw_v"></span></label>
+    </fieldset>
+    <fieldset><legend>Style</legend>
+      <label class="chk">claw <select id="sc"><option value="solid">white fill, black outline</option><option value="inverted">white outline, black fill</option><option value="double">white outline, black fill, black gap</option></select></label>
+      <label class="chk">phone <select id="sp"><option value="solid">white fill, black outline</option><option value="inverted">white outline, black fill</option><option value="double">white outline, black fill, black gap</option></select></label>
+      <label>line width (dp) <input type="range" id="ow" min="0.4" max="3" step="0.1"><span class="val" id="ow_v"></span></label>
+    </fieldset>
+    <details><summary style="font-size:13px;color:#444;cursor:pointer;margin:6px 0">Second claw, from the other side</summary>
+      <fieldset><legend>Second claw (mirrored; shares style, teeth and jaw settings)</legend>
+        <label class="chk">enabled <input type="checkbox" id="c2"></label>
+        <label>scale <input type="range" id="c2s" min="0.5" max="2.0" step="0.01"><span class="val" id="c2s_v"></span></label>
+        <label>rotation (°) <input type="range" id="c2a" min="-60" max="100" step="1"><span class="val" id="c2a_v"></span></label>
+        <label>wrist x <input type="range" id="w2x" min="-100" max="500" step="1"><span class="val" id="w2x_v"></span></label>
+        <label>wrist y <input type="range" id="w2y" min="-200" max="400" step="1"><span class="val" id="w2y_v"></span></label>
+      </fieldset>
+    </details>
+    <fieldset><legend>Phone</legend>
+      <label>rotation (°) <input type="range" id="tilt" min="-60" max="60" step="1"><span class="val" id="tilt_v"></span></label>
+      <label>centre x <input type="range" id="px" min="0" max="280" step="1"><span class="val" id="px_v"></span></label>
+      <label>centre y <input type="range" id="py" min="0" max="280" step="1"><span class="val" id="py_v"></span></label>
+      <label class="chk">speaker slit <input type="checkbox" id="slit"></label>
+    </fieldset>
+    <fieldset><legend>Frame (24 dp box)</legend>
+      <label class="chk">phone centred <input type="checkbox" id="auto"></label>
+      <label>padding (dp) <input type="range" id="pad" min="0" max="5" step="0.1"><span class="val" id="pad_v"></span></label>
+      <label>gap (dp) <input type="range" id="gap" min="0.4" max="2.5" step="0.1"><span class="val" id="gap_v"></span></label>
+      <label>frame zoom <input type="range" id="fz" min="0.5" max="1.6" step="0.01"><span class="val" id="fz_v"></span></label>
+      <label>frame shift x <input type="range" id="fdx" min="-8" max="8" step="0.1"><span class="val" id="fdx_v"></span></label>
+      <label>frame shift y <input type="range" id="fdy" min="-8" max="8" step="0.1"><span class="val" id="fdy_v"></span></label>
+    </fieldset>
+    <div class="sel" id="sel">Selected: claw (arrow keys nudge by 1 design unit, shift = 5)</div>
+    <button id="reset">Reset to current icon</button>
+    <button id="copy">Copy parameters</button>
+    <button id="copyxml">Copy XML</button>
+    <button id="load" data-label="Load parameters">Load parameters</button>
+    <textarea id="out" spellcheck="false"></textarea>
+    <textarea id="xml" readonly></textarea>
+    <div class="hint">
+      The 144 px view is the 24 dp box at 6×. Drag the claw there to move it; drag the phone to move it (untick "phone centred"
+      first, otherwise the frame follows the phone and nothing appears to move). Rotation and scale act about the claw's
+      wrist. The shape is built with real polygon booleans in the page: the upper jaw
+      in front, a gap cut out of the phone around it, the lower jaw cut by the phone's outline. The XML box is the
+      finished VectorDrawable, ready to drop in as <code>ic_stat_claw.xml</code>. To restore a saved state, paste its
+      parameter block over the text box and press "Load parameters" (the centred block on its own works too).
+      Style, per shape: "white fill, black outline" is the solid shape with the gap cut out of whatever is behind it;
+      "white outline, black fill" is a ring of the line width with no gap, the black fill being the separation; the
+      third keeps the ring and also cuts the gap, the double edge. Overlaps keep their meaning whichever style is
+      chosen: the upper jaw sits in front of the phone, the phone hides the lower jaw. A hollow phone's speaker slit
+      turns white. The second claw, under its own fold, is a mirror image coming in from the other side, with its
+      own wrist, scale and rotation; everything else about it follows the first claw. Drag it like the first.
+    </div>
+  </div></div>
+</div>
+<script src="clipper-6.4.2.js"></script>
+<script>
+// ---- design-space primitives (shared with the launcher) -------------------------------------------
+const CLAW = "M0,50 C25,30 60,18 100,16 C150,14 192,32 215,58 C219,63 215,70 209,68 C185,52 142,48 110,60 C102,64 100,76 108,82 C140,96 185,98 205,112 C211,118 209,127 201,126 C170,124 135,132 95,130 C55,128 22,112 0,92 Z";
+const FOREARM = [[-200,50],[0,50],[0,92],[-200,92]];
+const CLAW_JOINT = "M100,18 C110,34 112,50 106,62";   // the launcher's shading line between base and upper jaw
+const UPPER_INNER = [[209,68],[185,52],[142,48],[110,60]];
+const LOWER_INNER = [[108,82],[140,96],[185,98],[205,112]];
+const PW = 100, PH = 180;
+
+function bez(P, t) {
+  const [[x0,y0],[x1,y1],[x2,y2],[x3,y3]] = P, u = 1-t;
+  const x = u**3*x0 + 3*u*u*t*x1 + 3*u*t*t*x2 + t**3*x3, y = u**3*y0 + 3*u*u*t*y1 + 3*u*t*t*y2 + t**3*y3;
+  const dx = 3*u*u*(x1-x0) + 6*u*t*(x2-x1) + 3*t*t*(x3-x2), dy = 3*u*u*(y1-y0) + 6*u*t*(y2-y1) + 3*t*t*(y3-y2);
+  const L = Math.hypot(dx,dy); return [x, y, dx/L, dy/L];
+}
+function teeth(P, ts, intoDown, half, depth, sink) {
+  const out = [];
+  for (const t of ts) {
+    let [x,y,tx,ty] = bez(P,t); let nx = -ty, ny = tx;
+    if ((ny < 0) === intoDown) { nx = -nx; ny = -ny; }
+    const bx = x-nx*sink, by = y-ny*sink;
+    out.push([[bx-tx*half, by-ty*half], [bx+tx*half, by+ty*half], [x+nx*depth, y+ny*depth]]);
+  }
+  return out;
+}
+
+function flatten(d, n=14) {   // absolute M/C/L/Z path -> polygons, sampling cubics
+  const polys = []; let cur = [];
+  for (const m of d.matchAll(/([MLCZ])([^MLCZ]*)/g)) {
+    const cmd = m[1], nums = (m[2].match(/-?\d+\.?\d*/g) || []).map(Number);
+    if (cmd === "M") cur = [[nums[0], nums[1]]];
+    else if (cmd === "L") cur.push([nums[0], nums[1]]);
+    else if (cmd === "C") for (let j = 0; j < nums.length; j += 6) {
+      const p0 = cur[cur.length-1], P = [p0, [nums[j],nums[j+1]], [nums[j+2],nums[j+3]], [nums[j+4],nums[j+5]]];
+      for (let i = 1; i <= n; i++) { const b = bez(P, i/n); cur.push([b[0], b[1]]); }
+    } else if (cmd === "Z") { polys.push(cur); cur = []; }
+  }
+  if (cur.length) polys.push(cur);
+  return polys;
+}
+
+// jaw length: stretch everything beyond the hinge (local x > 100) along the pincers' direction;
+// girth: scale the whole claw across its axis (local y = 71), so it gets chunkier or slimmer
+const HINGE_X = 100, AXIS_Y = 71;
+// jaw opening: swing the upper jaw up and the lower jaw down about the hinge (100,71) by half the angle each,
+// blended in over local x 70..130 so the bend is smooth rather than a crease at the hinge
+const smooth = t => t <= 0 ? 0 : t >= 1 ? 1 : t*t*(3 - 2*t);
+const stretchPt = (jl, gi = 1, op = 0) => ([x, y]) => {
+  const w = smooth((x - 70)/60), side = y < AXIS_Y ? -1 : y > AXIS_Y ? 1 : 0;
+  let X = x > HINGE_X ? HINGE_X + (x - HINGE_X)*jl : x, Y = AXIS_Y + (y - AXIS_Y)*gi;
+  if (op && side && w) {
+    const a = side*w*op/2*Math.PI/180, dx = X - HINGE_X, dy = Y - AXIS_Y;
+    X = HINGE_X + dx*Math.cos(a) - dy*Math.sin(a); Y = AXIS_Y + dx*Math.sin(a) + dy*Math.cos(a);
+  }
+  return [X, Y];
+};
+function stretchPath(d, jl, gi = 1, op = 0) { return d.replace(/(-?\d+\.?\d*),(-?\d+\.?\d*)/g, (m, x, y) => { const p = stretchPt(jl, gi, op)([+x, +y]); return p[0].toFixed(2) + "," + p[1].toFixed(2); }); }
+// Which part of the claw is drawn in front of the phone: the upper jaw, taken as everything above the mouth's
+// midline (the average of the two inner edges after jaw length / girth / opening are applied). A fixed horizontal
+// split at the axis cut the upper jaw's tip and teeth off once the jaws moved.
+function frontRegion(f) {
+  const U = UPPER_INNER.map(f), Lr = LOWER_INNER.slice().reverse().map(f);
+  const M = U.map((p, i) => [(p[0] + Lr[i][0])/2, (p[1] + Lr[i][1])/2]);   // tip -> throat
+  const pts = [[60, -400], [60, AXIS_Y], [HINGE_X, AXIS_Y]];
+  for (let i = 12; i >= 0; i--) { const b = bez(M, i/12); pts.push([b[0], b[1]]); }   // throat -> tip
+  pts.push([600, M[0][1]], [600, -400]);
+  return pts;
+}
+let _geom = {};
+function geom(jl, gi, op) {   // the status-icon teeth are a little bigger than the launcher's
+  if (_geom.jl === jl && _geom.gi === gi && _geom.op === op) return _geom;
+  const f = stretchPt(jl, gi, op), d = stretchPath(CLAW, jl, gi, op), forearm = FOREARM.map(f);
+  _geom = { jl, gi, op, d, polys: flatten(d), forearm, front: frontRegion(f), joint: flatten(stretchPath(CLAW_JOINT, jl, gi, op))[0], fd: "M" + forearm.map(p => p.join(",")).join(" L") + " Z",
+            teethUp: teeth(UPPER_INNER.map(f), [0.12,0.32,0.52,0.72], true, 7, 11, 3),
+            teethLo: teeth(LOWER_INNER.map(f), [0.28,0.48,0.68,0.86], false, 7, 11, 3) };
+  return _geom;
+}
+function rrect(w, h, r, n=10) {
+  const pts = [];
+  for (const [cx, cy, a0] of [[w/2-r, -h/2+r, -90], [w/2-r, h/2-r, 0], [-w/2+r, h/2-r, 90], [-w/2+r, -h/2+r, 180]])
+    for (let i = 0; i <= n; i++) { const a = (a0 + 90*i/n)*Math.PI/180; pts.push([cx + r*Math.cos(a), cy + r*Math.sin(a)]); }
+  return pts;
+}
+
+// ---- polygon booleans via Clipper (integer coords, scaled by 1000) --------------------------------
+const CL = ClipperLib, SC = 1000;
+const toC = poly => poly.map(([x,y]) => ({X: Math.round(x*SC), Y: Math.round(y*SC)}));
+const norm = paths => paths.map(p => CL.Clipper.Orientation(p) ? p : p.slice().reverse());   // raw inputs only
+function run(type, subj, clip) {
+  const c = new CL.Clipper(); c.AddPaths(subj, CL.PolyType.ptSubject, true); if (clip) c.AddPaths(clip, CL.PolyType.ptClip, true);
+  const out = new CL.Paths(); c.Execute(type, out, CL.PolyFillType.pftNonZero, CL.PolyFillType.pftNonZero); return out;
+}
+const union = (a, b) => run(CL.ClipType.ctUnion, a, b);
+const diff = (a, b) => run(CL.ClipType.ctDifference, a, b);
+const inter = (a, b) => run(CL.ClipType.ctIntersection, a, b);
+function buffer(paths, d) {
+  const co = new CL.ClipperOffset(2, 10); co.AddPaths(paths, CL.JoinType.jtRound, CL.EndType.etClosedPolygon);
+  const out = new CL.Paths(); co.Execute(out, d*SC); return out;
+}
+function strokeOpen(path, w) {   // an open polyline as a closed polygon of width w, round caps and joins
+  const co = new CL.ClipperOffset(2, 10); co.AddPath(path, CL.JoinType.jtRound, CL.EndType.etOpenRound);
+  const out = new CL.Paths(); co.Execute(out, w/2*SC); return out;
+}
+function toPath(paths) {
+  return paths.filter(p => p.length > 2).map(p => "M" + p.map(q => (q.X/SC).toFixed(2) + "," + (q.Y/SC).toFixed(2)).join(" L") + " Z").join(" ");
+}
+
+// ---- the construction --------------------------------------------------------------------------
+function build(S) {
+  const t = Math.abs(S.tilt)*Math.PI/180;
+  const hx = PW/2*Math.cos(t) + PH/2*Math.sin(t), hy = PW/2*Math.sin(t) + PH/2*Math.cos(t);
+  const k = (24 - 2*S.pad) / Math.max(2*hx, 2*hy) * S.fz;
+  const cx = S.auto ? S.px : S.fcx, cy = S.auto ? S.py : S.fcy;
+  const m = (x, y) => [12 + S.fdx + (x-cx)*k, 12 + S.fdy + (y-cy)*k];
+  const tt = S.tilt*Math.PI/180, ct = Math.cos(tt), st = Math.sin(tt);
+  const pxf = ([x, y]) => m(S.px + x*ct - y*st, S.py + x*st + y*ct);
+  const ring = shape => diff(shape, buffer(shape, -S.ow));   // white outline, black interior
+  const clawHollow = S.sc !== "solid", phoneHollow = S.sp !== "solid";
+  const g = geom(S.jl, S.gi, S.op);
+
+  // One claw at a wrist, scale and rotation; mirrored claws come in from the other side. Returns the part drawn in
+  // front of the phone, what that part cuts out of the phone, and the part drawn behind it.
+  function clawAt(wx, wy, cs, ang, mirror) {
+    const a = ang*Math.PI/180, ca = Math.cos(a), sa = Math.sin(a), mx = mirror ? -1 : 1;
+    const cfn = ([x, y]) => { x *= mx; y -= 71; return m(wx + cs*(x*ca - y*sa), wy + cs*(x*sa + y*ca)); };
+    let parts = [...g.polys.map(p => p.map(cfn)), g.forearm.map(cfn)];
+    if (S.teeth) parts = parts.concat(g.teethUp.map(p => p.map(cfn)));
+    if (S.lo) parts = parts.concat(g.teethLo.map(p => p.map(cfn)));
+    const clawSolid = union(norm(parts.map(toC)));
+    let clawG = clawHollow ? ring(clawSolid) : clawSolid;
+    if (S.jt) {   // the joint line is the claw's other colour: black on a solid claw, white on a hollow one
+      const jl = inter(strokeOpen(toC(g.joint.map(cfn)), S.jw), clawSolid);
+      clawG = clawHollow ? union(clawG, jl) : diff(clawG, jl);
+    }
+    const hp = norm([toC(g.front.map(cfn))]);   // the upper jaw, drawn in front of the phone
+    // Occlusion always uses the solid shapes: a hollow jaw's black interior still hides the phone behind it.
+    const upperSolid = inter(clawSolid, hp);
+    // What the jaw cuts out of the phone. Solid: the gap, its black outline. Inverted: just its own area, the
+    // black fill being the separation. Double: the gap as well, so the ring gets a black edge outside it.
+    return { upper: inter(clawG, hp), cut: S.sc === "inverted" ? upperSolid : buffer(upperSolid, S.gap), rest: diff(clawG, hp) };
+  }
+  const claws = [clawAt(S.wx, S.wy, S.cs, S.ang, false)];
+  if (S.c2) claws.push(clawAt(S.w2x, S.w2y, S.c2s, S.c2a, true));
+
+  const phone = norm([toC(rrect(PW, PH, PW*0.2).map(pxf))]);
+  let phoneShape = phoneHollow ? ring(phone) : phone;
+  if (S.slit) {
+    const s = norm([toC([[-PW*0.16, -PH/2+PH*0.045], [PW*0.16, -PH/2+PH*0.045], [PW*0.16, -PH/2+PH*0.075], [-PW*0.16, -PH/2+PH*0.075]].map(pxf))]);
+    phoneShape = phoneHollow ? union(phoneShape, s) : diff(phone, s);
+  }
+  for (const c of claws) phoneShape = diff(phoneShape, c.cut);
+  const cutPhone = S.sp === "inverted" ? phone : buffer(phone, S.gap);   // the phone hides whatever is behind it
+  const all = union([].concat(...claws.map(c => c.upper), phoneShape, ...claws.map(c => diff(c.rest, cutPhone))));
+  const boxed = inter(all, norm([toC([[0,0],[24,0],[24,24],[0,24]])]));
+  const clean = CL.Clipper.CleanPolygons(boxed, 0.02*SC);
+  return { d: toPath(clean), k, cx, cy, m };
+}
+
+// ---- state: the status icon as shipped -----------------------------------------------------------
+function chosenState() {
+  return { cs: 0.93, ang: -3, tilt: 0, px: 61, py: 118, wx: -131, wy: 131.19,
+           teeth: true, lo: true, jt: false, jw: 1.1, jl: 1, gi: 1.12, op: 5, sc: "solid", sp: "inverted", ow: 1.7,
+           c2: false, c2s: 0.93, c2a: 3, w2x: 235, w2y: 131.19,
+           slit: true, auto: true, pad: 1.5, gap: 1.3, fz: 1, fdx: 0, fdy: 0, fcx: 61, fcy: 118 };
+}
+let S = chosenState();
+const RANGES = ["cs","ang","jl","gi","op","jw","ow","wx","wy","c2s","c2a","w2x","w2y","tilt","px","py","pad","gap","fz","fdx","fdy"], CHECKS = ["teeth","lo","jt","c2","slit","auto"], SELECTS = ["sc","sp"];
+const PYR = '<path d="M12,4 L15.09,9.2 L8.91,9.2 Z M7.79,10.4 L16.21,10.4 L18.58,14.4 L5.42,14.4 Z M4.71,15.6 L19.29,15.6 L21.5,20 L2.5,20 Z"/>';
+const INFO = '<path d="M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2zM13,17h-2v-6h2v6zM13,9h-2V7h2v2z"/>';
+const ico = (body, size=24) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="${size}" height="${size}"><g fill="#FFF">${body}</g></svg>`;
+function vectorXml(d) {
+  return '<?xml version="1.0" encoding="utf-8"?>\n<vector xmlns:android="http://schemas.android.com/apk/res/android"\n' +
+         '    android:width="24dp"\n    android:height="24dp"\n    android:viewportWidth="24"\n    android:viewportHeight="24">\n' +
+         '    <path\n        android:fillColor="#FFFFFFFF"\n        android:fillType="evenOdd"\n        android:pathData="' + d + '" />\n</vector>\n';
+}
+
+const $ = id => document.getElementById(id);
+let cur = null;
+function render() {
+  cur = build(S);
+  const body = `<path d="${cur.d}" fill-rule="evenodd" fill="#FFF"/>`;
+  // hit targets for dragging: invisible claw and phone outlines in design space, drawn in the 24-box
+  const a = S.ang*Math.PI/180, tt = S.tilt*Math.PI/180;
+  const gg = geom(S.jl, S.gi, S.op);
+  const hitClaw = `<g data-drag="claw" fill="transparent" transform="translate(${cur.m(S.wx, S.wy).join(",")}) rotate(${S.ang}) scale(${S.cs*cur.k}) translate(0,-71)"><path d="${gg.fd}"/><path d="${gg.d}"/></g>`;
+  const hitClaw2 = S.c2 ? `<g data-drag="claw2" fill="transparent" transform="translate(${cur.m(S.w2x, S.w2y).join(",")}) rotate(${S.c2a}) scale(${-S.c2s*cur.k},${S.c2s*cur.k}) translate(0,-71)"><path d="${gg.fd}"/><path d="${gg.d}"/></g>` : "";
+  const [ppx, ppy] = cur.m(S.px, S.py);
+  const hitPhone = `<g data-drag="phone" fill="transparent" transform="translate(${ppx},${ppy}) rotate(${S.tilt}) scale(${cur.k})"><rect x="${-PW/2}" y="${-PH/2}" width="${PW}" height="${PH}" rx="${PW*0.2}"/></g>`;
+  $("stage").innerHTML = `<rect width="24" height="24" fill="#1b1b1b"/>` + body + hitClaw + hitClaw2 + hitPhone;
+  $("p96").innerHTML = body; $("p48").innerHTML = body; $("p24").innerHTML = body;
+  const bar = `<span>9:41</span>${ico(body)}${ico(PYR)}${ico(INFO)}<span style="margin-left:auto">▲ 5G ▮</span>`;
+  $("bar1").innerHTML = bar; $("bar2").innerHTML = bar;
+  for (const k of RANGES) { $(k).value = S[k]; $(k + "_v").textContent = Number.isInteger(S[k]) || ["ang","wx","wy","c2a","w2x","w2y","tilt","px","py"].includes(k) ? Math.round(S[k]) : S[k].toFixed(2); }
+  for (const k of CHECKS) $(k).checked = S[k];
+  for (const k of SELECTS) $(k).value = S[k];
+  // derived: where the claw axis crosses the phone's long axis, as the centred block's G and up
+  const ra = S.ang*Math.PI/180, rt = -S.tilt*Math.PI/180;
+  const ux = Math.cos(ra), uy = Math.sin(ra), vx = Math.sin(rt), vy = Math.cos(rt);
+  const rx = S.px - S.wx, ry = S.py - S.wy, den = ux*vy - uy*vx;
+  const sdist = (rx*vy - ry*vx) / den, dd = (rx*uy - ry*ux) / den;
+  const out = {
+    claw: { scale: +S.cs.toFixed(2), rotation: Math.round(S.ang), wrist_x: +S.wx.toFixed(2), wrist_y: +S.wy.toFixed(2), teeth: S.teeth, lower_teeth: S.lo, joint_line: S.jt, joint_width: +S.jw.toFixed(1), jaw_length: +S.jl.toFixed(2), girth: +S.gi.toFixed(2), jaw_open: Math.round(S.op) },
+    phone: { rotation: Math.round(S.tilt), centre_x: Math.round(S.px), centre_y: Math.round(S.py), slit: S.slit },
+    claw2: { enabled: S.c2, scale: +S.c2s.toFixed(2), rotation: Math.round(S.c2a), wrist_x: +S.w2x.toFixed(2), wrist_y: +S.w2y.toFixed(2) },
+    style: { claw: S.sc, phone: S.sp, line_width: +S.ow.toFixed(1) },
+    frame: { phone_centred: S.auto, pad: +S.pad.toFixed(1), gap: +S.gap.toFixed(1), zoom: +S.fz.toFixed(2), shift: [+S.fdx.toFixed(1), +S.fdy.toFixed(1)], k: +cur.k.toFixed(4), centre: [Math.round(cur.cx), Math.round(cur.cy)] },
+    centred: { ang: Math.round(S.ang), tilt: Math.round(S.tilt), cs: +S.cs.toFixed(2), G: +(sdist / S.cs).toFixed(1), up: +(0.5 - dd/PH).toFixed(3), px: Math.round(S.px), py: Math.round(S.py), pad: +S.pad.toFixed(1), gap: +S.gap.toFixed(1), teeth_on: S.teeth, lower_teeth: S.lo, jaw_length: +S.jl.toFixed(2), girth: +S.gi.toFixed(2), jaw_open: Math.round(S.op) },
+    path_chars: cur.d.length
+  };
+  $("out").value = JSON.stringify(out, null, 2);
+  $("xml").value = vectorXml(cur.d);
+}
+for (const k of RANGES) $(k).addEventListener("input", e => { S[k] = parseFloat(e.target.value); render(); });
+for (const k of SELECTS) $(k).addEventListener("change", e => { S[k] = e.target.value; render(); });
+for (const k of CHECKS) $(k).addEventListener("change", e => {
+  if (k === "auto" && !e.target.checked) { S.fcx = cur.cx; S.fcy = cur.cy; }   // freeze the frame where it is
+  S[k] = e.target.checked; render();
+});
+
+// ---- dragging -------------------------------------------------------------------------------------
+let drag = null, selected = "claw";
+const stage = $("stage");
+function toBox(e) { const r = stage.getBoundingClientRect(); return [(e.clientX - r.left) * 24 / r.width, (e.clientY - r.top) * 24 / r.height]; }
+function describe() {
+  $("sel").textContent = selected === "phone" && S.auto
+    ? "Selected: phone — locked to the frame centre; untick 'phone centred' to drag it"
+    : `Selected: ${selected} (arrow keys nudge by 1 design unit, shift = 5)`;
+}
+stage.addEventListener("pointerdown", e => {
+  const g = e.target.closest("[data-drag]"); if (!g) return;
+  selected = g.dataset.drag; describe();
+  drag = { what: selected, last: toBox(e) };
+  stage.setPointerCapture(e.pointerId); stage.classList.add("dragging"); e.preventDefault();
+});
+function move(what, dx, dy) {   // dx, dy in design units
+  if (what === "claw") { S.wx += dx; S.wy += dy; }
+  else if (what === "claw2") { S.w2x += dx; S.w2y += dy; }
+  else if (!S.auto) { S.px += dx; S.py += dy; }
+}
+stage.addEventListener("pointermove", e => {
+  if (!drag) return;
+  const p = toBox(e), dx = (p[0] - drag.last[0]) / cur.k, dy = (p[1] - drag.last[1]) / cur.k; drag.last = p;
+  move(drag.what, dx, dy); render();
+});
+const endDrag = () => { drag = null; stage.classList.remove("dragging"); };
+stage.addEventListener("pointerup", endDrag); stage.addEventListener("pointercancel", endDrag);
+window.addEventListener("keydown", e => {
+  if (document.activeElement && ["INPUT","TEXTAREA"].includes(document.activeElement.tagName)) return;
+  const step = e.shiftKey ? 5 : 1; let dx = 0, dy = 0;
+  if (e.key === "ArrowLeft") dx = -step; else if (e.key === "ArrowRight") dx = step; else if (e.key === "ArrowUp") dy = -step; else if (e.key === "ArrowDown") dy = step; else return;
+  move(selected, dx, dy); e.preventDefault(); render();
+});
+$("reset").onclick = () => { S = chosenState(); render(); };
+async function copyText(btn, text, label) { try { await navigator.clipboard.writeText(text); btn.textContent = "Copied"; setTimeout(() => btn.textContent = label, 1200); } catch (_) {} }
+$("copy").onclick = () => copyText($("copy"), $("out").value, "Copy parameters");
+$("copyxml").onclick = () => copyText($("copyxml"), $("xml").value, "Copy XML");
+// Restore the state from a pasted parameter block: the full readout (claw / phone / frame), or just its centred
+// block. Only the keys present are applied, so a partial block adjusts rather than resets.
+const num = v => (typeof v === "number" && isFinite(v)) ? v : undefined;
+function applyParams(o) {
+  const c = o.claw || {}, p = o.phone || {}, f = o.frame || {}, g = o.centred || (o.ang !== undefined ? o : {});
+  const set = (k, ...vals) => { for (const v of vals) { const n = num(v); if (n !== undefined) { S[k] = n; return; } } };
+  const flag = (k, ...vals) => { for (const v of vals) if (typeof v === "boolean") { S[k] = v; return; } };
+  set("cs", c.scale, g.cs); set("ang", c.rotation, g.ang); set("jl", c.jaw_length, g.jaw_length);
+  set("gi", c.girth, g.girth); set("op", c.jaw_open, g.jaw_open);
+  set("tilt", p.rotation, g.tilt); set("px", p.centre_x, g.px); set("py", p.centre_y, g.py);
+  set("pad", f.pad, g.pad); set("gap", f.gap, g.gap); set("fz", f.zoom);
+  if (Array.isArray(f.shift)) { set("fdx", f.shift[0]); set("fdy", f.shift[1]); }
+  flag("teeth", c.teeth, g.teeth_on); flag("lo", c.lower_teeth, g.lower_teeth); flag("slit", p.slit); flag("auto", f.phone_centred);
+  flag("jt", c.joint_line); set("jw", c.joint_width);
+  const c2 = o.claw2 || {}; flag("c2", c2.enabled); set("c2s", c2.scale); set("c2a", c2.rotation); set("w2x", c2.wrist_x); set("w2y", c2.wrist_y);
+  const st = o.style || {};
+  const style = (k, v) => { if (typeof v === "boolean") S[k] = v ? "inverted" : "solid"; else if (["solid","inverted","double"].includes(v)) S[k] = v; };
+  style("sc", st.claw); style("sp", st.phone); set("ow", st.line_width);
+  if (!S.auto && Array.isArray(f.centre)) { set("fcx", f.centre[0]); set("fcy", f.centre[1]); }
+  if (num(c.wrist_x) !== undefined && num(c.wrist_y) !== undefined) { S.wx = c.wrist_x; S.wy = c.wrist_y; }
+  else if (num(g.G) !== undefined && num(g.up) !== undefined) {   // the centred block: wrist placed from G and up
+    const down = PH/2 - PH*g.up, rt = -S.tilt*Math.PI/180, ra = S.ang*Math.PI/180;
+    const gx = S.px + down*Math.sin(rt), gy = S.py + down*Math.cos(rt);
+    S.wx = gx - g.G*S.cs*Math.cos(ra); S.wy = gy - g.G*S.cs*Math.sin(ra);
+  }
+}
+$("load").onclick = () => {
+  let o; try { o = JSON.parse($("out").value); } catch (_) { flash($("load"), "Not valid JSON"); return; }
+  applyParams(o); render(); flash($("load"), "Loaded");
+};
+function flash(btn, text) { const was = btn.dataset.label; btn.textContent = text; setTimeout(() => btn.textContent = was, 1200); }
+render();
+</script>
+</body>
+</html>
