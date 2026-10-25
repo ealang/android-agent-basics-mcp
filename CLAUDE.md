@@ -32,28 +32,17 @@ An integration that needs a permission gets a manifest line and
 grant-guiding UI, not a tool.
 If a proposed tool names a third-party app, the answer is a skill file.
 
-## Result strings assume a small model
-
-The first-class tools may be read by a weak caller — a local or cheap
-model reading tool descriptions and result strings without much
-capacity to interpret them. So those strings stay simple:
+## Responses: only what the caller can act on
 
 **Don't surface a distinction the caller cannot act on.** If two outcomes lead
-to the same next step, they are one outcome. Real diagnostic detail that matters
-to a human maintainer goes to logcat, not into the response.
+to the same next step, they are one outcome. Diagnostic detail that matters to
+a maintainer goes to logcat, not into the response.
 
-**Don't report an ordinary state as an error.** `isError = true` means the user
-has to do something. Reserve errors for genuine faults, and name the exact fix
-in the message (which app is missing, which permission to grant, in which
-Settings screen).
-
-**Keep descriptions to what changes a decision.** No durations, no side effects
-the caller cannot use, no explanation of mechanism. State what the tool does and
-what it cannot do.
-
-The generic tools are exempt from none of the *clarity* here, but their
-results may expose mechanics freely — their caller is assumed capable,
-and `inspect` output is mechanics by definition.
+**Don't report an ordinary state as an error.** `isError` is the MCP result
+flag for a failed tool call. Set it only when the user has to do something,
+and name the exact fix in the message (which app is missing, which permission
+to grant, in which Settings screen). The shipped tool list is the guide: match
+its tone and level of detail.
 
 ## Validation: what a first-class tool owes the caller
 
@@ -64,12 +53,14 @@ told and report what Android said.
 A tool either does the job or says why it could not. It never hands back a
 maybe, and it never asks the caller to go and check.
 
-**The caller never verifies.** Whatever checking is worth doing, the tool does
-before it answers. "It may or may not have worked, call the status tool" is the
-one shape that is banned outright: it doubles the work for a model that is
-already the weakest part of the system, and in practice it just reports success
-anyway. If a tool did not fail, the agent is entitled to tell the user it is
-done.
+**The caller is not expected to verify by default.** Whatever checking is
+worth doing, the tool does before it answers. "It may or may not have worked,
+call the status tool" is not an acceptable response: it encourages unnecessary
+validation, doubling the work for the caller and adding noise to the
+conversation with the end user. The default tool usage is fire-and-forget, and
+in most cases a failure is obvious to the end user. In exceptional cases, where
+failure is unacceptable and verification is possible, a caller may choose to
+verify afterwards.
 
 **Preflight everything, always.** Android answers the questions that matter
 instantly and for free — is the app installed (`getPackageInfo`, with the
@@ -112,7 +103,8 @@ interpolated from the system — not because a secret is expected, but so that n
 one ever has to check. Diagnostic detail goes to logcat, where it belongs.
 
 **Prefixes: `FAILED:` on errors, plain prose on success.** `isError` already
-carries the distinction; the prefix is there because a weak model skims. There
+carries the distinction; the prefix keeps the text self-describing in a client
+that does not show the flag. There
 is no CONFIRMED and no UNCERTAIN — "we did it" and "we did it and watched it
 happen" are the same thing to the caller, and a tool that is unsure should be
 fixed rather than labelled.
