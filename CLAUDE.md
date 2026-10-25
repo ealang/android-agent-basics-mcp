@@ -104,10 +104,9 @@ one ever has to check. Diagnostic detail goes to logcat, where it belongs.
 
 **Prefixes: `FAILED:` on errors, plain prose on success.** `isError` already
 carries the distinction; the prefix keeps the text self-describing in a client
-that does not show the flag. There
-is no CONFIRMED and no UNCERTAIN — "we did it" and "we did it and watched it
-happen" are the same thing to the caller, and a tool that is unsure should be
-fixed rather than labelled.
+that does not show the flag. There is no CONFIRMED and no UNCERTAIN — "we did
+it" and "we did it and watched it happen" are the same thing to the caller, and
+a tool that is unsure should be fixed rather than labelled.
 
 **Status tools answer the user's questions, not the tools'.** A "what's
 playing" tool exists because that is a thing people ask. No status tool exists
