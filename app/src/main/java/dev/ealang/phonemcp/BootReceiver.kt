@@ -19,6 +19,8 @@ class BootReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         Log.i("PhoneMcpBoot", "Received ${intent.action}")
+        Logs.init(context.filesDir)
+        Logs.mcp.info("broadcast", intent.action)
 
         if (Config(context).enabled) {
             McpService.start(context)

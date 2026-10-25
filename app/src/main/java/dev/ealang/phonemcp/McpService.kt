@@ -190,6 +190,12 @@ class McpService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // A null intent is Android redelivering a START_STICKY start on its
+        // own; anything else came from the app (activity or boot receiver).
+        Logs.mcp.info(
+            "service start",
+            if (intent == null) "sticky restart by Android" else "requested by the app",
+        )
         if (intent?.action == ACTION_STOP) {
             Config(this).enabled = false
             Logs.mcp.info("stopped by user")
