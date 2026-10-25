@@ -20,7 +20,7 @@ object GenericTools {
             featureKey = "media_control",
             definition = JSONObject()
                 .put("name", "media_apps")
-                .put("description", "EXPERIMENTAL: list installed apps declaring a MediaBrowserService.")
+                .put("description", "list installed apps declaring a MediaBrowserService.")
                 .put("inputSchema", JSONObject().put("type", "object").put("properties", JSONObject())),
         ) { _ ->
             val apps = MediaExplorer.mediaApps(context)
@@ -33,7 +33,7 @@ object GenericTools {
             featureKey = "media_control",
             definition = JSONObject()
                 .put("name", "media_browse")
-                .put("description", "EXPERIMENTAL: list one node of a media app's browse tree (root if no node given).")
+                .put("description", "list one node of a media app's browse tree (root if no node given).")
                 .put(
                     "inputSchema",
                     JSONObject().put("type", "object").put(
@@ -60,7 +60,7 @@ object GenericTools {
             featureKey = "media_control",
             definition = JSONObject()
                 .put("name", "media_play")
-                .put("description", "EXPERIMENTAL: start playback in a media app — a specific item by media_id, the app's own match for a search query, or bare resume. Connects over the browser route, so it works even when the app is fully closed; for an app that refuses that route, use media_command with route session on its live session instead. Reads back the session state after a beat. Audible on the phone.")
+                .put("description", "start playback in a media app — a specific item by media_id, the app's own match for a search query, or bare resume. Connects over the browser route, so it works even when the app is fully closed; for an app that refuses that route, use media_command with route session on its live session instead. Reads back the session state after a beat. Audible on the phone.")
                 .put(
                     "inputSchema",
                     JSONObject().put("type", "object").put(
@@ -90,7 +90,7 @@ object GenericTools {
             featureKey = "media_control",
             definition = JSONObject()
                 .put("name", "media_command")
-                .put("description", "EXPERIMENTAL: send a media app a transport command through its session — the action grammar (see the action parameter) maps directly onto Android's TransportControls, plus queue listing and edits. An action the session does not advertise is silently ignored, not errored. Reads back the session state, position, and advertised actions after a beat.")
+                .put("description", "send a media app a transport command through its session — the action grammar (see the action parameter) maps directly onto Android's TransportControls, plus queue listing and edits. An action the session does not advertise is silently ignored, not errored. Reads back the session state, position, and advertised actions after a beat.")
                 .put(
                     "inputSchema",
                     JSONObject().put("type", "object").put(
@@ -98,7 +98,7 @@ object GenericTools {
                         JSONObject()
                             .put("app", JSONObject().put("type", "string").put("description", "App name or package, fuzzy matched."))
                             .put("action", JSONObject().put("type", "string").put("description", "next, previous, pause, play, stop, queue (list it), queue:<id> (jump to an entry), seek:<seconds> (absolute, or +N/-N relative), speed:<multiplier>, rate:up/down/clear/<number>, uri:<uri>, search:<query>, media:<id>, queue_add:<id>, queue_add:<pos>:<id>, queue_remove:<id>, or a custom action id verbatim (case-sensitive, listed in read-backs)."))
-                            .put("route", JSONObject().put("type", "string").put("description", "browser (default) connects the app's MediaBrowserService — wakes the app even from fully closed, but some apps refuse the connection. session drives the app's live media session instead — reaches apps whose browser service refuses, but only while they are playing or paused, and cannot cold-start anything; needs notification access. Queue edits are browser-only.")),
+                            .put("route", JSONObject().put("type", "string").put("enum", JSONArray().put("browser").put("session")).put("description", "browser (default) connects the app's MediaBrowserService — wakes the app even from fully closed, but some apps refuse the connection. session drives the app's live media session instead — reaches apps whose browser service refuses, but only while they are playing or paused, and cannot cold-start anything; needs notification access. Queue edits are browser-only.")),
                     ).put("required", JSONArray().put("app").put("action")),
                 ),
         ) { args ->
@@ -128,7 +128,7 @@ object GenericTools {
             featureKey = "media_control",
             definition = JSONObject()
                 .put("name", "media_sessions")
-                .put("description", "EXPERIMENTAL: list the phone's active media sessions — every app currently playing or paused-but-alive, whatever it is, with state, title, position, and advertised actions. Sees apps media_browse cannot connect to. Needs notification access.")
+                .put("description", "list the phone's active media sessions — every app currently playing or paused-but-alive, whatever it is, with state, title, position, and advertised actions. Sees apps media_browse cannot connect to. Needs notification access.")
                 .put("inputSchema", JSONObject().put("type", "object").put("properties", JSONObject())),
         ) { _ ->
             val text = SessionExplorer.list(context)
@@ -140,12 +140,12 @@ object GenericTools {
             featureKey = "media_control",
             definition = JSONObject()
                 .put("name", "media_key")
-                .put("description", "EXPERIMENTAL: press a system media button — the mechanism a car or headset uses. Takes no target: Android routes the press to the most recent media app, which may restart that app even when it is fully closed. Keys: play, pause, play_pause, next, previous, stop, fast_forward, rewind. Not all apps respect the press — use the app-specific skill file when one exists. Reads back the active sessions after a beat. Audible on the phone.")
+                .put("description", "press a system media button — the mechanism a car or headset uses. Takes no target: Android routes the press to the most recent media app, which may restart that app even when it is fully closed. Keys: play, pause, play_pause, next, previous, stop, fast_forward, rewind. Not all apps respect the press — use the app-specific skill file when one exists. Reads back the active sessions after a beat. Audible on the phone.")
                 .put(
                     "inputSchema",
                     JSONObject().put("type", "object").put(
                         "properties",
-                        JSONObject().put("key", JSONObject().put("type", "string").put("description", "play, pause, play_pause, next, previous, stop, fast_forward, or rewind.")),
+                        JSONObject().put("key", JSONObject().put("type", "string").put("enum", JSONArray().put("play").put("pause").put("play_pause").put("next").put("previous").put("stop").put("fast_forward").put("rewind"))),
                     ).put("required", JSONArray().put("key")),
                 ),
         ) { args ->
@@ -158,7 +158,7 @@ object GenericTools {
             featureKey = "media_control",
             definition = JSONObject()
                 .put("name", "media_search")
-                .put("description", "EXPERIMENTAL: search a media app's catalog and list the results without playing anything. Optional per app — some never implemented it.")
+                .put("description", "search a media app's catalog and list the results without playing anything. Optional per app — some never implemented it.")
                 .put(
                     "inputSchema",
                     JSONObject().put("type", "object").put(
@@ -174,6 +174,17 @@ object GenericTools {
             else MediaExplorer.search(context, app, args.optString("query")) to false
         }
 
+        val extrasProperty = JSONObject().put("type", "array").put(
+            "items",
+            JSONObject().put("type", "object").put(
+                "properties",
+                JSONObject()
+                    .put("key", JSONObject().put("type", "string"))
+                    .put("type", JSONObject().put("type", "string").put("enum", JSONArray().put("string").put("int").put("long").put("boolean").put("float").put("double").put("uri").put("string_array").put("int_array").put("long_array").put("int_arraylist").put("string_arraylist").put("key_event")).put("description", "Defaults to string. The _arraylist types send an ArrayList, which some extras require. For key_event the value is a key name, KEYCODE_MEDIA_PLAY or just play, prefixed up: for a key-up event."))
+                    .put("value", JSONObject().put("description", "The value, matching the type.")),
+            ).put("required", JSONArray().put("key").put("value")),
+        ).put("description", "Typed extras. The type must match what the receiving app reads.")
+
         val intentSpecProperties = JSONObject()
             .put("action", JSONObject().put("type", "string").put("description", "Intent action, e.g. android.intent.action.VIEW."))
             .put("data", JSONObject().put("type", "string").put("description", "Data URI, e.g. https://... or geo:..."))
@@ -181,26 +192,14 @@ object GenericTools {
             .put("categories", JSONObject().put("type", "array").put("items", JSONObject().put("type", "string")).put("description", "Intent categories."))
             .put("package", JSONObject().put("type", "string").put("description", "Limit to this package without naming a component."))
             .put("component", JSONObject().put("type", "string").put("description", "Explicit target, \"package/ClassName\" (leading-dot class ok)."))
-            .put(
-                "extras",
-                JSONObject().put("type", "array").put(
-                    "items",
-                    JSONObject().put("type", "object").put(
-                        "properties",
-                        JSONObject()
-                            .put("key", JSONObject().put("type", "string"))
-                            .put("type", JSONObject().put("type", "string").put("description", "string, int, long, boolean, float, double, uri, string_array, int_array, long_array, int_arraylist, string_arraylist, or key_event. The _arraylist types send an ArrayList rather than an array; some platform extras specify ArrayList and reading one as an array yields null. key_event builds a KeyEvent parcelable (the payload a MEDIA_BUTTON intent needs): value is a key name — play, pause, play_pause, next, previous, stop, fast_forward, rewind, or any android KEYCODE_* name — with an optional \"up:\" prefix for ACTION_UP (default is ACTION_DOWN)."))
-                            .put("value", JSONObject().put("description", "The value, matching the type.")),
-                    ).put("required", JSONArray().put("key").put("value")),
-                ).put("description", "Typed extras. The type must match what the receiving app reads."),
-            )
+            .put("extras", extrasProperty)
 
         val inspect = ToolSpec(
             name = "inspect",
             featureKey = "intents",
             definition = JSONObject()
                 .put("name", "inspect")
-                .put("description", "EXPERIMENTAL: inspect an installed app's automation surface — its exported activities, receivers, services, and content providers, with intent filters and guarding permissions. With no package, lists every installed app by label and package name.")
+                .put("description", "inspect an installed app's automation surface — its exported activities, receivers, services, and content providers, with intent filters and guarding permissions. With no package, lists every installed app by label and package name.")
                 .put(
                     "inputSchema",
                     JSONObject().put("type", "object").put(
@@ -219,7 +218,7 @@ object GenericTools {
             featureKey = "intents",
             definition = JSONObject()
                 .put("name", "intent_resolve")
-                .put("description", "EXPERIMENTAL: dry run — list which activities, receivers, and services would handle an intent, without sending it.")
+                .put("description", "dry run — list which activities, receivers, and services would handle an intent, without sending it.")
                 .put(
                     "inputSchema",
                     JSONObject().put("type", "object").put("properties", intentSpecProperties),
@@ -234,13 +233,13 @@ object GenericTools {
             featureKey = "intents",
             definition = JSONObject()
                 .put("name", "send_intent")
-                .put("description", "EXPERIMENTAL: build and fire an Android intent — start an activity (opens on screen), send a broadcast, or start a service. Resolution is checked first; an intent nothing handles is not sent.")
+                .put("description", "build and fire an Android intent — start an activity (opens on screen), send a broadcast, or start a service. Resolution is checked first; an intent nothing handles is not sent.")
                 .put(
                     "inputSchema",
                     JSONObject().put("type", "object").put(
                         "properties",
                         JSONObject(intentSpecProperties.toString())
-                            .put("mode", JSONObject().put("type", "string").put("description", "activity (default), broadcast, service, or foreground_service."))
+                            .put("mode", JSONObject().put("type", "string").put("enum", JSONArray().put("activity").put("broadcast").put("service").put("foreground_service")).put("description", "Defaults to activity."))
                             .put("via_unlock_gate", JSONObject().put("type", "boolean").put("description", "Activity mode only, default false. Fallback for intents that require the phone to be unlocked: if the phone is locked, wake it with the unlock prompt and start the activity when the user unlocks (expires after two minutes). Without it, a locked phone may silently discard the launch while reporting success.")),
                     ),
                 ),
@@ -254,7 +253,7 @@ object GenericTools {
             featureKey = "content_providers",
             definition = JSONObject()
                 .put("name", "provider_query")
-                .put("description", "EXPERIMENTAL: read another app's state through its ContentProvider — run a query against a content:// uri and get rows back as text. inspect <package> lists an app's providers and their authorities.")
+                .put("description", "read another app's state through its ContentProvider — run a query against a content:// uri and get rows back as text. inspect <package> lists an app's providers and their authorities.")
                 .put(
                     "inputSchema",
                     JSONObject().put("type", "object").put(
@@ -278,7 +277,7 @@ object GenericTools {
             featureKey = "content_providers",
             definition = JSONObject()
                 .put("name", "provider_call")
-                .put("description", "EXPERIMENTAL: invoke a method on another app's ContentProvider (ContentResolver.call) — the RPC half of the provider interface, one round trip in and out. Returns the result Bundle as text; a null Bundle is a normal answer, not a failure.")
+                .put("description", "invoke a method on another app's ContentProvider (ContentResolver.call) — the RPC half of the provider interface, one round trip in and out. Returns the result Bundle as text; a null Bundle is a normal answer, not a failure.")
                 .put(
                     "inputSchema",
                     JSONObject().put("type", "object").put(
@@ -287,7 +286,7 @@ object GenericTools {
                             .put("authority", JSONObject().put("type", "string").put("description", "The provider's authority, bare, no path — e.g. com.example.app.provider. Find it with inspect."))
                             .put("method", JSONObject().put("type", "string").put("description", "Method name the provider dispatches on."))
                             .put("arg", JSONObject().put("type", "string").put("description", "Optional string argument."))
-                            .put("extras", JSONObject().put("type", "array").put("items", JSONObject().put("type", "object")).put("description", "Optional typed extras, same format as send_intent: [{key, type, value}] with type one of string, int, long, boolean, float, double, uri, string_array, int_array, long_array, int_arraylist, string_arraylist.")),
+                            .put("extras", JSONObject(extrasProperty.toString()).put("description", "Typed extras for the call, as for send_intent.")),
                     ).put("required", JSONArray().put("authority").put("method")),
                 ),
         ) { args ->
@@ -309,7 +308,7 @@ object GenericTools {
                             .put("key", JSONObject().put("type", "string").put("description", "Identifies this notification. Reuse it to update or dismiss later."))
                             .put("title", JSONObject().put("type", "string"))
                             .put("text", JSONObject().put("type", "string"))
-                            .put("level", JSONObject().put("type", "string").put("description", "info (default) appears silently; alert makes a sound. Neither pops up over the screen.")),
+                            .put("level", JSONObject().put("type", "string").put("enum", JSONArray().put("info").put("alert")).put("description", "info (default) appears silently; alert makes a sound. Neither pops up over the screen.")),
                     ).put("required", JSONArray().put("key").put("title").put("text")),
                 ),
         ) { args ->

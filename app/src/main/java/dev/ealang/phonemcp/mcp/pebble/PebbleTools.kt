@@ -32,7 +32,7 @@ object PebbleTools {
                 "properties",
                 JSONObject()
                     .put("key", JSONObject().put("type", "integer"))
-                    .put("type", JSONObject().put("type", "string").put("description", "int, uint, string, or bytes."))
+                    .put("type", JSONObject().put("type", "string").put("enum", JSONArray().put("int").put("uint").put("string").put("bytes")))
                     .put("length", JSONObject().put("type", "integer").put("description", "Required by the wire format. Byte width 1, 2, or 4 for int/uint; string length for string; byte count for bytes."))
                     .put("value", JSONObject().put("description", "Number for int/uint, text for string, base64 for bytes.")),
             ).put("required", JSONArray().put("key").put("type").put("length").put("value")),

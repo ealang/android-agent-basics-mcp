@@ -312,25 +312,10 @@ class McpServer(
         .put("error", JSONObject().put("code", code).put("message", message))
 }
 
-private const val INSTRUCTIONS = """Tools that run on the user's Android phone.
+private const val INSTRUCTIONS = """Tools that run on the user's Android phone, acting on the device they are carrying.
 
-These act on the physical device the user is carrying, so effects are real and
-immediate: a timer set here rings on that phone, in their own clock app. Prefer
-them over anything that merely records an intention when the user asks for
-something to happen at a specific time.
-
-Both timer tools take either a duration in seconds or a clock time in `at`. Pass
-the clock time the user said and let the phone work out the interval; it knows
-what time it is and you do not.
-
-Every tool checks what it needs before it acts, and either does the job or
-answers FAILED with the reason. There is no separate confirmation step: if a
-tool did not say FAILED, tell the user it is done. When it does say FAILED, pass
-on the reason — it names what the user has to fix.
-
-The phone's timers cannot be listed. If the user asks what is running, say so
-and suggest they look at the clock app.
-
-The watch tools reach a Pebble paired to that phone, by way of its companion
-app. Launching a watchapp cannot parameterise it — it opens in its default
-state, and the user drives it from there."""
+The tools are generic Android mechanisms (intents, content providers, media
+sessions, Pebble AppMessages), not commands for particular apps. How to drive a
+specific app through them is skill-file knowledge: check the skill files the user
+has provided before experimenting, and if they have none, suggest they add some.
+The phone-mcp repository ships a set under skills/."""
