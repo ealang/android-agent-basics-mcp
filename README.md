@@ -58,23 +58,8 @@ is recommended.
 3. **Grant permissions** as the app asks. Each tool family states what it
    needs on its own row; a family you leave off asks for nothing.
 4. **Share the MCP link with the agent**: **Copy MCP URL** gives the URL,
-   and the token is shown beside it. Most MCP clients take the standard
-   configuration block:
-
-   ```json
-   {
-     "mcpServers": {
-       "phone": {
-         "type": "http",
-         "url": "http://<phone-tailscale-ip>:8910/mcp",
-         "headers": { "Authorization": "Bearer <token>" }
-       }
-     }
-   }
-   ```
-
-   Confirm it works by asking the agent what tools the phone offers, or
-   with a direct call:
+   and the token is shown beside it. Confirm it works by asking the agent
+   what tools the phone offers, or with a direct call:
 
    ```bash
    curl -X POST http://<phone-tailscale-ip>:8910/mcp \
@@ -85,12 +70,6 @@ is recommended.
 5. **Curate skill files** for the apps you actually use. Start from
    [skills/](skills/) and give the agent the files for the apps on your
    phone; what it learns about a new app belongs in a new file there.
-
-The server runs as a foreground service, so it keeps a persistent
-notification; **Hide status notification** silences it. It restarts after a
-reboot or an update if it was on, unless the phone's battery manager
-prevents that, in which case **Battery settings** opens the exemption
-screen. **View server log** shows what the server has been doing.
 
 ## Building
 
