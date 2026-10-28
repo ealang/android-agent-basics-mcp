@@ -1,3 +1,9 @@
+---
+name: android-youtube-music
+description: YouTube Music app. Resume playback from a dead process with the screen locked, play any song or playlist by its music.youtube.com URL, pause, play, skip. Content is chosen by URL only, found out of band.
+verified: 2026-10-19
+---
+
 # YouTube Music
 
 - **Package**: `com.google.android.apps.youtube.music`
@@ -142,4 +148,4 @@ re-probe:
   by package with the standard `focus`/`artist`/`album` extras it
   shows the search results and waits for a tap.
 - The browser route can never help: `onGetRoot` refuses non-allowlisted
-  signatures (see [unavailable.md](unavailable.md)).
+  signatures.

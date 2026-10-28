@@ -1,3 +1,9 @@
+---
+name: android-youtube
+description: YouTube app. Start any video by URL on screen, then pause, play, seek and switch videos by URL while the app stays in the foreground. No catalogue, queue or account content is visible.
+verified: 2026-09-06
+---
+
 # YouTube
 
 - **Package**: `com.google.android.youtube`

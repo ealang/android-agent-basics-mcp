@@ -1,3 +1,9 @@
+---
+name: android-sleep-as-android
+description: Sleep as Android alarm clock. Create an alarm, and nothing else. The alarm table is closed, so an existing alarm cannot be read, retimed, enabled or deleted, and every create adds a new one.
+verified: 2026-10-04
+---
+
 # Sleep as Android (com.urbandroid.sleep)
 
 When this app is the user's alarm clock, "move my wake time" means this

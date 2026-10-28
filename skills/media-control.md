@@ -1,3 +1,8 @@
+---
+name: android-media-control
+description: How to drive any media app through the media browser route, the live-session route, and the targeted media-button intent that revives an app neither route can reach. Read before using the media tools on an app without its own skill file.
+---
+
 # Media control — driving apps through their media sessions
 
 Two mechanisms, one grammar — plus a third, built from `send_intent`,

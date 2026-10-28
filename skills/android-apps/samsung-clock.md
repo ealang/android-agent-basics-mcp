@@ -1,3 +1,9 @@
+---
+name: android-samsung-clock
+description: Samsung Clock, the stock clock on Samsung phones. Set a timer or alarm and open the timer or alarm list. Dismiss and snooze are accepted and ignored; the stopwatch is unreachable.
+verified: 2026-10-01
+---
+
 # Samsung Clock (com.sec.android.app.clockpackage)
 
 Verified on device 2026-09-06.

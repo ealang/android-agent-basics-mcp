@@ -1,3 +1,9 @@
+---
+name: android-google-maps
+description: Google Maps. Start turn-by-turn navigation to any destination hands-free, including on a locked phone; multi-stop previews, search along route and destination entry open one tap from done. Navigation cannot be ended.
+verified: 2026-10-01
+---
+
 # Google Maps
 
 - **Package**: `com.google.android.apps.maps`

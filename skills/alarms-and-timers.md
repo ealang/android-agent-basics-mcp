@@ -1,25 +1,50 @@
+---
+name: android-alarms-and-timers
+description: Set a timer or alarm on whatever clock app the phone uses, through the standard AlarmClock intents. The calls, what every Android phone guarantees, and how to find the handling app's own skill file.
+---
+
 # Timers and alarms — the AlarmClock intents
 
-A generic Android skill, not tied to any app: the clock interface is a
-family of public intent actions (`android.provider.AlarmClock`), and
-each one is handled by whatever app the system resolves it to — the
-default clock app, or whichever app the user has chosen for that role.
-Timers and alarms can even land in different apps (observed on the test
-device: timers in Samsung Clock, alarms in Sleep as Android). Whether
-an action is honoured is therefore up to the receiving app, and the
-caveats below record what was actually observed.
+Timers and alarms are set through the public `android.provider.AlarmClock`
+intent actions, which the system hands to whichever app is registered for
+them: usually the stock clock, sometimes a third-party alarm app, and
+timers and alarms can land in different apps. The timer then lives where
+the user already looks for timers, rings with their own sound, and keeps
+running if phone-mcp dies.
 
-Everything here goes through `send_intent` with `mode: "activity"` —
-these are activity intents, so the overlay grant ("Display over other
-apps") must be held for a background send; the tool preflights that and
-names it on failure.
+This file is the starting point for a clock app with no file of its own
+in `android-apps/`. Where the handling app has one, use that file: its
+calls are complete and it says what the app actually does with each
+action.
 
-Delegating to the clock app is the point, not a workaround: the timer
-lands where the user already looks for timers, rings with their own
-alarm sound, can be edited or snoozed by hand, and keeps running if
-phone-mcp dies.
+## What every phone guarantees, and what it does not
 
-## Set a timer — works
+Android's compatibility definition requires every certified device to
+ship a handler for the AlarmClock actions: SET_ALARM, SET_TIMER,
+SHOW_ALARMS, SHOW_TIMERS, DISMISS_ALARM, DISMISS_TIMER and SNOOZE_ALARM
+all **resolve** on any Play-certified phone. Send them directly; there is
+no need to `intent_resolve` first, and a send that fails to resolve
+means an uncertified device.
+
+Resolving is not acting. The requirement is that a handler exists, not
+that it does anything, and clock apps differ:
+
+- **SET_TIMER and SET_ALARM are honoured.** Creating is the purpose of
+  the contract and what voice assistants drive; a clock that ignored it
+  would be visibly broken.
+- **SHOW_ALARMS and SHOW_TIMERS** open the list on screen. Harmless.
+- **DISMISS_ALARM, DISMISS_TIMER and SNOOZE_ALARM are per app.** Some
+  clocks accept them and do nothing. Treat them as unavailable unless the
+  handling app's file says otherwise: a timer or alarm, once set, is the
+  user's to stop.
+
+## The calls
+
+All through `send_intent` with `mode: "activity"`. These are activity
+intents, so a send from the background needs the overlay grant ("Display
+over other apps"); the tool preflights that and names it on failure.
+
+Set a timer:
 
 ```json
 {
@@ -27,23 +52,13 @@ phone-mcp dies.
   "mode": "activity",
   "extras": [
     {"key": "android.intent.extra.alarm.LENGTH", "type": "int", "value": 300},
-    {"key": "android.intent.extra.alarm.MESSAGE", "type": "string", "value": "tea"},
+    {"key": "android.intent.extra.alarm.MESSAGE", "type": "string", "value": "<label>"},
     {"key": "android.intent.extra.alarm.SKIP_UI", "type": "boolean", "value": true}
   ]
 }
 ```
 
-Verified on the device (2026-10-01): the timer appears and counts down.
-
-- `LENGTH` is seconds, typed `int`. Clock apps accept 1–86400 (24 h)
-  and reject outside that; validate before sending.
-- Always set a `MESSAGE` label so the user can tell agent-set timers
-  apart; there is no read API to check later.
-- `SKIP_UI: true` is a request, not a guarantee: the stock clock starts
-  the timer without coming to the front; a third-party clock may show
-  its UI anyway.
-
-## Set an alarm — works
+Set an alarm:
 
 ```json
 {
@@ -52,52 +67,35 @@ Verified on the device (2026-10-01): the timer appears and counts down.
   "extras": [
     {"key": "android.intent.extra.alarm.HOUR", "type": "int", "value": 7},
     {"key": "android.intent.extra.alarm.MINUTES", "type": "int", "value": 30},
-    {"key": "android.intent.extra.alarm.MESSAGE", "type": "string", "value": "flight"},
+    {"key": "android.intent.extra.alarm.MESSAGE", "type": "string", "value": "<label>"},
     {"key": "android.intent.extra.alarm.SKIP_UI", "type": "boolean", "value": true}
   ]
 }
 ```
 
-Verified on the device (2026-10-01): the alarm appears, armed.
-`HOUR`/`MINUTES` are typed `int`. For a repeating alarm add `DAYS` as
-an `int_arraylist` of `java.util.Calendar` day constants (Sunday = 1,
-Saturday = 7) — the platform specifies `EXTRA_DAYS` as
-`ArrayList<Integer>`, and with any other type the alarm comes out
-one-time. `android.intent.action.SHOW_ALARMS` opens the alarm list on
-screen.
+- `LENGTH` is seconds, typed `int`, 1 to 86400. Validate before sending.
+- `HOUR` and `MINUTES` are typed `int`. For a repeating alarm add
+  `android.intent.extra.alarm.DAYS` as an `int_arraylist` of
+  `java.util.Calendar` day constants (Sunday = 1, Saturday = 7); with any
+  other type the alarm comes out one-time.
+- Always set a `MESSAGE`, so the user can tell agent-set timers apart.
+- `SKIP_UI: true` is a request, not a guarantee: most clocks set the
+  timer without coming to the front, some show their UI anyway.
+- **SET_ALARM only ever creates.** The contract has no way to address an
+  existing alarm, so sending a new time makes a second alarm rather than
+  moving the first.
+- Add `"package": "<clock app>"` to target a specific app instead of the
+  system default, when the user has more than one.
 
-**SET_ALARM creates; it never edits.** A clock app reuses an existing
-alarm only when *every* parameter matches, so sending a new time makes
-a second alarm rather than moving the first. With no dismiss and no
-delete, each send leaves a live alarm the user has to remove by hand.
-See `apps/sleep-as-android.md`.
+## Which app will handle it
 
-## Dismissing — does not work; do not rely on it
+`intent_resolve` with the same action returns the handling package. Look
+for its file in `android-apps/`; if there is none, the facts above are
+all that can be assumed.
 
-`android.intent.action.DISMISS_TIMER` and
-`android.intent.action.DISMISS_ALARM` (with
-`android.intent.extra.alarm.SEARCH_MODE` = `"android.label"` +
-`MESSAGE`, `"android.next"`, or no extras at all against a ringing
-alarm) all resolve and are accepted — "Started activity" — and then
-nothing happens: the timer keeps counting, the alarm stays armed, a
-ringing alarm keeps ringing. Verified on the device (2026-10-01),
-repeatedly, against both receiving apps. `SNOOZE_ALARM` is the same
-grammar and there is no reason to expect better.
+## No read-back
 
-This is the receiving app's choice, so another clock app may honour
-these — but since the handler is whatever the system default is, treat
-dismiss as unavailable: a timer or alarm, once set, is the user's to
-stop.
-
-## No read-back of any kind
-
-- **No read API.** Nothing can enumerate timers or alarms, so there is
-  no list and no way to confirm state. "Started activity" from
-  `send_intent` means the handling app took the intent; that is all
-  the platform offers.
-- **No duplicate protection follows from that.** Sending SET_TIMER or
-  SET_ALARM twice makes two. Never resend on doubt.
-
-A `package` can be added to any of these to target a specific clock app
-instead of the system default — see per-app files in `apps/` for apps
-with their own alarm surfaces.
+Nothing can enumerate timers or alarms, so there is no list and no way to
+confirm state. "Started activity" means the handling app took the
+intent; that is all the platform offers. Sending SET_TIMER or SET_ALARM
+twice makes two. Never resend on doubt.

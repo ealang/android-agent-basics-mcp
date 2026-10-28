@@ -1,3 +1,9 @@
+---
+name: android-librofm
+description: Libro.fm audiobook app. Play any owned audiobook from cold by ISBN or by title search, pause; ids are stable and may be stored.
+verified: 2026-09-04
+---
+
 # Libro.fm
 
 - **Package**: `fm.libro.librofm`

@@ -1,3 +1,9 @@
+---
+name: pebble-maps
+description: Pebble Maps watchapp, forked build. Show Google Maps search results on the watch, or start turn-by-turn navigation to a favourite, address, place or coordinate with an optional travel mode.
+verified: 2026-10-20
+---
+
 # Pebble Maps (Pebble watchapp)
 
 UUID `cce60bc9-e29f-4988-a83b-b4652291650d`. Google Maps search and

@@ -1,3 +1,8 @@
+---
+name: android-media-discovery
+description: Ways to find something playable in a media app, from the browse tree to session search to the vendor's web API, and what is usually not discoverable at all.
+---
+
 # Media discovery — every way to find something playable
 
 Ordered from most to least universal. Per-app files state which of these

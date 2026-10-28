@@ -1,3 +1,9 @@
+---
+name: android-aimp
+description: AIMP local music player. Browse the library and playlists and read the session; sustained playback is not possible, because audio stops the moment the connection closes.
+verified: 2026-09-03
+---
+
 # AIMP
 
 - **Package**: `com.aimp.player`

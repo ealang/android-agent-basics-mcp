@@ -16,8 +16,50 @@ only other tools are the phone's own capabilities: location, ringing
 itself, notifications.
 
 `skills/` ships a starter set, generic mechanisms and per-app findings
-alike; [skills/README.md](skills/README.md) explains how they are
-organised and how to write one.
+alike; the next section summarises what they cover.
+
+## What the skill files cover
+
+The generic mechanisms, one file each at the top of `skills/`:
+
+- **Media control** — play, pause, skip, seek and queue in any app with
+  a media session, including apps that refuse the standard route.
+- **Media discovery** — finding something playable: browse, search, the
+  queue, now playing, the vendor's web API.
+- **App launch** — when opening an app's screen is needed at all.
+- **Timers and alarms** — setting them on whatever clock app the phone
+  uses.
+- **Pebble watch control** — launching a watchapp and sending it a
+  message.
+
+The apps with a verified file, in `skills/android-apps/` and
+`skills/pebble-apps/`:
+
+| App | What works |
+|---|---|
+| [Pocket Casts](skills/android-apps/pocket-casts.md) | everything: play by name or id, queue, speed; works cold with the screen locked |
+| [Podcast Addict](skills/android-apps/podcast-addict.md) | browse, play by id or search, pause, jump |
+| [Simple Radio](skills/android-apps/simple-radio.md) | any station by name, favourites, pause |
+| [Libro.fm](skills/android-apps/librofm.md) | any owned book by ISBN or title, from cold; the cleanest interface |
+| [Substack](skills/android-apps/substack.md) | recent episodes and narrated posts, queue edits; no search, no older posts |
+| [AIMP](skills/android-apps/aimp.md) | browse only; playback stops when the connection closes |
+| [YouTube](skills/android-apps/youtube.md) | start any video by URL on screen; transport and URL switching while in the foreground |
+| [YouTube Music](skills/android-apps/youtube-music.md) | revive from dead with the screen locked; any song or playlist by URL |
+| [Smart AudioBook Player](skills/android-apps/smart-audiobook.md) | full remote from a dead process: play, jump, bookmark, sleep timer; any book by name |
+| [Audible](skills/android-apps/audible.md) | revive from dead, any book by name, true absolute seek |
+| [Google Maps](skills/android-apps/google-maps.md) | start navigation hands-free, even locked; multi-stop and search along route one tap away; cannot end navigation |
+| [Samsung Clock](skills/android-apps/samsung-clock.md) | set timer and alarm; dismiss and snooze ignored; stopwatch unreachable |
+| [Sleep as Android](skills/android-apps/sleep-as-android.md) | create an alarm only; existing alarms cannot be read or changed |
+| [Eleven Reader](skills/android-apps/eleven-reader.md) | nothing |
+| [Agent Timer](skills/pebble-apps/agent-timer.md) (Pebble) | start a timer on the watch in one call |
+| [Pebble Maps](skills/pebble-apps/pebble-maps.md) (Pebble) | search, or start navigation to a favourite, address or place |
+
+Give the agent only the files for the apps you use. The recommended way
+is a personal skill file, or a section of your own agent instructions,
+that links the files for your apps and adds your preferences: which
+podcast app is *the* podcast app, the usual navigation mode, what a bare
+"set a timer" should mean. [skills/AGENTS.md](skills/AGENTS.md) explains
+how the files are organised and how to write one for a new app.
 
 ## Tools
 
@@ -67,9 +109,9 @@ is recommended.
      -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
    ```
 
-5. **Curate skill files** for the apps you actually use. Start from
-   [skills/](skills/) and give the agent the files for the apps on your
-   phone; what it learns about a new app belongs in a new file there.
+5. **Curate skill files** for the apps you actually use, as described
+   above; what the agent learns about a new app belongs in a new file
+   under [skills/](skills/).
 
 ## Building
 

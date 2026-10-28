@@ -1,3 +1,9 @@
+---
+name: android-smart-audiobook
+description: Smart AudioBook Player. Play, pause, jump, change file, bookmark and set the sleep timer by firing its service actions from a dead process; play any book in the library by name.
+verified: 2026-09-26
+---
+
 # Smart AudioBook Player
 
 - **Package**: `ak.alizandro.smartaudiobookplayer`

@@ -1,3 +1,9 @@
+---
+name: pebble-agent-timer
+description: Agent Timer, a Pebble watchapp. Start a countdown timer on the watch in one call. Timers cannot be read, cancelled or changed from the phone.
+verified: 2026-10-20
+---
+
 # Agent Timer (Pebble watchapp)
 
 UUID `6ba47813-25c2-4c9e-b93a-f6f24372b4c3`. A fork of the stock Timer

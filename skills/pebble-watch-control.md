@@ -1,3 +1,8 @@
+---
+name: pebble-watch-control
+description: How to drive any Pebble watchapp. Launch, send an AppMessage, the launch-and-send handshake that beats the silent discard, what an ACK proves, and which watchapps cannot be reached.
+---
+
 # Driving a Pebble watchapp
 
 The surface is the `pebblekit_*` family — the classic PebbleKit intent
@@ -41,7 +46,7 @@ do, which only the caller knows.
 The ping matters: the watch acknowledges and hands over every message
 alike, so the ping must be one **the target app does nothing with**, and
 it is sent repeatedly, so a wrong one does something several times. Take
-it from the app's file in `apps/pebble/`. It is usually an empty message,
+it from the app's file in `pebble-apps/`. It is usually an empty message,
 `[]`, which is inert for any app whose handler only reacts to keys it
 knows. If no inert message is known, there is no safe ping —
 `pebblekit_launch_app`, wait a couple of seconds, send with
@@ -65,7 +70,7 @@ that matters, verify by what the user can see on the watch.
 ## Keys are per-app knowledge
 
 Nothing in the transport describes an app's keys, and nothing validates
-them. The key table for each watchapp lives in `apps/pebble/`, one file
+them. The key table for each watchapp lives in `pebble-apps/`, one file
 per app. If there is no file, the keys have to come from the watchapp's
 own `package.json` (`messageKeys`) and its inbox handler — reading the C
 is the only way to learn what the handler does with a message it was not

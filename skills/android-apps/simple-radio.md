@@ -1,3 +1,9 @@
+---
+name: android-simple-radio
+description: Simple Radio streaming app. Play any station by name, play favourites and recents, pause; a stream keeps going once started.
+verified: 2026-09-02
+---
+
 # Simple Radio
 
 - **Package**: `com.streema.simpleradio`

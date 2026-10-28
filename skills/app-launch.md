@@ -1,3 +1,8 @@
+---
+name: android-app-launch
+description: When launching an app's UI is needed at all. Not for media playback, which works from the background, but for apps that must be in the foreground, and as a visible last resort when a media route refuses.
+---
+
 # App launch — when you need it, and mostly why you don't
 
 ## For media apps: you don't
@@ -32,5 +37,4 @@ Substack posts older than the tree window), the remaining option is the
 app's UI: a deep link / VIEW intent to the content's URL, which opens the
 app *on screen* and requires the user (or further UI automation) to press
 play. This is qualitatively different — visible, keyguard-bound, not
-verifiable — and is currently **not exposed** as a generic phone-mcp
-tool. Noted as future work in [README.md](README.md).
+verifiable — and is not exposed as a generic phone-mcp tool.

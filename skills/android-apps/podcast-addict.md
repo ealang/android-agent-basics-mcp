@@ -1,3 +1,9 @@
+---
+name: android-podcast-addict
+description: Podcast Addict podcast app. Browse the library, play an episode by id or by free-text search, pause, rewind and fast-forward.
+verified: 2026-09-02
+---
+
 # Podcast Addict
 
 - **Package**: `com.bambuna.podcastaddict`

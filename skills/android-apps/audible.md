@@ -1,3 +1,9 @@
+---
+name: android-audible
+description: Audible audiobook app. Revive from a dead process, play any library book by name, pause, seek to an absolute position within the chapter. Sleep timer and speed are reachable only through screen-bound deep links.
+verified: 2026-09-27
+---
+
 # Audible
 
 `com.audible.application` (verified on v26.36.11, 2026-09-27). Browser

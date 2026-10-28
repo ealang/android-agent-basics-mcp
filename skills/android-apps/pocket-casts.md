@@ -1,3 +1,9 @@
+---
+name: android-pocket-casts
+description: Pocket Casts podcast app. Resume or start playback, play any subscribed show or episode by name or id, read and jump within the Up Next queue, change speed; all of it works cold with the screen locked.
+verified: 2026-10-02
+---
+
 # Pocket Casts
 
 - **Package**: `au.com.shiftyjelly.pocketcasts`

@@ -1,3 +1,9 @@
+---
+name: android-substack
+description: Substack app audio. Play recent podcast episodes and narrated posts from subscribed publications, read and edit the play queue, pause, seek. No search and no route to older posts.
+verified: 2026-09-04
+---
+
 # Substack
 
 - **Package**: `com.substack.app`
