@@ -66,21 +66,16 @@
       <label class="chk">lower teeth <input type="checkbox" id="lo"></label>
       <label class="chk">joint line <input type="checkbox" id="jt"></label>
       <label>joint width (dp) <input type="range" id="jw" min="0.3" max="2" step="0.1"><span class="val" id="jw_v"></span></label>
+      <label class="chk">arm <input type="checkbox" id="arm"></label>
+      <label>body length <input type="range" id="bl" min="0.2" max="1.3" step="0.01"><span class="val" id="bl_v"></span></label>
+      <label>back cut <input type="range" id="bx" min="0" max="94" step="1"><span class="val" id="bx_v"></span></label>
+      <label>back curl <input type="range" id="bb" min="0" max="3" step="0.05"><span class="val" id="bb_v"></span></label>
     </fieldset>
     <fieldset><legend>Style</legend>
       <label class="chk">claw <select id="sc"><option value="solid">white fill, black outline</option><option value="inverted">white outline, black fill</option><option value="double">white outline, black fill, black gap</option></select></label>
       <label class="chk">phone <select id="sp"><option value="solid">white fill, black outline</option><option value="inverted">white outline, black fill</option><option value="double">white outline, black fill, black gap</option></select></label>
       <label>line width (dp) <input type="range" id="ow" min="0.4" max="3" step="0.1"><span class="val" id="ow_v"></span></label>
     </fieldset>
-    <details><summary style="font-size:13px;color:#444;cursor:pointer;margin:6px 0">Second claw, from the other side</summary>
-      <fieldset><legend>Second claw (mirrored; shares style, teeth and jaw settings)</legend>
-        <label class="chk">enabled <input type="checkbox" id="c2"></label>
-        <label>scale <input type="range" id="c2s" min="0.5" max="2.0" step="0.01"><span class="val" id="c2s_v"></span></label>
-        <label>rotation (°) <input type="range" id="c2a" min="-60" max="100" step="1"><span class="val" id="c2a_v"></span></label>
-        <label>wrist x <input type="range" id="w2x" min="-100" max="500" step="1"><span class="val" id="w2x_v"></span></label>
-        <label>wrist y <input type="range" id="w2y" min="-200" max="400" step="1"><span class="val" id="w2y_v"></span></label>
-      </fieldset>
-    </details>
     <fieldset><legend>Phone</legend>
       <label>rotation (°) <input type="range" id="tilt" min="-60" max="60" step="1"><span class="val" id="tilt_v"></span></label>
       <label>centre x <input type="range" id="px" min="0" max="280" step="1"><span class="val" id="px_v"></span></label>
@@ -113,16 +108,21 @@
       "white outline, black fill" is a ring of the line width with no gap, the black fill being the separation; the
       third keeps the ring and also cuts the gap, the double edge. Overlaps keep their meaning whichever style is
       chosen: the upper jaw sits in front of the phone, the phone hides the lower jaw. A hollow phone's speaker slit
-      turns white. The second claw, under its own fold, is a mirror image coming in from the other side, with its
-      own wrist, scale and rotation; everything else about it follows the first claw. Drag it like the first.
+      turns white. Untick "arm" for a floating claw: "back cut" moves the claw's back end forward along the body
+      (0 is the stock outline, where the arm joined) and "back curl" rounds that end off, the two edges curling in
+      along their own tangents until they meet; at 0 the back is a flat cut. "body length" squashes everything
+      behind the hinge towards it, the way jaw length stretches everything in front, so the body can be made as
+      short as the box needs with its curves intact; the cut is taken before the squash.
     </div>
   </div></div>
 </div>
 <script src="clipper-6.4.2.js"></script>
 <script>
 // ---- design-space primitives (shared with the launcher) -------------------------------------------
-const CLAW = "M0,50 C25,30 60,18 100,16 C150,14 192,32 215,58 C219,63 215,70 209,68 C185,52 142,48 110,60 C102,64 100,76 108,82 C140,96 185,98 205,112 C211,118 209,127 201,126 C170,124 135,132 95,130 C55,128 22,112 0,92 Z";
-const FOREARM = [[-200,50],[0,50],[0,92],[-200,92]];
+// The back of the body. The stock outline ends in a flat cut at x = 0, where the forearm joins; TOP and BOT
+// are its first and last curves, the ones that reach that cut.
+const TOP = [[0,50],[25,30],[60,18],[100,16]], BOT = [[95,130],[55,128],[22,112],[0,92]];
+const CLAW_MID = "C150,14 192,32 215,58 C219,63 215,70 209,68 C185,52 142,48 110,60 C102,64 100,76 108,82 C140,96 185,98 205,112 C211,118 209,127 201,126 C170,124 135,132 95,130";
 const CLAW_JOINT = "M100,18 C110,34 112,50 106,62";   // the launcher's shading line between base and upper jaw
 const UPPER_INNER = [[209,68],[185,52],[142,48],[110,60]];
 const LOWER_INNER = [[108,82],[140,96],[185,98],[205,112]];
@@ -160,22 +160,23 @@ function flatten(d, n=14) {   // absolute M/C/L/Z path -> polygons, sampling cub
   return polys;
 }
 
-// jaw length: stretch everything beyond the hinge (local x > 100) along the pincers' direction;
-// girth: scale the whole claw across its axis (local y = 71), so it gets chunkier or slimmer
+// jaw length: stretch everything beyond the hinge (local x > 100) along the pincers' direction; body length
+// does the same to everything behind it; girth: scale the whole claw across its axis (local y = 71), so it gets
+// chunkier or slimmer
 const HINGE_X = 100, AXIS_Y = 71;
 // jaw opening: swing the upper jaw up and the lower jaw down about the hinge (100,71) by half the angle each,
 // blended in over local x 70..130 so the bend is smooth rather than a crease at the hinge
 const smooth = t => t <= 0 ? 0 : t >= 1 ? 1 : t*t*(3 - 2*t);
-const stretchPt = (jl, gi = 1, op = 0) => ([x, y]) => {
+const stretchPt = (jl, gi = 1, op = 0, bl = 1) => ([x, y]) => {
   const w = smooth((x - 70)/60), side = y < AXIS_Y ? -1 : y > AXIS_Y ? 1 : 0;
-  let X = x > HINGE_X ? HINGE_X + (x - HINGE_X)*jl : x, Y = AXIS_Y + (y - AXIS_Y)*gi;
+  let X = HINGE_X + (x - HINGE_X)*(x > HINGE_X ? jl : bl), Y = AXIS_Y + (y - AXIS_Y)*gi;
   if (op && side && w) {
     const a = side*w*op/2*Math.PI/180, dx = X - HINGE_X, dy = Y - AXIS_Y;
     X = HINGE_X + dx*Math.cos(a) - dy*Math.sin(a); Y = AXIS_Y + dx*Math.sin(a) + dy*Math.cos(a);
   }
   return [X, Y];
 };
-function stretchPath(d, jl, gi = 1, op = 0) { return d.replace(/(-?\d+\.?\d*),(-?\d+\.?\d*)/g, (m, x, y) => { const p = stretchPt(jl, gi, op)([+x, +y]); return p[0].toFixed(2) + "," + p[1].toFixed(2); }); }
+function stretchPath(d, jl, gi = 1, op = 0, bl = 1) { return d.replace(/(-?\d+\.?\d*),(-?\d+\.?\d*)/g, (m, x, y) => { const p = stretchPt(jl, gi, op, bl)([+x, +y]); return p[0].toFixed(2) + "," + p[1].toFixed(2); }); }
 // Which part of the claw is drawn in front of the phone: the upper jaw, taken as everything above the mouth's
 // midline (the average of the two inner edges after jaw length / girth / opening are applied). A fixed horizontal
 // split at the axis cut the upper jaw's tip and teeth off once the jaws moved.
@@ -187,11 +188,32 @@ function frontRegion(f) {
   pts.push([600, M[0][1]], [600, -400]);
   return pts;
 }
+// Floating claw: cut the body further forward (bx, local x) and close the back. The closing curve leaves the
+// lower edge along that edge's own tangent and arrives at the upper edge along its, so there is no corner; bb is
+// the handle length as a fraction of the back's height, 0 giving a flat cut. bx = 0, bb = 0 is the stock outline.
+function splitAt(P, t) {   // de Casteljau: the two halves of a cubic
+  const L = (a, b) => [a[0] + (b[0]-a[0])*t, a[1] + (b[1]-a[1])*t];
+  const [p0, p1, p2, p3] = P, a = L(p0,p1), b = L(p1,p2), c = L(p2,p3), d = L(a,b), e = L(b,c), f = L(d,e);
+  return [[p0, a, d, f], [f, e, c, p3]];
+}
+function tAtX(P, x) {   // bisection on a cubic whose x is monotonic in t, either direction
+  const inc = bez(P, 1)[0] > bez(P, 0)[0]; let lo = 0, hi = 1;
+  for (let i = 0; i < 40; i++) { const mid = (lo+hi)/2; if ((bez(P, mid)[0] < x) === inc) lo = mid; else hi = mid; }
+  return (lo+hi)/2;
+}
+function clawPath(bx, bb) {
+  const top = splitAt(TOP, tAtX(TOP, bx))[1], bot = splitAt(BOT, tAtX(BOT, bx))[0];   // cut -> (100,16); (95,130) -> cut
+  const t0 = top[0], t1 = top[1], b3 = bot[3], b2 = bot[2], h = Math.hypot(t0[0]-b3[0], t0[1]-b3[1])*bb;
+  const ext = (p, q) => { const d = Math.hypot(p[0]-q[0], p[1]-q[1]) || 1; return [p[0] + (p[0]-q[0])/d*h, p[1] + (p[1]-q[1])/d*h]; };
+  const f = p => p.map(v => +v.toFixed(2)).join(",");
+  return `M${f(t0)} C${f(t1)} ${f(top[2])} ${f(top[3])} ${CLAW_MID} C${f(bot[1])} ${f(b2)} ${f(b3)} C${f(ext(b3, b2))} ${f(ext(t0, t1))} ${f(t0)} Z`;
+}
 let _geom = {};
-function geom(jl, gi, op) {   // the status-icon teeth are a little bigger than the launcher's
-  if (_geom.jl === jl && _geom.gi === gi && _geom.op === op) return _geom;
-  const f = stretchPt(jl, gi, op), d = stretchPath(CLAW, jl, gi, op), forearm = FOREARM.map(f);
-  _geom = { jl, gi, op, d, polys: flatten(d), forearm, front: frontRegion(f), joint: flatten(stretchPath(CLAW_JOINT, jl, gi, op))[0], fd: "M" + forearm.map(p => p.join(",")).join(" L") + " Z",
+function geom(jl, gi, op, bx = 0, bb = 0, bl = 1) {   // the status-icon teeth are a little bigger than the launcher's
+  if (_geom.jl === jl && _geom.gi === gi && _geom.op === op && _geom.bx === bx && _geom.bb === bb && _geom.bl === bl) return _geom;
+  const f = stretchPt(jl, gi, op, bl), d = stretchPath(clawPath(bx, bb), jl, gi, op, bl);
+  const forearm = [[-200,50],[bx+2,50],[bx+2,92],[-200,92]].map(f);   // reaches the cut, whatever it is
+  _geom = { jl, gi, op, bx, bb, bl, d, polys: flatten(d), forearm, front: frontRegion(f), joint: flatten(stretchPath(CLAW_JOINT, jl, gi, op, bl))[0], fd: "M" + forearm.map(p => p.join(",")).join(" L") + " Z",
             teethUp: teeth(UPPER_INNER.map(f), [0.12,0.32,0.52,0.72], true, 7, 11, 3),
             teethLo: teeth(LOWER_INNER.map(f), [0.28,0.48,0.68,0.86], false, 7, 11, 3) };
   return _geom;
@@ -237,14 +259,15 @@ function build(S) {
   const pxf = ([x, y]) => m(S.px + x*ct - y*st, S.py + x*st + y*ct);
   const ring = shape => diff(shape, buffer(shape, -S.ow));   // white outline, black interior
   const clawHollow = S.sc !== "solid", phoneHollow = S.sp !== "solid";
-  const g = geom(S.jl, S.gi, S.op);
+  const g = geom(S.jl, S.gi, S.op, S.bx, S.bb, S.bl);
 
-  // One claw at a wrist, scale and rotation; mirrored claws come in from the other side. Returns the part drawn in
-  // front of the phone, what that part cuts out of the phone, and the part drawn behind it.
-  function clawAt(wx, wy, cs, ang, mirror) {
-    const a = ang*Math.PI/180, ca = Math.cos(a), sa = Math.sin(a), mx = mirror ? -1 : 1;
-    const cfn = ([x, y]) => { x *= mx; y -= 71; return m(wx + cs*(x*ca - y*sa), wy + cs*(x*sa + y*ca)); };
-    let parts = [...g.polys.map(p => p.map(cfn)), g.forearm.map(cfn)];
+  // The claw at a wrist, scale and rotation. Returns the part drawn in front of the phone, what that part cuts
+  // out of the phone, and the part drawn behind it.
+  function clawAt(wx, wy, cs, ang) {
+    const a = ang*Math.PI/180, ca = Math.cos(a), sa = Math.sin(a);
+    const cfn = ([x, y]) => { y -= 71; return m(wx + cs*(x*ca - y*sa), wy + cs*(x*sa + y*ca)); };
+    let parts = g.polys.map(p => p.map(cfn));
+    if (S.arm) parts.push(g.forearm.map(cfn));
     if (S.teeth) parts = parts.concat(g.teethUp.map(p => p.map(cfn)));
     if (S.lo) parts = parts.concat(g.teethLo.map(p => p.map(cfn)));
     const clawSolid = union(norm(parts.map(toC)));
@@ -260,8 +283,7 @@ function build(S) {
     // black fill being the separation. Double: the gap as well, so the ring gets a black edge outside it.
     return { upper: inter(clawG, hp), cut: S.sc === "inverted" ? upperSolid : buffer(upperSolid, S.gap), rest: diff(clawG, hp) };
   }
-  const claws = [clawAt(S.wx, S.wy, S.cs, S.ang, false)];
-  if (S.c2) claws.push(clawAt(S.w2x, S.w2y, S.c2s, S.c2a, true));
+  const claws = [clawAt(S.wx, S.wy, S.cs, S.ang)];
 
   const phone = norm([toC(rrect(PW, PH, PW*0.2).map(pxf))]);
   let phoneShape = phoneHollow ? ring(phone) : phone;
@@ -279,13 +301,13 @@ function build(S) {
 
 // ---- state: the status icon as shipped -----------------------------------------------------------
 function chosenState() {
-  return { cs: 0.93, ang: -3, tilt: 0, px: 61, py: 118, wx: -131, wy: 131.19,
-           teeth: true, lo: true, jt: false, jw: 1.1, jl: 1, gi: 1.12, op: 5, sc: "solid", sp: "inverted", ow: 1.7,
-           c2: false, c2s: 0.93, c2a: 3, w2x: 235, w2y: 131.19,
-           slit: true, auto: true, pad: 1.5, gap: 1.3, fz: 1, fdx: 0, fdy: 0, fcx: 61, fcy: 118 };
+  return { cs: 0.98, ang: -37, tilt: -23, px: 13, py: 134, wx: -119.23, wy: 250.82,
+           teeth: true, lo: false, jt: false, jw: 1.3, jl: 1.15, gi: 1.31, op: -15, sc: "solid", sp: "inverted", ow: 1.5,
+           arm: false, bx: 69, bb: 1.75, bl: 0.31,
+           slit: false, auto: false, pad: 1.5, gap: 1.3, fz: 1, fdx: 6.8, fdy: -3, fcx: 61, fcy: 118 };
 }
 let S = chosenState();
-const RANGES = ["cs","ang","jl","gi","op","jw","ow","wx","wy","c2s","c2a","w2x","w2y","tilt","px","py","pad","gap","fz","fdx","fdy"], CHECKS = ["teeth","lo","jt","c2","slit","auto"], SELECTS = ["sc","sp"];
+const RANGES = ["cs","ang","jl","gi","op","jw","ow","wx","wy","bl","bx","bb","tilt","px","py","pad","gap","fz","fdx","fdy"], CHECKS = ["teeth","lo","jt","arm","slit","auto"], SELECTS = ["sc","sp"];
 const PYR = '<path d="M12,4 L15.09,9.2 L8.91,9.2 Z M7.79,10.4 L16.21,10.4 L18.58,14.4 L5.42,14.4 Z M4.71,15.6 L19.29,15.6 L21.5,20 L2.5,20 Z"/>';
 const INFO = '<path d="M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2zM13,17h-2v-6h2v6zM13,9h-2V7h2v2z"/>';
 const ico = (body, size=24) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="${size}" height="${size}"><g fill="#FFF">${body}</g></svg>`;
@@ -302,16 +324,15 @@ function render() {
   const body = `<path d="${cur.d}" fill-rule="evenodd" fill="#FFF"/>`;
   // hit targets for dragging: invisible claw and phone outlines in design space, drawn in the 24-box
   const a = S.ang*Math.PI/180, tt = S.tilt*Math.PI/180;
-  const gg = geom(S.jl, S.gi, S.op);
-  const hitClaw = `<g data-drag="claw" fill="transparent" transform="translate(${cur.m(S.wx, S.wy).join(",")}) rotate(${S.ang}) scale(${S.cs*cur.k}) translate(0,-71)"><path d="${gg.fd}"/><path d="${gg.d}"/></g>`;
-  const hitClaw2 = S.c2 ? `<g data-drag="claw2" fill="transparent" transform="translate(${cur.m(S.w2x, S.w2y).join(",")}) rotate(${S.c2a}) scale(${-S.c2s*cur.k},${S.c2s*cur.k}) translate(0,-71)"><path d="${gg.fd}"/><path d="${gg.d}"/></g>` : "";
+  const gg = geom(S.jl, S.gi, S.op, S.bx, S.bb, S.bl);
+  const hitClaw = `<g data-drag="claw" fill="transparent" transform="translate(${cur.m(S.wx, S.wy).join(",")}) rotate(${S.ang}) scale(${S.cs*cur.k}) translate(0,-71)">${S.arm ? `<path d="${gg.fd}"/>` : ""}<path d="${gg.d}"/></g>`;
   const [ppx, ppy] = cur.m(S.px, S.py);
   const hitPhone = `<g data-drag="phone" fill="transparent" transform="translate(${ppx},${ppy}) rotate(${S.tilt}) scale(${cur.k})"><rect x="${-PW/2}" y="${-PH/2}" width="${PW}" height="${PH}" rx="${PW*0.2}"/></g>`;
-  $("stage").innerHTML = `<rect width="24" height="24" fill="#1b1b1b"/>` + body + hitClaw + hitClaw2 + hitPhone;
+  $("stage").innerHTML = `<rect width="24" height="24" fill="#1b1b1b"/>` + body + hitClaw + hitPhone;
   $("p96").innerHTML = body; $("p48").innerHTML = body; $("p24").innerHTML = body;
   const bar = `<span>9:41</span>${ico(body)}${ico(PYR)}${ico(INFO)}<span style="margin-left:auto">▲ 5G ▮</span>`;
   $("bar1").innerHTML = bar; $("bar2").innerHTML = bar;
-  for (const k of RANGES) { $(k).value = S[k]; $(k + "_v").textContent = Number.isInteger(S[k]) || ["ang","wx","wy","c2a","w2x","w2y","tilt","px","py"].includes(k) ? Math.round(S[k]) : S[k].toFixed(2); }
+  for (const k of RANGES) { $(k).value = S[k]; $(k + "_v").textContent = Number.isInteger(S[k]) || ["ang","wx","wy","bx","tilt","px","py"].includes(k) ? Math.round(S[k]) : S[k].toFixed(2); }
   for (const k of CHECKS) $(k).checked = S[k];
   for (const k of SELECTS) $(k).value = S[k];
   // derived: where the claw axis crosses the phone's long axis, as the centred block's G and up
@@ -320,9 +341,8 @@ function render() {
   const rx = S.px - S.wx, ry = S.py - S.wy, den = ux*vy - uy*vx;
   const sdist = (rx*vy - ry*vx) / den, dd = (rx*uy - ry*ux) / den;
   const out = {
-    claw: { scale: +S.cs.toFixed(2), rotation: Math.round(S.ang), wrist_x: +S.wx.toFixed(2), wrist_y: +S.wy.toFixed(2), teeth: S.teeth, lower_teeth: S.lo, joint_line: S.jt, joint_width: +S.jw.toFixed(1), jaw_length: +S.jl.toFixed(2), girth: +S.gi.toFixed(2), jaw_open: Math.round(S.op) },
+    claw: { scale: +S.cs.toFixed(2), rotation: Math.round(S.ang), wrist_x: +S.wx.toFixed(2), wrist_y: +S.wy.toFixed(2), teeth: S.teeth, lower_teeth: S.lo, joint_line: S.jt, joint_width: +S.jw.toFixed(1), jaw_length: +S.jl.toFixed(2), girth: +S.gi.toFixed(2), jaw_open: Math.round(S.op), arm: S.arm, body_length: +S.bl.toFixed(2), back_cut: Math.round(S.bx), back_curl: +S.bb.toFixed(2) },
     phone: { rotation: Math.round(S.tilt), centre_x: Math.round(S.px), centre_y: Math.round(S.py), slit: S.slit },
-    claw2: { enabled: S.c2, scale: +S.c2s.toFixed(2), rotation: Math.round(S.c2a), wrist_x: +S.w2x.toFixed(2), wrist_y: +S.w2y.toFixed(2) },
     style: { claw: S.sc, phone: S.sp, line_width: +S.ow.toFixed(1) },
     frame: { phone_centred: S.auto, pad: +S.pad.toFixed(1), gap: +S.gap.toFixed(1), zoom: +S.fz.toFixed(2), shift: [+S.fdx.toFixed(1), +S.fdy.toFixed(1)], k: +cur.k.toFixed(4), centre: [Math.round(cur.cx), Math.round(cur.cy)] },
     centred: { ang: Math.round(S.ang), tilt: Math.round(S.tilt), cs: +S.cs.toFixed(2), G: +(sdist / S.cs).toFixed(1), up: +(0.5 - dd/PH).toFixed(3), px: Math.round(S.px), py: Math.round(S.py), pad: +S.pad.toFixed(1), gap: +S.gap.toFixed(1), teeth_on: S.teeth, lower_teeth: S.lo, jaw_length: +S.jl.toFixed(2), girth: +S.gi.toFixed(2), jaw_open: Math.round(S.op) },
@@ -355,7 +375,6 @@ stage.addEventListener("pointerdown", e => {
 });
 function move(what, dx, dy) {   // dx, dy in design units
   if (what === "claw") { S.wx += dx; S.wy += dy; }
-  else if (what === "claw2") { S.w2x += dx; S.w2y += dy; }
   else if (!S.auto) { S.px += dx; S.py += dy; }
 }
 stage.addEventListener("pointermove", e => {
@@ -389,7 +408,7 @@ function applyParams(o) {
   if (Array.isArray(f.shift)) { set("fdx", f.shift[0]); set("fdy", f.shift[1]); }
   flag("teeth", c.teeth, g.teeth_on); flag("lo", c.lower_teeth, g.lower_teeth); flag("slit", p.slit); flag("auto", f.phone_centred);
   flag("jt", c.joint_line); set("jw", c.joint_width);
-  const c2 = o.claw2 || {}; flag("c2", c2.enabled); set("c2s", c2.scale); set("c2a", c2.rotation); set("w2x", c2.wrist_x); set("w2y", c2.wrist_y);
+  flag("arm", c.arm); set("bl", c.body_length); set("bx", c.back_cut); set("bb", c.back_curl);
   const st = o.style || {};
   const style = (k, v) => { if (typeof v === "boolean") S[k] = v ? "inverted" : "solid"; else if (["solid","inverted","double"].includes(v)) S[k] = v; };
   style("sc", st.claw); style("sp", st.phone); set("ow", st.line_width);

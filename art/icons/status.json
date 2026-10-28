@@ -1,65 +1,62 @@
 {
   "claw": {
-    "scale": 0.93,
-    "rotation": -3,
-    "wrist_x": -131,
-    "wrist_y": 131.19,
+    "scale": 0.98,
+    "rotation": -37,
+    "wrist_x": -119.23,
+    "wrist_y": 250.82,
     "teeth": true,
-    "lower_teeth": true,
+    "lower_teeth": false,
     "joint_line": false,
-    "joint_width": 1.1,
-    "jaw_length": 1,
-    "girth": 1.12,
-    "jaw_open": 5
+    "joint_width": 1.3,
+    "jaw_length": 1.15,
+    "girth": 1.31,
+    "jaw_open": -15,
+    "arm": false,
+    "body_length": 0.31,
+    "back_cut": 69,
+    "back_curl": 1.75
   },
   "phone": {
-    "rotation": 0,
-    "centre_x": 61,
-    "centre_y": 118,
-    "slit": true
-  },
-  "claw2": {
-    "enabled": false,
-    "scale": 0.93,
-    "rotation": 3,
-    "wrist_x": 235,
-    "wrist_y": 131.19
+    "rotation": -23,
+    "centre_x": 13,
+    "centre_y": 134,
+    "slit": false
   },
   "style": {
     "claw": "solid",
     "phone": "inverted",
-    "line_width": 1.7
+    "line_width": 1.5
   },
   "frame": {
-    "phone_centred": true,
+    "phone_centred": false,
     "pad": 1.5,
     "gap": 1.3,
     "zoom": 1,
     "shift": [
-      0,
-      0
+      6.8,
+      -3
     ],
-    "k": 0.1167,
+    "k": 0.1026,
     "centre": [
       61,
       118
     ]
   },
   "centred": {
-    "ang": -3,
-    "tilt": 0,
-    "cs": 0.93,
-    "G": 206.7,
-    "up": 0.483,
-    "px": 61,
-    "py": 118,
+    "ang": -37,
+    "tilt": -23,
+    "cs": 0.98,
+    "G": 176,
+    "up": 0.421,
+    "px": 13,
+    "py": 134,
     "pad": 1.5,
     "gap": 1.3,
     "teeth_on": true,
-    "lower_teeth": true,
-    "jaw_length": 1,
-    "girth": 1.12,
-    "jaw_open": 5
+    "lower_teeth": false,
+    "jaw_length": 1.15,
+    "girth": 1.31,
+    "jaw_open": -15
   },
-  "path_chars": 1488
+  "path_chars": 1722
 }
