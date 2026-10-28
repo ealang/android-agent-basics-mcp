@@ -1,56 +1,77 @@
 ---
 name: android-samsung-clock
-description: Samsung Clock, the stock clock on Samsung phones. Set a timer or alarm and open the timer or alarm list. Dismiss and snooze are accepted and ignored; the stopwatch is unreachable.
+description: Samsung Clock, the stock clock on Samsung phones. Set a timer or alarm and open the timer or alarm list. Dismiss and snooze do nothing; the stopwatch is unreachable.
 verified: 2026-10-01
 ---
 
-# Samsung Clock (com.sec.android.app.clockpackage)
+# Samsung Clock
 
-Verified on device 2026-09-06.
+Package `com.sec.android.app.clockpackage`. Timers and alarms are set
+through the standard AlarmClock intents and the lists open on screen.
+Dismiss and snooze are accepted and do nothing. The stopwatch cannot be
+reached at all; do not re-probe it.
 
-## What works
+## Set a timer
 
-The public alarm-clock actions, all on activities guarded by
-`com.android.alarm.permission.SET_ALARM` (normal-level; phone-mcp holds it):
+```
+send_intent
+{
+  "action": "android.intent.action.SET_TIMER",
+  "package": "com.sec.android.app.clockpackage",
+  "mode": "activity",
+  "extras": [
+    {"key": "android.intent.extra.alarm.LENGTH", "type": "int", "value": <seconds>},
+    {"key": "android.intent.extra.alarm.MESSAGE", "type": "string", "value": "<label>"},
+    {"key": "android.intent.extra.alarm.SKIP_UI", "type": "boolean", "value": true}
+  ]
+}
+```
 
-- `android.intent.action.SET_TIMER` — verified end to end (2026-10-01):
-  the timer appears and counts down. `SHOW_TIMERS` also resolves.
-- `android.intent.action.DISMISS_TIMER` resolves and is accepted, but
-  **does nothing**: the timer keeps running (verified 2026-10-01,
-  repeatedly, by label search). Do not rely on it.
-- `android.intent.action.SET_ALARM`, `SHOW_ALARMS`, `DISMISS_ALARM`,
-  `SNOOZE_ALARM` resolve to `AlarmCTSHandleActivity`.
-- Exported receivers include `com.samsung.sec.android.clockpackage.alarm.ALARM_DISMISS`
-  and `ALARM_SNOOZE` (see the intent sweep) — untested.
+The timer appears in the Clock app and counts down. Sending twice makes
+two timers; nothing can list or read them, so never resend on doubt.
 
-## Stopwatch: unreachable, do not re-probe
+## Set an alarm
 
-There is no programmatic stopwatch on this device — and no standard one
-anywhere in Android.
+```
+send_intent
+{
+  "action": "android.intent.action.SET_ALARM",
+  "package": "com.sec.android.app.clockpackage",
+  "mode": "activity",
+  "extras": [
+    {"key": "android.intent.extra.alarm.HOUR", "type": "int", "value": <hour>},
+    {"key": "android.intent.extra.alarm.MINUTES", "type": "int", "value": <minutes>},
+    {"key": "android.intent.extra.alarm.MESSAGE", "type": "string", "value": "<label>"},
+    {"key": "android.intent.extra.alarm.SKIP_UI", "type": "boolean", "value": true}
+  ]
+}
+```
 
-- The platform defines **no stopwatch intent at all**: `AlarmClock`
-  stops at alarms and timers (`javap` on the SDK confirms; so does the
-  common-intents documentation). AOSP/Lineage DeskClock export nothing
-  for the stopwatch either — their `START_STOPWATCH`-style actions are
-  internal, on an unexported service. A tool built on a stopwatch
-  action would rest on a contract that does not exist, which is why no
-  first-class `start_stopwatch` was added (decided 2026-09-06).
-- Samsung's private `com.sec.android.app.clockpackage.INTENT_STOPWATCH`
-  is handled only by `ClockPackageExecutable`, an internal entry activity
-  (Bixby/Routines surface) guarded by
-  `com.sec.android.app.clockpackage.permission.ACCESS_WCCITY`. That
-  permission is **signature-level**: declaring it in our manifest was
-  tried and the grant never arrives — explicit-component launch still
-  throws `SecurityException` naming it. Only Samsung-signed apps can call
-  it. The guard is a blanket one on the internal entry point, not a
-  stopwatch-specific policy.
-- Two traps met on the way, both now handled: the filter lacks
-  `CATEGORY_DEFAULT`, so an implicit send fails with
-  `ActivityNotFoundException` even though `intent_resolve` lists a
-  handler (resolve does not require DEFAULT; `startActivity` does); and
-  before fcb7429 the resulting exception dropped the HTTP connection
-  instead of returning `FAILED:`.
+Only ever creates: a new time makes a second alarm. For a repeating
+alarm add `android.intent.extra.alarm.DAYS` as an `int_arraylist` of
+`java.util.Calendar` day constants (Sunday = 1).
 
-Best available: open the Clock app (launcher intent or
-`clockpackage://ClockMain` VIEW deep link, unguarded) and the user taps
-Stopwatch → Start.
+## Show the lists
+
+`android.intent.action.SHOW_TIMERS` and `SHOW_ALARMS`, same shape with
+no extras, open the Clock app at the list.
+
+## Does nothing
+
+`DISMISS_TIMER`, `DISMISS_ALARM` and `SNOOZE_ALARM` resolve to the app's
+handler activity and are accepted; the timer keeps running. A timer or
+alarm, once set, is the user's to stop.
+
+## Stopwatch: unreachable
+
+Android defines no stopwatch intent, and Samsung's private
+`com.sec.android.app.clockpackage.INTENT_STOPWATCH` is handled by an
+internal entry activity guarded by a signature-level permission, so an
+explicit launch throws `SecurityException` and no manifest line changes
+that. The best available is opening the Clock app for the user to tap
+Stopwatch:
+
+```
+send_intent
+{"action": "android.intent.action.VIEW", "data": "clockpackage://ClockMain", "mode": "activity"}
+```

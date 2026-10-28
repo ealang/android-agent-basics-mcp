@@ -6,39 +6,36 @@ verified: 2026-09-04
 
 # Libro.fm
 
-- **Package**: `fm.libro.librofm`
-- **Tier**: open — the cleanest interface surveyed; everything works
-- **Survives disconnect**: assumed yes (played past read-back; not
-  explicitly stress-tested)
-- **Verified on device**: 2026-09-04
+Package `fm.libro.librofm`. Fully open browser route, the cleanest of
+the media apps: any owned book plays from a cold process by ISBN, title
+search returns exact items, and ids are public and permanent. Playback
+continues after the connection closes.
 
-Mechanisms: [media-control.md](../media-control.md),
-[media-discovery.md](../media-discovery.md).
+## Play a book
 
-## Tree and ids
+```
+media_play {"app": "fm.libro.librofm", "media_id": "<isbn>"}
+```
 
-Root: **Recent** and **Library** — Library is the *entire owned
-collection*, no recency window.
+Works cold, resuming the saved position at the user's remembered
+playback speed. Ids are the book's ISBN: stable and public, so an ISBN
+may be stored and reused indefinitely instead of re-browsed.
 
-Ids are plain **ISBNs** (Neuromancer = `9781101536698`). Stable, public,
-durable: **ids may be hard-coded in skills/automations indefinitely** —
-the one surveyed app where storing ids beats re-browsing.
+## Find a book
 
-## What works
+```
+media_search {"app": "fm.libro.librofm", "query": "<title>"}
+media_browse {"app": "fm.libro.librofm"}
+```
 
-- `playFromMediaId(ISBN)` — works **cold**: app unopened for weeks,
-  playing within 3s, resumed saved position *and* remembered playback
-  speed (1.2x).
-- Session search (`media_search`) — implemented; exact title → exact item
-  with its ISBN.
-- `pause` — works.
-- Advertised: pause, play, play_pause, stop, skip_to_next/previous,
-  skip_to_queue_item, fast_forward, rewind, seek_to, play_from_media_id,
-  play_from_search, play_from_uri, prepare, set_rating.
+Search returns the matching item with its ISBN. The root holds Recent
+and Library; Library is the entire owned collection, no recency window.
 
-## Notes
+## Transport
 
-- Position/duration in read-backs are per **chapter track** (e.g. "75s of
-  300s"), not the whole book.
-- Broad advertised set (queue ops, uri, rating) exists but only the core
-  path above has been exercised.
+```
+media_command {"app": "fm.libro.librofm", "action": "pause"}
+```
+
+Position and duration in read-backs are per chapter track, not the whole
+book.

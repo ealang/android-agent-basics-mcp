@@ -6,103 +6,65 @@ verified: 2026-09-27
 
 # Audible
 
-`com.audible.application` (verified on v26.36.11, 2026-09-27). Browser
-route refused (`onGetRoot` allowlist — don't re-probe), but fully
-reachable through the media-button revival plus its session, which is
-the richest in the survey: any book by name via search, real absolute
-seek, and the full transport grammar.
+Package `com.audible.application`. The browser route is refused
+(signature allowlist, do not re-probe), but the app revives from a dead
+process with a targeted media-button intent followed by a session
+`play`, and the live session then plays any library book by name, takes
+transport and seeks to an absolute position. The relative jumps are
+broken. Sleep timer and speed have no session verb.
 
-Self-contained: everything below runs without an `inspect`. The
-generic verbs (`play`, `pause`, read-backs) are in
-[../media-control.md](../media-control.md).
-
-## Reviving from a dead process — two steps, not one
-
-Audible has the same exported androidx `MediaButtonReceiver` /
-MediaBrowserService shape as YouTube Music, so the targeted
-media-button recipe applies, with one difference: the wake and the
-playback are separate steps. The intent brings the process up and
-publishes the session, but audio does not start until a session `play`
-follows.
+## Revive from a dead process
 
 ```
 send_intent
-  mode: foreground_service
-  component: com.audible.application/com.audible.application.AndroidMediaBrowserService
-  action: android.intent.action.MEDIA_BUTTON
-  extras: [{key: android.intent.extra.KEY_EVENT, type: key_event, value: play}]
+{
+  "mode": "foreground_service",
+  "component": "com.audible.application/com.audible.application.AndroidMediaBrowserService",
+  "action": "android.intent.action.MEDIA_BUTTON",
+  "extras": [{"key": "android.intent.extra.KEY_EVENT", "type": "key_event", "value": "play"}]
+}
 ```
 
-then, once `media_sessions` shows the Audible session (≈3 s):
+then, about three seconds later, once `media_sessions` lists Audible:
 
 ```
-media_command  app: "audible"  route: session  action: "play"
+media_command {"app": "com.audible.application", "route": "session", "action": "play"}
 ```
 
-Verified 2026-09-27 from no live session: the intent published the
-session (state "no state", empty title), and the follow-up `play`
-resumed the last-played item. Freshly published, the session may read
-"no state — the command was likely ignored" with a blank title; that is
-the pre-play limbo, not a failure — send `play` and re-read.
+The intent brings the process up and publishes the session, but audio
+does not start until the session `play`. A freshly published session
+reads "no state" with a blank title; that is the pre-play state, not a
+failure. The `play` resumes the last-played book.
 
-## Any book by name: session search, and it auto-plays
-
-`play_from_search` is honored (verified 2026-09-27: switched from one
-title to another by name):
+## Any book by name
 
 ```
-media_command  app: "audible"  route: session  action: "search:<book title>"
+media_command {"app": "com.audible.application", "route": "session", "action": "search:<book title>"}
 ```
 
-Read-back showed "buffering" with the new title within 3 s, then
-playback started **on its own** — search auto-plays, no follow-up
-`play` needed. Verify the switch by the title in the read-back, never
-by "sent" (a non-matching query may fail silently; unverified here,
-but that is the Smart AudioBook failure mode and the read-back costs
-nothing).
+The read-back shows buffering with the new title, and playback starts on
+its own; no follow-up `play`. From a dead process: revive, wait for the
+session, then search.
 
-Chained recipe, dead process → named book playing: revival intent →
-wait for the session → `search:<title>`.
+## Seek and transport
 
-## Seeking: real absolute seek — the only app in the survey with one
+```
+media_command {"app": "com.audible.application", "route": "session", "action": "seek:<seconds>"}
+media_command {"app": "com.audible.application", "route": "session", "action": "pause"}
+```
 
-`seek:<seconds>` on the session route is honored exactly, even while
-paused, on both a Preview stream and a library title (verified:
-`seek:120` landed at 120 s paused; `seek:0` restarted a chapter).
-Position is within the current chapter/file, not the whole book —
-`seek:0` means "start of this chapter". Prefer it over any jump-button
-approach.
+`seek:` is honoured exactly, playing or paused, within the current
+chapter: `seek:0` is the start of this chapter, not of the book. For a
+relative move, read the position, compute, and seek absolutely. The
+relative verbs do nothing: `rewind` and `fast_forward` are advertised
+and ignored, and the custom `ACTION_BACKWARD_AssistantDrive` and
+`ACTION_FORWARD_AssistantDrive` are inert. Do not use them.
 
-The relative jumps are broken, so don't fall back to them:
-`rewind`/`fast_forward` are advertised but ignored (position kept
-advancing through a `rewind` sent mid-playback), and the custom
-`ACTION_BACKWARD_AssistantDrive`/`ACTION_FORWARD_AssistantDrive`
-actions were equally inert (tested paused and playing, Preview stream,
-2026-09-27). Relative moves: read the position, compute, `seek:<n>`.
+## Screen-bound only
 
-## The session's full advertised surface
-
-play, pause, play_pause, stop, skip_to_next, skip_to_previous,
-skip_to_queue_item, fast_forward, rewind, **seek_to**,
-play_from_media_id, play_from_search, play_from_uri, prepare. Custom:
-`ACTION_BACKWARD_AssistantDrive`, `ACTION_FORWARD_AssistantDrive`,
-`ACTION_BOOKMARKS_AssistantDrive` (bookmark).
-
-Verified working: revival, play, pause, seek_to, play_from_search.
-Verified broken: rewind, fast_forward, ACTION_BACKWARD. Untested:
-play_from_uri, skip_to_next/previous, skip_to_queue_item, prepare,
-stop, the bookmark action, ACTION_FORWARD.
-
-## Activity-level doors (screen-bound, untested)
-
-`MainLauncher` accepts `MEDIA_PLAY_FROM_SEARCH`, product-page deep
-links (`https://www.audible.com/pd/...`, `audible://` scheme), and a
-set of Google Assistant deep links under `audible://google-assistant/`
-whose paths name real verbs: `save-bookmark-clip`,
-`download-current-listening`, `faster-playback-speed`,
-`slower-playback-speed`, `cancel-sleep-timer`,
-`end-of-chapter-sleep-timer`,
-`set-up-sleep-timer-duration-hours-and-minutes?number_of_hours={h}&number_of_minutes={m}`.
-These launch the UI (screen on, app foregrounded) — but they are the
-only visible route to sleep-timer and speed control, which no session
-verb offers.
+Sleep timer and playback speed have no session verb. The app's launcher
+activity accepts `audible://google-assistant/` deep links with paths
+such as `cancel-sleep-timer`, `end-of-chapter-sleep-timer`,
+`faster-playback-speed` and `slower-playback-speed`; these open the UI
+on screen through a VIEW intent in activity mode and are the only route
+to those settings.

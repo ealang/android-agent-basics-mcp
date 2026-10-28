@@ -6,32 +6,35 @@ verified: 2026-09-02
 
 # Simple Radio
 
-- **Package**: `com.streema.simpleradio`
-- **Tier**: open — browse and play work
-- **Survives disconnect**: yes
-- **Verified on device**: 2026-09-02
+Package `com.streema.simpleradio`. Any station plays by name through the
+browser route, including stations not in the small browse tree, and the
+stream continues after the connection closes.
 
-Mechanisms: [media-control.md](../media-control.md),
-[media-discovery.md](../media-discovery.md).
+## Play a station
 
-## Tree and ids
+```
+media_play {"app": "com.streema.simpleradio", "query": "<station name>"}
+```
 
-Tiny tree: `__RECENT__`, `__FAVORITE__`, `__RECOMMENDED__`. Station ids
-look like `__FAVORITE__|1719` (node-prefixed numeric).
+The name is resolved server-side and the station switches. This is the
+route to use; the tree only covers the user's own lists:
 
-## What works
+```
+media_browse {"app": "com.streema.simpleradio", "node": "__FAVORITE__"}
+media_play   {"app": "com.streema.simpleradio", "media_id": "<id>"}
+```
 
-- `playFromMediaId` — streams, keeps streaming after disconnect.
-- `playFromSearch` — free text ("<station name>") resolved server-side,
-  switched stations. This is the best route: stations not in the small
-  tree are reachable by name.
-- `pause` — works. The advertised-actions set updates **live** with state
-  (while paused, `pause` drops out and `play` remains) — an honest
-  dynamic bitmask, useful as a state signal.
-- Custom action: `...ACTION_FAVORITE`.
+Root nodes are `__RECENT__`, `__FAVORITE__` and `__RECOMMENDED__`.
+Station ids are node-prefixed numerics such as `__FAVORITE__|<n>`.
 
-## Quirks
+## Pause, state, favourite
 
-- No metadata title in read-backs while playing ("Now loaded" absent) —
-  don't rely on title verification for this app; the state and the
-  user's ears are the signal.
+```
+media_command {"app": "com.streema.simpleradio", "action": "pause"}
+```
+
+The advertised actions change with state: while paused, `pause` drops
+out and `play` remains, so the advertisement is a reliable state signal.
+Read-backs carry no title while a stream plays; the state line is the
+confirmation. One custom action, ending `ACTION_FAVORITE`, appears in the
+read-back; send it verbatim to favourite the current station.

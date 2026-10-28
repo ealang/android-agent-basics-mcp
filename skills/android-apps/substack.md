@@ -6,74 +6,65 @@ verified: 2026-09-04
 
 # Substack
 
-- **Package**: `com.substack.app`
-- **Tier**: open, with sharp edges — playback works, discovery is weak,
-  ids are non-forgeable, the queue is ephemeral
-- **Survives disconnect**: yes
-- **Verified on device**: 2026-09-03/04
+Package `com.substack.app`. The browser route plays recent audio from
+subscribed publications and reads and edits the queue; it has no search,
+no route to older posts, ids that must come from a fresh browse, and a
+queue that dies with the process. Playback continues after the
+connection closes.
 
-Mechanisms: [media-control.md](../media-control.md),
-[media-discovery.md](../media-discovery.md).
+## Find and play
 
-## Tree and ids
+```
+media_browse {"app": "com.substack.app"}
+media_browse {"app": "com.substack.app", "node": "<id>"}
+media_play   {"app": "com.substack.app", "media_id": "<id>"}
+```
 
-Root → **Podcasts** (subscribed publications with podcasts — the only
-view of subscriptions) and **All audio** (recent audio across
-subscriptions). Both derive from the signed-in account.
+The root holds Podcasts (subscribed publications with podcasts, the only
+view of subscriptions) and All audio (recent audio across subscriptions,
+narrated posts included). All audio reaches back a few weeks; older
+posts are absent and nothing plays them.
 
-**Recency window only**: All audio reaches back ~weeks. Older posts are
-absent from the tree and **there is no route to play them** (see below).
+Ids are JSON blobs the app mints. Lift one verbatim from a fresh browse
+every time: a hand-built blob, even with a valid public mp3 in it, is
+refused by play and the app falls back to the last-loaded item. Never
+store them.
 
-**Ids are self-contained JSON blobs** (uri, entityId, title, author,
-publicationId, artwork, durationMs, audioType TTS/Podcast/Voiceover).
-They must be lifted **verbatim from a fresh browse**: hand-built blobs —
-even ones whose uri is a valid public mp3 — are displayed happily by
-queue_add but **refused by playFromMediaId**, which falls back to the
-last-loaded item. The app only plays ids it minted. Never store these
-long-term; re-browse.
+## Queue and transport
 
-## What works
+```
+media_command {"app": "com.substack.app", "action": "queue"}
+media_command {"app": "com.substack.app", "action": "queue_add:<pos>:<id>"}
+media_command {"app": "com.substack.app", "action": "pause"}
+media_command {"app": "com.substack.app", "action": "seek:<seconds>"}
+```
 
-- `playFromMediaId` with a fresh genuine blob — plays (TTS narrations and
-  podcast episodes), keeps playing after disconnect. Verify by advancing
-  position.
-- **Queue read** — works (titles + ids; current item plus autoplay feed).
-- **Queue insert** — `queue_add:<pos>:<id>` inserts at the exact index
-  (confirmed repeatedly). Malformed adds are silently ignored.
-  `queue_remove` untested.
-- Now-playing metadata, `pause`, `seek`.
+The queue read returns the current item plus the autoplay feed, with
+ids. Insert lands at the exact index; a malformed add is silently
+ignored. The queue is per-process state that dies with the app, so set
+it up immediately before playing.
 
-## What doesn't
+## Does not work
 
-- **Session search: unimplemented** (times out). `playFromSearch` is
-  accepted but fire-and-forget.
-- **`play_from_uri`: advertised but inert** — raw S3 audio URL and
-  canonical post URL both silently ignored.
-- **Saved / liked / history: not exposed.** No such tree nodes; guessed
-  hidden ids return empty. (Caveat: unknown node ids return *empty*, not
-  an error, so hidden-node probing is inconclusive here.)
-- **The queue is not durable** — per-session state that dies with the
-  process (hours, not days). Set the queue up immediately before playing;
-  never expect it to persist. Queue edits with forged ids are cosmetic.
+- `media_search`: unimplemented, times out. `media_play` with `query`
+  is accepted and does nothing.
+- `uri:` on the session: advertised and inert, for raw audio URLs and
+  post URLs alike.
+- Saved, liked and history: no such nodes. An unknown node id returns
+  empty rather than an error, so do not probe for hidden nodes.
+- A post published today may show `durationMs: 0` and hang in buffering
+  until Substack generates its narration server-side. Try again later.
 
-## Quirks
+## Finding older content: the web API
 
-- **Fresh TTS posts may not play yet**: a brand-new post shows
-  `durationMs: 0` and can hang in "buffering" until Substack generates
-  the TTS audio server-side (the same item played fine the next day).
-  Treat durationMs 0 on a post published today as "try again later".
-- The queue UI is inside the full-screen player behind the Up Next icon —
-  users may not find it elsewhere.
+The anonymous web API answers what the session cannot, but it cannot
+mint playable ids, so it identifies content only:
 
-## Out-of-band discovery (find, but not play)
+- `https://<publication>.substack.com/api/v1/archive?sort=new&search=<query>&limit=<n>`
+  returns posts of any age (id, slug, title, audience, post_date).
+- `https://<publication>.substack.com/api/v1/posts/<slug>` returns the
+  post, with `audio_items[].audio_url` for the narration (withheld on
+  paid-only posts).
 
-The anonymous web API answers what the session can't:
-
-- `https://<pub>.substack.com/api/v1/archive?sort=new&search=<q>&limit=N`
-  → posts (id, slug, title, audience, post_date), any age.
-- `https://<pub>.substack.com/api/v1/posts/<slug>` →
-  `audio_items[].audio_url` (the TTS mp3; withheld on `only_paid` posts).
-
-Use it to identify content, then find the item in the browse tree. It
-cannot mint playable ids, so content outside the tree window stays
-unplayable through the media session.
+Use it to name the item, then look for it in the browse tree. Content
+outside the tree's window stays unplayable through the media session.

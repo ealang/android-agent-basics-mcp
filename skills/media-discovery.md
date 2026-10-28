@@ -3,64 +3,67 @@ name: android-media-discovery
 description: Ways to find something playable in a media app, from the browse tree to session search to the vendor's web API, and what is usually not discoverable at all.
 ---
 
-# Media discovery — every way to find something playable
+# Media discovery — finding something playable
 
-Ordered from most to least universal. Per-app files state which of these
-each app actually supports.
+Five ways, from most to least universal. The browse tree always exists
+where the browser route connects; session search is rare; the queue and
+now-playing metadata answer narrower questions; a vendor's web API finds
+anything but cannot usually play it. An app's file in `android-apps/`
+says which of these it supports and what its tree holds.
 
-## 1. Browse the tree (`media_browse`)
+## 1. Browse the tree
 
-Always available in the open tier. What the tree *contains* is the app's
-choice and varies enormously:
+```
+media_browse {"app": "<package>"}
+media_browse {"app": "<package>", "node": "<id>"}
+```
 
-- Full catalog of owned/subscribed content (Libro.fm: entire library;
-  Pocket Casts: all 57 subscribed shows).
-- A recency window only (Substack: ~weeks of recent audio; older posts
-  are simply absent with no route to them).
-- **Unlisted nodes exist.** Pocket Casts answers `__UP_NEXT__` though it
-  never lists it. Probing guessed node ids is worth one attempt per app —
-  but note some apps (Substack) return *empty* rather than an error for
-  unknown ids, which makes negative results inconclusive.
+What the tree contains is the app's choice: the whole owned or
+subscribed catalogue in some apps, a recency window of recent items in
+others, with older content absent and no route to it. Some apps answer
+node ids they never list; the per-app file names them. Do not guess at
+hidden ids: apps return empty for an unknown node, not an error, so a
+guess learns nothing.
 
-## 2. Session search (`media_search`)
+## 2. Session search
 
-The highest-value route where it works — free text in, playable ids out —
-but the rarest: of the surveyed open-tier apps only Pocket Casts and
-Libro.fm implement it. Unimplemented search *times out* rather than
-erroring.
+```
+media_search {"app": "<package>", "query": "<text>"}
+```
 
-`media_play` with `query` (playFromSearch) is related but blind: the app
-resolves the text and immediately plays its best guess. Works in Pocket
-Casts, Podcast Addict, Simple Radio. No result list, no confirmation of
-what it picked beyond the read-back title.
+Free text in, playable ids out, where implemented. Most apps do not
+implement it, and an unimplemented search times out rather than
+erroring; only use it where the per-app file says it works.
 
-## 3. Read the queue (`media_command action=queue`)
+`media_play` with `"query"` is related but blind: the app resolves the
+text and plays its best guess at once. The read-back's title is the only
+report of what it chose.
 
-The current play queue with titles and ids. Genuine discovery in apps
-that maintain a persistent queue (Pocket Casts' Up Next), less so where
-the queue is session-ephemeral autoplay filler (Substack).
+## 3. Read the queue
+
+```
+media_command {"app": "<package>", "action": "queue"}
+```
+
+The current play queue with titles and ids. Real discovery in apps that
+keep a persistent queue; filler in apps whose queue is autoplay for the
+current session.
 
 ## 4. Now-playing metadata
 
-Every read-back includes the loaded item's title/position/duration. Zero
-discovery reach, but answers "what is this?".
+Every read-back carries the loaded item's title, position and duration.
+No reach beyond the current item, but it answers "what is this?".
 
-## 5. Out-of-band: the app's public web API
+## 5. The vendor's public web API
 
-When the session's discovery is too weak, the vendor's public web API may
-find anything ever published — e.g. Substack's anonymous archive search
-(`https://<pub>.substack.com/api/v1/archive?search=<q>`) and post lookup
-(`/api/v1/posts/<slug>`, which even exposes the TTS mp3 URL).
+Where the session's discovery is too weak, the vendor's web API may find
+anything ever published. The limit: a web API finds content but cannot
+mint ids the app will play. Use it to learn whether something exists and
+what it is called, then find the item in the browse tree. The per-app
+file gives the endpoints where this is useful.
 
-**The hard limit**: web APIs find content but usually **cannot mint ids
-the app will play**. Substack refuses hand-built ids and ignores
-playFromUri, so its web API is discovery-only. Treat this route as a way
-to answer "does it exist / what is it called", then look for the item in
-the browse tree — not as a play path.
+## Not discoverable
 
-## What is typically NOT discoverable
-
-Saved items, likes, listening history, and account state are generally
-not exposed to media-session strangers (verified absent in Substack;
-Pocket Casts' In Progress node is the exception that proves the rule).
-Assume absent unless the per-app file says otherwise.
+Saved items, likes, listening history and account state are not exposed
+to media-session clients. Assume absent unless the per-app file says
+otherwise.

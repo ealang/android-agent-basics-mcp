@@ -6,92 +6,73 @@ verified: 2026-09-06
 
 # YouTube
 
-- **Package**: `com.google.android.youtube`
-- **Tier**: split personality — **dead while idle, transport-drivable once
-  playing** — but a VIEW intent cold-starts it into the fully drivable
-  state (see Automation consequence)
-- **Verified on device**: 2026-09-06
+Package `com.google.android.youtube`. Any video starts by URL through a
+VIEW intent, which opens the app on screen; while the app's UI is open,
+the session takes transport and switches videos by URL. With the UI
+closed only transport on the current video works, and with the process
+dead nothing works. The app exposes none of the account's content, so
+video ids come from outside: a web search, the YouTube Data API or a
+known URL.
 
-Mechanisms: [media-control.md](../media-control.md).
+## Start a video
 
-## The rule
+```
+send_intent
+{
+  "action": "android.intent.action.VIEW",
+  "data": "https://www.youtube.com/watch?v=<id>",
+  "package": "com.google.android.youtube",
+  "mode": "activity",
+  "via_unlock_gate": true
+}
+```
 
-Three states, in decreasing capability. What matters is whether the
-**app's UI is open**, not just whether its process is alive.
+Cold-starts the app, plays the video and leaves a fully drivable session.
+On a locked phone the video starts when the user unlocks; without
+`via_unlock_gate` a locked-phone launch is discarded.
 
-### UI open with a video loaded — full control
+To open search results instead of a video, one tap from playing:
 
-- Real now-playing metadata (title, position, duration).
-- Advertised: play, pause, stop, skip_to_next, seek_to,
-  **play_from_uri**, set_rating.
-- `pause` / `play` — work.
-- **`uri:https://www.youtube.com/watch?v=<id>` works** — switches
-  playback to an arbitrary video by plain watch URL. This is the
-  payload: with the UI up, any video is one command away.
+```
+send_intent
+{
+  "action": "android.media.action.MEDIA_PLAY_FROM_SEARCH",
+  "package": "com.google.android.youtube",
+  "mode": "activity",
+  "extras": [{"key": "query", "type": "string", "value": "<query>"}]
+}
+```
 
-### UI closed, process still alive — transport only
+## While the UI is open
 
-The session keeps answering (metadata, advertised actions unchanged) but
-**`play_from_uri` drops the URI** even though still advertised — tested
-with multiple URLs and a known-good control id; the same URL that failed
-here switched instantly once the UI was foregrounded. Instead of loading
-the URI it may *launch the app and restart the last-loaded video* as a
-fallback — visible, and confusing to the user, so don't fire URI loads
-at a backgrounded YouTube. `m.youtube.com` vs `www.youtube.com` makes no
-difference.
+```
+media_command {"app": "com.google.android.youtube", "action": "pause"}
+media_command {"app": "com.google.android.youtube", "action": "play"}
+media_command {"app": "com.google.android.youtube", "action": "seek:<seconds>"}
+media_command {"app": "com.google.android.youtube", "action": "uri:https://www.youtube.com/watch?v=<id>"}
+```
 
-### Never started / process dead — nothing
+`uri:` switches playback to any video by its watch URL. Advertised: play,
+pause, stop, next, seek, play-from-uri, rating. Read-backs carry the
+real title, position and duration.
 
-- `playFromSearch`, `playFromMediaId` → error "Action not supported".
-- `play` → error "Required premium account to perform action in
-  background". **A canned rejection, not an account check** — it appears
-  on a Premium account with the app foregrounded. Don't chase it.
-- Advertised actions: none. Nothing works; don't retry variations.
+## While the UI is closed, process alive
 
-## What is visible: only the current video
+Transport on the current video still works. `uri:` does not: the session
+still advertises it but drops the URL, and may instead launch the app
+and restart the last video, which is visible and confusing. Do not send
+`uri:` to a backgrounded YouTube; fire the VIEW intent instead.
 
-Content discovery is zero in both states, warm included:
+## Process dead
 
-- Browse root is `__EMPTY_ROOT__` (browse deliberately withheld), and
-  stays empty while playing.
-- **No queue** exposed on the session.
-- **Liked videos, subscriptions, history, downloads, library: not
-  visible.** A dozen guessed node ids (`__LIKED__`, `__HISTORY__`,
-  `subscriptions`, …) all return empty; like Substack, YouTube answers
-  *empty* rather than *error* for unknown nodes, so the probe is
-  formally inconclusive — but every account surface tried is
-  inaccessible.
-- The only readable state is the now-playing metadata of whatever is
-  currently loaded.
+Nothing works on the session: `play` answers "Required premium account to
+perform action in background", a canned rejection that appears on
+Premium accounts too, and play-from-search and play-from-id answer
+"Action not supported". Do not retry variations; use the VIEW intent.
 
-So: video ids must come from outside (web search, YouTube Data API, a
-known URL) — the app tells us nothing about the account's content.
+## No content is visible
 
-## Automation consequence
-
-Play-by-URL requires the YouTube UI on screen, and `send_intent` opens
-it. Verified live (2026-09-06): a VIEW intent at a watch URL —
-
-    action: android.intent.action.VIEW
-    data: https://www.youtube.com/watch?v=<id>
-    package: com.google.android.youtube
-    mode: activity
-
-— cold-starts the app, plays the video, and brings up a fully drivable
-media session (transport works, `play_from_uri` advertised for
-subsequent switches while the UI stays up). Match `media_command` by
-package, not "youtube" — the name is ambiguous with YouTube Music. On
-a locked phone add `via_unlock_gate: true`, since the launch needs the
-screen; the video then starts when the user unlocks.
-
-`android.media.action.MEDIA_PLAY_FROM_SEARCH` with a string extra
-`query` (verified 2026-09-06) opens the search **results** for the
-query but does not auto-play the top hit — one tap from playing, like
-Maps' search-along-route. Use it for "find X on YouTube"; use the VIEW
-intent when a video id or URL is already known. The scan also shows
-`vnd.youtube:<id>` as a VIEW scheme (untested; the watch URL already
-covers it). Video ids still must come from outside — web search or a
-known URL; the app exposes no catalog.
-
-So: fire the VIEW intent to start any video; UI open = full control
-including play-by-URL; UI closed = transport on the current video only.
+The browse root is empty, there is no queue, and liked videos,
+subscriptions, history, downloads and library are not exposed: guessed
+node ids return empty, as every unknown node does. Do not probe. The
+only readable state is the now-playing metadata of the loaded video.
