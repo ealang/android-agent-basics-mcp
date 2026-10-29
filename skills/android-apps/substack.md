@@ -51,7 +51,7 @@ it up immediately before playing.
 - `uri:` on the session: advertised and inert, for raw audio URLs and
   post URLs alike.
 - Saved, liked and history: no such nodes. An unknown node id returns
-  empty rather than an error, so do not probe for hidden nodes.
+  empty rather than an error.
 - A post published today may show `durationMs: 0` and hang in buffering
   until Substack generates its narration server-side. Try again later.
 

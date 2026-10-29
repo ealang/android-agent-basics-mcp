@@ -9,7 +9,7 @@ verified: 2026-10-02
 Package `au.com.shiftyjelly.pocketcasts`. Everything works through the
 browser route, from a cold process with the screen locked: resume, play
 by name, play by id, search, the queue, speed. Playback continues after
-the connection closes. Do not use `media_key` on this app.
+the connection closes. `media_key` does not work on this app.
 
 ## Resume or revive
 
@@ -66,9 +66,9 @@ media_command {"app": "au.com.shiftyjelly.pocketcasts", "action": "jumpFwd"}
   `markAsPlayed`. Case-sensitive: `jumpfwd` is dropped, `jumpFwd` works.
 - `pause` works on either route.
 
-## Do not use `media_key`
+## `media_key`
 
 Swiped away, the press does not revive the app. Paused with the
 notification up, the press tears the player down and leaves a `stopped`
-session that advertises `play` but ignores it. Revive with the
-browser-route `play` above instead.
+session that advertises `play` but ignores it. The browser-route `play`
+above revives it.

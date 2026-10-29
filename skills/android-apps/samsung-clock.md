@@ -9,7 +9,7 @@ verified: 2026-10-01
 Package `com.sec.android.app.clockpackage`. Timers and alarms are set
 through the standard AlarmClock intents and the lists open on screen.
 Dismiss and snooze are accepted and do nothing. The stopwatch cannot be
-reached at all; do not re-probe it.
+reached at all.
 
 ## Set a timer
 
@@ -28,7 +28,7 @@ send_intent
 ```
 
 The timer appears in the Clock app and counts down. Sending twice makes
-two timers; nothing can list or read them, so never resend on doubt.
+two timers, and nothing can list or read them.
 
 ## Set an alarm
 

@@ -11,7 +11,7 @@ Package `com.urbandroid.sleep`. When this app is the user's alarm clock,
 thing that works is creating an alarm through the standard intent. The
 alarm table cannot be read or written, so an existing alarm cannot be
 retimed, enabled, disabled or deleted, and each create adds a new alarm
-the user has to remove by hand. Ask before sending one.
+the user has to remove by hand.
 
 ## Create an alarm
 
@@ -49,7 +49,7 @@ closed: `provider_query` against the alarm authority fails with a
 permission denial naming `READ` or `WRITE`, `READ` is a build-time
 manifest grant phone-mcp does not declare, and `WRITE` is
 signature-level, so only Urbandroid-signed apps can ever hold it. No
-Settings toggle and no manifest line changes that. Do not re-probe.
+Settings toggle and no manifest line changes that.
 
 The broadcast toggles an alarm by its label, and alarms created by the
 intent carry no label the app addresses, so it reaches nothing created

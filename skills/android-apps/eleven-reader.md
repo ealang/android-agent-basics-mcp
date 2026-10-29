@@ -1,12 +1,12 @@
 ---
 name: android-eleven-reader
-description: Eleven Reader, the ElevenLabs reading app. Nothing can be driven. No media browser, no media-button listener, no exported service. Do not re-probe.
+description: Eleven Reader, the ElevenLabs reading app. Nothing can be driven. No media browser, no media-button listener, no exported service.
 verified: 2026-09-26
 ---
 
 # Eleven Reader
 
-`io.elevenlabs.readerapp`. Nothing to drive; do not re-probe.
+Package `io.elevenlabs.readerapp`. Nothing can be driven.
 
 - No MediaBrowserService, so the browser route does not exist.
 - No MEDIA_BUTTON listener on any receiver or service, so the targeted

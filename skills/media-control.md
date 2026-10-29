@@ -41,8 +41,8 @@ per-app (the file says), and a hand-built id is refused at play time.
 
 Who may connect is the app's decision. `media_apps` lists every app with
 a browser service; an app absent from it has no browser route. A
-connection the app refuses is a signature allowlist, permanent: do not
-retry, go to the other two routes. An app that connects but shows an
+connection the app refuses is a signature allowlist, permanent; the
+other two routes remain. An app that connects but shows an
 empty root withholds browsing; play and transport may still work.
 
 Most apps keep playing after the connection closes. The per-app file
@@ -64,9 +64,9 @@ media_command  {"app": "<package>", "route": "session", "action": "pause"}
 
 `media_key {"key": "play"}` presses a system media button. It is
 untargetable: the system routes it to whatever it considers the most
-recent media app and can revive that app as a headset button would. Use
-it only when no target can be named; some apps ignore it or mishandle it
-(their files say), and an app holding the audio session, such as a voice
+recent media app and can revive that app as a headset button would. It
+suits a bare play or pause with no named target; some apps ignore it or
+mishandle it (their files say), and an app holding the audio session, such as a voice
 assistant mid-conversation, can capture the press.
 
 ## Targeted media button
@@ -103,8 +103,7 @@ way.
 Every `media_play` and `media_command` result reads the session back
 after a beat: state, title, position and the actions the session
 advertises. PLAYING with a position that advances is playback; a stale
-title at position 0 means the app refused the id. That read-back is the
-confirmation, and nothing further is needed.
+title at position 0 means the app refused the id.
 
 - An action the session does not advertise is silently ignored, not
   errored. Some apps update the advertisement live.

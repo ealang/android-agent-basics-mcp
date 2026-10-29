@@ -10,8 +10,8 @@ Package `com.aimp.player`. The browser route connects and the library
 browses fully, but playback started this way stops the instant the
 connection closes, about three seconds after the call: AIMP never
 promotes itself to an independent service, so the session lives only
-while a browser client stays bound, which phone-mcp cannot do. Browse
-and inspect, do not play.
+while a browser client stays bound, which phone-mcp does not do.
+Browsing works; playback does not outlive the call.
 
 ## Browse
 
@@ -32,4 +32,4 @@ media_play {"app": "com.aimp.player", "media_id": "<id>"}
 
 Yields a read-back of PLAYING and about three seconds of audio, then
 silence as the connection closes. The transport and custom actions the
-session advertises are equally short-lived. Do not promise playback.
+session advertises are equally short-lived.

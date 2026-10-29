@@ -35,6 +35,5 @@ media_command {"app": "com.streema.simpleradio", "action": "pause"}
 
 The advertised actions change with state: while paused, `pause` drops
 out and `play` remains, so the advertisement is a reliable state signal.
-Read-backs carry no title while a stream plays; the state line is the
-confirmation. One custom action, ending `ACTION_FAVORITE`, appears in the
+Read-backs carry no title while a stream plays, only the state. One custom action, ending `ACTION_FAVORITE`, appears in the
 read-back; send it verbatim to favourite the current station.

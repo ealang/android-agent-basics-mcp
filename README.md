@@ -33,26 +33,28 @@ The generic mechanisms, one file each at the top of `skills/`:
   message.
 
 The apps with a verified file, in `skills/android-apps/` and
-`skills/pebble-apps/`:
+`skills/pebble-apps/`. ✅ means the app's main job runs hands-free from
+the background, 🟡 means it works with a limit the row names, ❌ means
+nothing works:
 
-| App | What works |
-|---|---|
-| [Pocket Casts](skills/android-apps/pocket-casts.md) | everything: play by name or id, queue, speed; works cold with the screen locked |
-| [Podcast Addict](skills/android-apps/podcast-addict.md) | browse, play by id or search, pause, jump |
-| [Simple Radio](skills/android-apps/simple-radio.md) | any station by name, favourites, pause |
-| [Libro.fm](skills/android-apps/librofm.md) | any owned book by ISBN or title, from cold; the cleanest interface |
-| [Substack](skills/android-apps/substack.md) | recent episodes and narrated posts, queue edits; no search, no older posts |
-| [AIMP](skills/android-apps/aimp.md) | browse only; playback stops when the connection closes |
-| [YouTube](skills/android-apps/youtube.md) | start any video by URL on screen; transport and URL switching while in the foreground |
-| [YouTube Music](skills/android-apps/youtube-music.md) | revive from dead with the screen locked; any song or playlist by URL |
-| [Smart AudioBook Player](skills/android-apps/smart-audiobook.md) | resume from a dead process, jump, pause; any book by name |
-| [Audible](skills/android-apps/audible.md) | revive from dead, any book by name, true absolute seek |
-| [Google Maps](skills/android-apps/google-maps.md) | start navigation hands-free, even locked; multi-stop and search along route one tap away; cannot end navigation |
-| [Samsung Clock](skills/android-apps/samsung-clock.md) | set timer and alarm; dismiss and snooze ignored; stopwatch unreachable |
-| [Sleep as Android](skills/android-apps/sleep-as-android.md) | create an alarm only; existing alarms cannot be read or changed |
-| [Eleven Reader](skills/android-apps/eleven-reader.md) | nothing |
-| [Agent Timer](skills/pebble-apps/agent-timer.md) (Pebble) | start a timer on the watch in one call |
-| [Pebble Maps](skills/pebble-apps/pebble-maps.md) (Pebble) | search, or start navigation to a favourite, address or place |
+| | App | What works |
+|---|---|---|
+| ✅ [Pocket Casts](skills/android-apps/pocket-casts.md) | everything: play by name or id, queue, speed; works cold with the screen locked |
+| ✅ [Podcast Addict](skills/android-apps/podcast-addict.md) | browse, play by id or search, pause, jump |
+| ✅ [Simple Radio](skills/android-apps/simple-radio.md) | any station by name, favourites, pause |
+| ✅ [Libro.fm](skills/android-apps/librofm.md) | any owned book by ISBN or title, from cold; the cleanest interface |
+| 🟡 [Substack](skills/android-apps/substack.md) | recent episodes and narrated posts, queue edits; no search, no older posts |
+| 🟡 [AIMP](skills/android-apps/aimp.md) | browse only; playback stops when the connection closes |
+| 🟡 [YouTube](skills/android-apps/youtube.md) | start any video by URL on screen; transport and URL switching while in the foreground |
+| ✅ [YouTube Music](skills/android-apps/youtube-music.md) | revive from dead with the screen locked; any song or playlist by URL |
+| ✅ [Smart AudioBook Player](skills/android-apps/smart-audiobook.md) | resume from a dead process, jump, pause; any book by name |
+| ✅ [Audible](skills/android-apps/audible.md) | revive from dead, any book by name, true absolute seek |
+| ✅ [Google Maps](skills/android-apps/google-maps.md) | start navigation hands-free, even locked; multi-stop and search along route one tap away; cannot end navigation |
+| 🟡 [Samsung Clock](skills/android-apps/samsung-clock.md) | set timer and alarm; dismiss and snooze ignored; stopwatch unreachable |
+| 🟡 [Sleep as Android](skills/android-apps/sleep-as-android.md) | create an alarm only; existing alarms cannot be read or changed |
+| ❌ [Eleven Reader](skills/android-apps/eleven-reader.md) | nothing |
+| ✅ [Agent Timer](skills/pebble-apps/agent-timer.md) (Pebble) | start a timer on the watch in one call |
+| ✅ [Pebble Maps](skills/pebble-apps/pebble-maps.md) (Pebble) | search, or start navigation to a favourite, address or place |
 
 Give the agent only the files for the apps you use. The recommended way
 is a personal skill file, or a section of your own agent instructions,

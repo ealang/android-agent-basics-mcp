@@ -28,8 +28,8 @@ finishes and keeps counting with the phone away. It shows the new
 timer's detail screen so the user sees what was set.
 
 The watch holds several timers at once, so repeating the call adds
-another timer rather than replacing one. Treat a result of no ACK and no
-NACK the same way: do not resend.
+another timer rather than replacing one. A result of no ACK and no NACK
+does not mean the timer was not set; the reply alone may have been lost.
 
 ## Clock-time requests
 

@@ -56,16 +56,25 @@ A skill file states current behaviour, succinctly. It is read as
 operating knowledge, so every sentence should change what a caller does
 next.
 
+- **Header shape.** After the front matter: the title, one line naming
+  the package (or the watchapp's UUID), then the verdict. No other
+  metadata in the body; the front matter holds it.
 - **Verdict first.** Open with what the app can and cannot do, in a
   sentence or two, before any detail.
 - **Literal calls.** Every working route is shown as the exact call an
-  agent would make: tool, arguments, typed extras. Use placeholders for
-  the variable parts (`<title>`, `<id>`), never a real title, query or
-  address from the test device.
-- **What did not work, with the reason.** Negative results are welcome,
-  as warnings, not as experiment logs: "signature-locked", "accepted then
-  silently ignored". Where retrying would waste a persistent agent's
-  time, say "do not re-probe".
+  agent would make: tool, arguments, typed extras. The `app` argument is
+  always the package name. Use placeholders for the variable parts
+  (`<title>`, `<id>`), never a real title, query or address from the
+  test device.
+- **What did not work, with the reason.** Negative results are stated
+  as facts with the cause, in terms a reader can weigh: refused at
+  connection by a signature allowlist, advertised but ignored, guarded
+  by a signature-level permission, accepted and does nothing. Not as
+  experiment logs, and not as instructions.
+- **Neutral on verification and retrying.** A file describes what a
+  call does and what its result contains. It does not tell the caller
+  to verify, re-read, poll, retry or refrain from any of those; the
+  calling agent decides what its situation needs.
 - **Current state only.** State what works and the correct way to do it.
   Don't narrate how it was discovered, what the file used to say, or the
   bug that prompted the edit; when behaviour changes, rewrite the

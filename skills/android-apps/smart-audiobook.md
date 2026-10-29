@@ -7,7 +7,7 @@ verified: 2026-09-26
 # Smart AudioBook Player
 
 Package `ak.alizandro.smartaudiobookplayer`. The browser route is
-refused (signature allowlist, do not re-probe) and there is no
+refused at connection by a signature allowlist and there is no
 media-button listener, but the player service exports named actions as
 plain intent filters, so one `send_intent` resumes the current book from
 a dead process, and the live session then plays any book in the library
@@ -51,7 +51,7 @@ media_command
 
 Free text against the local library; playback switches to the named
 book within the read-back. A non-matching query leaves the current book
-playing with no error, so the read-back's title is the report. From a
+playing with no error; the read-back shows which book is loaded. From a
 dead process: `ActionPlay`, then the search once `media_sessions` lists
 the app.
 

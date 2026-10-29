@@ -44,7 +44,7 @@ send_intent
 Fire the same URI at an active session. Maps shows an "exit
 navigation?" prompt: accepted, the route swaps to the new destination;
 timed out, the new destination is dropped and the original route
-continues. Tell the user to expect the prompt.
+continues.
 
 ## Multi-stop route — one tap
 
@@ -74,7 +74,7 @@ send_intent
 
 The query cannot be passed in; the user types or speaks it. The extras
 `query`, `q`, `android.intent.extra.TEXT` and `search_query` are all
-ignored. Do not re-probe.
+ignored.
 
 ## Open the destination-entry screen
 
@@ -89,5 +89,4 @@ active navigation, after an exit-navigation prompt). Useful only as
 - **End navigation**: no exported component, no URI. The user taps End.
 - **Add a stop to an active route**: nothing exported.
 - A bare targeted broadcast at `NavigationInfoBroadcastReceiver` is
-  delivered and does nothing, during active navigation included. Do not
-  re-probe.
+  delivered and does nothing, during active navigation included.

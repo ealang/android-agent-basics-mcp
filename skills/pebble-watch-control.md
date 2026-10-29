@@ -59,8 +59,8 @@ app is running; ACK rather than NACK proves the firmware accepted
 delivery. Neither proves the handler acted: a key the app has never heard
 of is ACKed exactly like one it acts on, and there is no error for a
 wrong key. A payload that gets no reply is not resent by the tool, since
-it may have arrived with only the reply lost; do not resend it blindly
-either, because a duplicate does whatever the keys do twice.
+it may have arrived with only the reply lost, and a resend does whatever
+the keys do a second time.
 
 ## Keys are per-app knowledge
 

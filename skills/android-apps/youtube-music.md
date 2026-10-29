@@ -7,7 +7,7 @@ verified: 2026-10-19
 # YouTube Music
 
 Package `com.google.android.apps.youtube.music`. The browser route is
-refused (signature allowlist, do not re-probe), but the app is fully
+refused at connection by a signature allowlist, but the app is fully
 drivable: a targeted media-button intent revives it from a dead process
 with the screen locked, and the live session then plays any song or
 playlist by `music.youtube.com` URL and takes transport. Content is
@@ -30,7 +30,7 @@ session at all, screen locked, taking audio focus from any other app. A
 session appears within about a second. A force-stopped app stays
 unreachable.
 
-Do not re-probe these: `"mode": "broadcast"` at the app's
+The other deliveries fall short: `"mode": "broadcast"` at the app's
 MediaButtonReceiver is delivered and ignored; `"mode": "service"` is
 refused by Android; `"value": "pause"` is delivered but publishes no
 session, so only `play` revives.
@@ -95,7 +95,7 @@ within a minute of losing audio focus; revive when that happens.
 - YouTube Data API v3 `search.list` with `videoCategoryId=10` filters to
   official music; needs an API key.
 
-## Refused, do not re-probe
+## Refused
 
 - `search:<query>` on the session answers "Cannot play track" and pins
   the session in an error state, recoverable with a plain `play`.

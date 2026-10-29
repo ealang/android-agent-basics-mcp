@@ -22,9 +22,8 @@ action.
 Android's compatibility definition requires every certified device to
 ship a handler for the AlarmClock actions: SET_ALARM, SET_TIMER,
 SHOW_ALARMS, SHOW_TIMERS, DISMISS_ALARM, DISMISS_TIMER and SNOOZE_ALARM
-all **resolve** on any Play-certified phone. Send them directly; there is
-no need to `intent_resolve` first, and a send that fails to resolve
-means an uncertified device.
+all **resolve** on any Play-certified phone. A send that fails to
+resolve means an uncertified device.
 
 Resolving is not acting. The requirement is that a handler exists, not
 that it does anything, and clock apps differ:
@@ -34,9 +33,8 @@ that it does anything, and clock apps differ:
   would be visibly broken.
 - **SHOW_ALARMS and SHOW_TIMERS** open the list on screen. Harmless.
 - **DISMISS_ALARM, DISMISS_TIMER and SNOOZE_ALARM are per app.** Some
-  clocks accept them and do nothing. Treat them as unavailable unless the
-  handling app's file says otherwise: a timer or alarm, once set, is the
-  user's to stop.
+  clocks accept them and do nothing; the handling app's file says what
+  it does with them.
 
 ## The calls
 
@@ -73,12 +71,12 @@ Set an alarm:
 }
 ```
 
-- `LENGTH` is seconds, typed `int`, 1 to 86400. Validate before sending.
+- `LENGTH` is seconds, typed `int`, 1 to 86400.
 - `HOUR` and `MINUTES` are typed `int`. For a repeating alarm add
   `android.intent.extra.alarm.DAYS` as an `int_arraylist` of
   `java.util.Calendar` day constants (Sunday = 1, Saturday = 7); with any
   other type the alarm comes out one-time.
-- Always set a `MESSAGE`, so the user can tell agent-set timers apart.
+- `MESSAGE` labels the timer, so the user can tell agent-set timers apart.
 - `SKIP_UI: true` is a request, not a guarantee: most clocks set the
   timer without coming to the front, some show their UI anyway.
 - **SET_ALARM only ever creates.** The contract has no way to address an
@@ -98,4 +96,4 @@ all that can be assumed.
 Nothing can enumerate timers or alarms, so there is no list and no way to
 confirm state. "Started activity" means the handling app took the
 intent; that is all the platform offers. Sending SET_TIMER or SET_ALARM
-twice makes two. Never resend on doubt.
+twice makes two.

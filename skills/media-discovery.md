@@ -21,9 +21,8 @@ media_browse {"app": "<package>", "node": "<id>"}
 What the tree contains is the app's choice: the whole owned or
 subscribed catalogue in some apps, a recency window of recent items in
 others, with older content absent and no route to it. Some apps answer
-node ids they never list; the per-app file names them. Do not guess at
-hidden ids: apps return empty for an unknown node, not an error, so a
-guess learns nothing.
+node ids they never list; the per-app file names them. Apps return empty
+for an unknown node, not an error, so a guessed id learns nothing.
 
 ## 2. Session search
 
@@ -33,7 +32,7 @@ media_search {"app": "<package>", "query": "<text>"}
 
 Free text in, playable ids out, where implemented. Most apps do not
 implement it, and an unimplemented search times out rather than
-erroring; only use it where the per-app file says it works.
+erroring; the per-app file says where it works.
 
 `media_play` with `"query"` is related but blind: the app resolves the
 text and plays its best guess at once. The read-back's title is the only

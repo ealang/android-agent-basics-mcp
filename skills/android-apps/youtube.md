@@ -60,19 +60,19 @@ real title, position and duration.
 
 Transport on the current video still works. `uri:` does not: the session
 still advertises it but drops the URL, and may instead launch the app
-and restart the last video, which is visible and confusing. Do not send
-`uri:` to a backgrounded YouTube; fire the VIEW intent instead.
+and restart the last video, which is visible and confusing. The VIEW
+intent is the route to a new video while the UI is closed.
 
 ## Process dead
 
 Nothing works on the session: `play` answers "Required premium account to
 perform action in background", a canned rejection that appears on
 Premium accounts too, and play-from-search and play-from-id answer
-"Action not supported". Do not retry variations; use the VIEW intent.
+"Action not supported". The VIEW intent is the only route.
 
 ## No content is visible
 
 The browse root is empty, there is no queue, and liked videos,
 subscriptions, history, downloads and library are not exposed: guessed
-node ids return empty, as every unknown node does. Do not probe. The
-only readable state is the now-playing metadata of the loaded video.
+node ids return empty, as every unknown node does. The only readable
+state is the now-playing metadata of the loaded video.

@@ -7,7 +7,7 @@ verified: 2026-09-27
 # Audible
 
 Package `com.audible.application`. The browser route is refused
-(signature allowlist, do not re-probe), but the app revives from a dead
+at connection by a signature allowlist, but the app revives from a dead
 process with a targeted media-button intent followed by a session
 `play`, and the live session then plays any library book by name, takes
 transport and seeks to an absolute position. The relative jumps are
@@ -58,4 +58,4 @@ chapter: `seek:0` is the start of this chapter, not of the book. For a
 relative move, read the position, compute, and seek absolutely. The
 relative verbs do nothing: `rewind` and `fast_forward` are advertised
 and ignored, and the custom `ACTION_BACKWARD_AssistantDrive` and
-`ACTION_FORWARD_AssistantDrive` are inert. Do not use them.
+`ACTION_FORWARD_AssistantDrive` are inert.
