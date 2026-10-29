@@ -45,7 +45,7 @@ The apps with a verified file, in `skills/android-apps/` and
 | [AIMP](skills/android-apps/aimp.md) | browse only; playback stops when the connection closes |
 | [YouTube](skills/android-apps/youtube.md) | start any video by URL on screen; transport and URL switching while in the foreground |
 | [YouTube Music](skills/android-apps/youtube-music.md) | revive from dead with the screen locked; any song or playlist by URL |
-| [Smart AudioBook Player](skills/android-apps/smart-audiobook.md) | full remote from a dead process: play, jump, bookmark, sleep timer; any book by name |
+| [Smart AudioBook Player](skills/android-apps/smart-audiobook.md) | resume from a dead process, jump, pause; any book by name |
 | [Audible](skills/android-apps/audible.md) | revive from dead, any book by name, true absolute seek |
 | [Google Maps](skills/android-apps/google-maps.md) | start navigation hands-free, even locked; multi-stop and search along route one tap away; cannot end navigation |
 | [Samsung Clock](skills/android-apps/samsung-clock.md) | set timer and alarm; dismiss and snooze ignored; stopwatch unreachable |

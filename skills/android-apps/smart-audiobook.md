@@ -1,6 +1,6 @@
 ---
 name: android-smart-audiobook
-description: Smart AudioBook Player. Play, pause, jump, change file, bookmark and set the sleep timer by firing its service actions from a dead process; play any book in the library by name.
+description: Smart AudioBook Player. Resume from a dead process by firing its service actions, jump back and forward, restart the chapter, pause; play any book in the library by name.
 verified: 2026-09-26
 ---
 
@@ -37,10 +37,6 @@ The same call with another action name drives the rest of the service:
 | `ActionPrevFile` | restart the current file |
 | `ActionRewindBig` / `ActionFwdBig` | jump about a minute, app-configured |
 
-The service declares `ActionPause`, `ActionPlayPause`,
-`ActionRewindSmall`, `ActionFwdSmall`, `ActionNextFile`,
-`ActionAddBookmark`, `ActionEnableSleepTimer`, `ActionDisableSleepTimer`
-and `ActionExit` on the same filter.
 
 ## Any book by name
 

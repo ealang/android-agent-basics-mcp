@@ -1,6 +1,6 @@
 ---
 name: android-audible
-description: Audible audiobook app. Revive from a dead process, play any library book by name, pause, seek to an absolute position within the chapter. Sleep timer and speed are reachable only through screen-bound deep links.
+description: Audible audiobook app. Revive from a dead process, play any library book by name, pause, seek to an absolute position within the chapter.
 verified: 2026-09-27
 ---
 
@@ -11,7 +11,7 @@ Package `com.audible.application`. The browser route is refused
 process with a targeted media-button intent followed by a session
 `play`, and the live session then plays any library book by name, takes
 transport and seeks to an absolute position. The relative jumps are
-broken. Sleep timer and speed have no session verb.
+broken, and the session has no sleep-timer or speed verb.
 
 ## Revive from a dead process
 
@@ -59,12 +59,3 @@ relative move, read the position, compute, and seek absolutely. The
 relative verbs do nothing: `rewind` and `fast_forward` are advertised
 and ignored, and the custom `ACTION_BACKWARD_AssistantDrive` and
 `ACTION_FORWARD_AssistantDrive` are inert. Do not use them.
-
-## Screen-bound only
-
-Sleep timer and playback speed have no session verb. The app's launcher
-activity accepts `audible://google-assistant/` deep links with paths
-such as `cancel-sleep-timer`, `end-of-chapter-sleep-timer`,
-`faster-playback-speed` and `slower-playback-speed`; these open the UI
-on screen through a VIEW intent in activity mode and are the only route
-to those settings.
