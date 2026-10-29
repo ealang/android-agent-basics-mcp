@@ -118,7 +118,3 @@ title at position 0 means the app refused the id.
   play-from-id.
 - Any other action is sent verbatim as a custom action. Ids are
   app-defined and case-sensitive; the read-back lists them.
-
-Force stop blocks two routes until the user opens the app again: no
-broadcast reaches it, and `media_key` does not revive it. The browser
-route still reaches a force-stopped app.
