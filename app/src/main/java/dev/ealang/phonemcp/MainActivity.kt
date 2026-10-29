@@ -101,12 +101,27 @@ class MainActivity : ComponentActivity() {
         )
         bump()
 
-        // A service started by boot or by an app update cannot hold the
-        // location foreground type — that needs an app the system considers in
-        // use. Being on screen is exactly that, so this is the moment it can
-        // be claimed. Harmless when it isn't needed; the service treats a
-        // repeat start as a no-op once the socket is up.
-        if (McpService.serviceRunning && McpService.degraded) McpService.start(this)
+        // Two states only the open app can mend, so this is the moment:
+        //
+        // The switch is on but the service is gone. A force stop (App info,
+        // or an OEM battery manager) kills the process without touching the
+        // flag, and nothing restarts it — the system drops every broadcast
+        // to a force-stopped app until the user opens it. Which they just
+        // did, so start it, and say so in the log, where the page points
+        // when the header reads "on but not listening".
+        //
+        // The service is up but without the location foreground type. A
+        // start from boot or an app update cannot hold it — that needs an
+        // app the system considers in use. Being on screen is exactly that.
+        //
+        // Harmless when neither applies; the service treats a repeat start
+        // as a no-op once the socket is up.
+        if (config.enabled && !McpService.serviceRunning) {
+            Logs.mcp.info("service not running with the switch on", "restarting")
+            McpService.start(this)
+        } else if (McpService.serviceRunning && McpService.degraded) {
+            McpService.start(this)
+        }
     }
 
     override fun onStop() {
