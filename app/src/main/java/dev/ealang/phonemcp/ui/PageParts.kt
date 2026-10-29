@@ -4,6 +4,7 @@ import android.app.NotificationManager
 import android.content.ComponentName
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.compose.foundation.background
@@ -153,7 +154,15 @@ private fun settingsFor(action: String): (MainActivity) -> Unit = { activity ->
 val BATTERY_GRANT = Grant(
     ask = "The server needs to be exempt from battery optimization, or power " +
         "management can stop it and close the listening socket. On the next " +
-        "screen, open Battery and choose Unrestricted.",
+        "screen, " + if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            "open Battery and choose Unrestricted."
+        } else {
+            // Before 12 there is no Unrestricted: the exemption is a list of
+            // its own, one screen further down (Battery sits under Advanced
+            // on 10).
+            "open Battery, then Battery optimization, find Phone MCP under " +
+                "All apps and choose Don't optimize."
+        },
     button = "Battery settings",
     granted = {
         it.getSystemService(PowerManager::class.java)
