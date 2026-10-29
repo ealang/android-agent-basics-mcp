@@ -98,7 +98,7 @@ The app runs a plain HTTP server on the phone with a single endpoint,
 `Authorization: Bearer <token>`; any other request is answered 401. The
 traffic is unencrypted, so it is meant to be reached over a VPN rather than
 the open network. [Tailscale](https://play.google.com/store/apps/details?id=com.tailscale.ipn)
-is recommended.
+is recommended. The app installs on Android 10 (API 29) or later.
 
 1. **Set up Tailscale** on the phone and on the machine hosting the agent,
    signed into the same tailnet.
