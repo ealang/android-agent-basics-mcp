@@ -58,6 +58,14 @@ manifest suggests it could do. The work runs in this order.
   there proves nothing. Read the session again after the connection has
   closed, because some apps stop when it does. Try a stored id later, so
   the file can say whether ids outlive a session.
+- **Test from cold.** The hardest case, and the one a media app will
+  usually meet, is a cold start: process dead, no notification, no live
+  session, screen locked. Produce it deliberately: force-stop the app,
+  open it once so it leaves Android's stopped state, then swipe it from
+  Recents and dismiss any notification it left. Force stop alone is not
+  the test; a force-stopped app is unreachable on every route until the
+  user opens it, so a failure in that state proves nothing. A route that
+  only works while the app is warm is a 🟡, and the file says so.
 - **Run a failure down to its cause.** A negative result goes in the file
   with its reason, so the test is not finished at "did not work":
   distinguish a connection refused by allowlist, an action advertised
