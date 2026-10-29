@@ -33,28 +33,35 @@ The generic mechanisms, one file each at the top of `skills/`:
   message.
 
 The apps with a verified file, in `skills/android-apps/` and
-`skills/pebble-apps/`. ✅ means the app's main job runs hands-free from
+`skills/pebble-apps/`. ✅ means the app's main job works hands-free from
 the background, 🟡 means it works with a limit the row names, ❌ means
-nothing works:
+nothing works.
 
-| | App | What works |
-|---|---|---|
-| ✅ [Pocket Casts](skills/android-apps/pocket-casts.md) | everything: play by name or id, queue, speed; works cold with the screen locked |
-| ✅ [Podcast Addict](skills/android-apps/podcast-addict.md) | browse, play by id or search, pause, jump |
+Android apps:
+
+| App | What works |
+|---|---|
+| ✅ [Pocket Casts](skills/android-apps/pocket-casts.md) | play any show or episode by name, resume, queue, speed; screen locked |
+| ✅ [Podcast Addict](skills/android-apps/podcast-addict.md) | play by name, resume, pause, jump |
 | ✅ [Simple Radio](skills/android-apps/simple-radio.md) | any station by name, favourites, pause |
-| ✅ [Libro.fm](skills/android-apps/librofm.md) | any owned book by ISBN or title, from cold; the cleanest interface |
-| 🟡 [Substack](skills/android-apps/substack.md) | recent episodes and narrated posts, queue edits; no search, no older posts |
-| ✅ [AIMP](skills/android-apps/aimp.md) | any track or playlist from the library, locked; one service-start call first |
-| 🟡 [YouTube](skills/android-apps/youtube.md) | start any video by URL on screen; transport and URL switching while in the foreground |
-| ✅ [YouTube Music](skills/android-apps/youtube-music.md) | revive from dead with the screen locked; any song or playlist by URL |
-| ✅ [Smart AudioBook Player](skills/android-apps/smart-audiobook.md) | resume from a dead process, jump, pause; any book by name |
-| ✅ [Audible](skills/android-apps/audible.md) | revive from dead, any book by name, true absolute seek |
-| ✅ [Google Maps](skills/android-apps/google-maps.md) | start navigation hands-free, even locked; multi-stop and search along route one tap away; cannot end navigation |
-| 🟡 [Samsung Clock](skills/android-apps/samsung-clock.md) | set timer and alarm; dismiss and snooze ignored; stopwatch unreachable |
-| 🟡 [Sleep as Android](skills/android-apps/sleep-as-android.md) | create an alarm only; existing alarms cannot be read or changed |
+| ✅ [Libro.fm](skills/android-apps/librofm.md) | any owned book by title, resume, pause |
+| ✅ [AIMP](skills/android-apps/aimp.md) | any track or playlist in the library, pause, skip; screen locked |
+| ✅ [YouTube Music](skills/android-apps/youtube-music.md) | any song or playlist, resume; screen locked |
+| ✅ [Smart AudioBook Player](skills/android-apps/smart-audiobook.md) | any book in the library by name, resume, pause, jump |
+| ✅ [Audible](skills/android-apps/audible.md) | any book by name, resume, pause, seek |
+| ✅ [Google Maps](skills/android-apps/google-maps.md) | start navigation hands-free, screen locked; multi-stop and search along the route are one tap away; cannot end navigation |
+| 🟡 [Substack](skills/android-apps/substack.md) | recent episodes and narrated posts; no search, no older posts |
+| 🟡 [YouTube](skills/android-apps/youtube.md) | start any video on screen, then pause, seek and switch videos while it stays in the foreground |
+| 🟡 [Samsung Clock](skills/android-apps/samsung-clock.md) | set timers and alarms; cannot dismiss or snooze, no stopwatch |
+| 🟡 [Sleep as Android](skills/android-apps/sleep-as-android.md) | create an alarm; existing alarms cannot be read or changed |
 | ❌ [Eleven Reader](skills/android-apps/eleven-reader.md) | nothing |
-| ✅ [Agent Timer](skills/pebble-apps/agent-timer.md) (Pebble) | start a timer on the watch in one call |
-| ✅ [Pebble Maps](skills/pebble-apps/pebble-maps.md) (Pebble) | search, or start navigation to a favourite, address or place |
+
+Pebble watchapps:
+
+| App | What works |
+|---|---|
+| ✅ [Agent Timer](skills/pebble-apps/agent-timer.md) | start a timer on the watch |
+| ✅ [Pebble Maps](skills/pebble-apps/pebble-maps.md) | search, or start navigation to a favourite, address or place |
 
 Give the agent only the files for the apps you use. The recommended way
 is a personal skill file, or a section of your own agent instructions,

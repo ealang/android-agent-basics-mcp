@@ -22,8 +22,9 @@ An app file is self-contained. Its calls are written out in full even
 when a generic file explains the same mechanism, so a reader with only
 the app file can act.
 
-The user-facing summary, app by app, is the table in the root README.
-It is maintained by hand: a new app file gets a row.
+The user-facing summary, app by app, is the pair of tables in the root
+README, Android then Pebble, ✅ rows first. They are maintained by hand: a
+new app file gets a row.
 
 ## Front matter
 
