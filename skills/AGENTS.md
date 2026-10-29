@@ -71,8 +71,6 @@ manifest suggests it could do. The work runs in this order.
   distinguish a connection refused by allowlist, an action advertised
   but ignored, a permission guard, and a call accepted that does
   nothing.
-- **Leave the device as found.** Stop what the test started. Anything
-  that rings, speaks or vibrates is announced before it is fired.
 - **Acceptance.** An agent with no familiarity with the project drives
   the app from the finished file alone. If it needs an `inspect` or a
   question, the file is not self-contained yet.
