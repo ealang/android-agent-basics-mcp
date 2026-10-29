@@ -60,12 +60,12 @@ manifest suggests it could do. The work runs in this order.
   the file can say whether ids outlive a session.
 - **Test from cold.** The hardest case, and the one a media app will
   usually meet, is a cold start: process dead, no notification, no live
-  session, screen locked. Produce it deliberately: force-stop the app,
-  open it once so it leaves Android's stopped state, then swipe it from
-  Recents and dismiss any notification it left. Force stop alone is not
-  the test; a force-stopped app is unreachable on every route until the
-  user opens it, so a failure in that state proves nothing. A route that
-  only works while the app is warm is a 🟡, and the file says so.
+  session, screen locked. Force stop (App info, Force stop) produces it
+  on demand and is the standard cold test. One exception: a force-stopped
+  app receives no broadcasts and is not revived by `media_key` until the
+  user opens it again, so those two routes are tested from a process
+  that died on its own. A route that only works while the app is warm is
+  a 🟡, and the file says so.
 - **Run a failure down to its cause.** A negative result goes in the file
   with its reason, so the test is not finished at "did not work":
   distinguish a connection refused by allowlist, an action advertised

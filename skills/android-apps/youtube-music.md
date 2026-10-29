@@ -27,8 +27,7 @@ send_intent
 
 Resumes whatever was last loaded, audibly, from a stopped session or no
 session at all, screen locked, taking audio focus from any other app. A
-session appears within about a second. A force-stopped app stays
-unreachable.
+session appears within about a second.
 
 The other deliveries fall short: `"mode": "broadcast"` at the app's
 MediaButtonReceiver is delivered and ignored; `"mode": "service"` is

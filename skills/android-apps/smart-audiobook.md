@@ -26,8 +26,7 @@ send_intent
 ```
 
 No extras: the action name is the command. Resumes the current book at
-the saved speed with no live session anywhere. A force-stopped app stays
-unreachable.
+the saved speed with no live session anywhere.
 
 The same call with another action name drives the rest of the service:
 
