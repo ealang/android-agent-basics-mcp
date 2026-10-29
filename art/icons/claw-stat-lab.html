@@ -22,6 +22,12 @@
   .bar svg { display: block; }
   .bars { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; margin-top: 6px; }
   .bar.x2 { transform: scale(2); transform-origin: left top; margin-right: 180px; margin-bottom: 30px; }
+  .themed { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; margin-top: 10px; }
+  .themed .card { padding: 10px 12px 6px; border-radius: 12px; display: flex; gap: 14px; }
+  .themed .card.light { background: #F7F2FA; } .themed .card.night { background: #141218; }
+  .themed .card > div { text-align: center; font-size: 11px; color: #666; line-height: 1.3; }
+  .themed .card svg { display: block; width: 72px; height: 72px; margin-bottom: 4px; }
+  .themed .note { font-size: 11px; color: #666; align-self: center; max-width: 220px; line-height: 1.4; }
   .panel { width: 100%; max-width: 560px; }
   label { display: grid; grid-template-columns: 96px 1fr 44px; gap: 8px; align-items: center; margin: 6px 0; font-size: 13px; }
   label.chk { grid-template-columns: 96px 1fr; }
@@ -30,7 +36,7 @@
   input[type=range] { width: 100%; height: 28px; margin: 0; }
   .val { text-align: right; font-variant-numeric: tabular-nums; }
   textarea { width: 100%; font: 11px/1.4 ui-monospace, monospace; box-sizing: border-box; margin-top: 8px; }
-  #out { height: 120px; } #xml { height: 110px; }
+  #out { height: 120px; } #xml { height: 110px; } #mono { height: 90px; }
   button { font-size: 13px; padding: 6px 12px; margin-right: 8px; margin-top: 8px; }
   .hint { font-size: 12px; color: #666; margin-top: 10px; line-height: 1.5; }
   .sel { font-size: 12px; margin-top: 6px; color: #444; }
@@ -52,6 +58,7 @@
       <div class="bar x2" id="bar2"></div>
       <div><div class="bar" id="bar1"></div><div style="margin-top:4px;font-size:11px;color:#666">status bar, 1× and 2×</div></div>
     </div>
+    <div class="themed" id="themed"></div>
   </div>
   <div class="panel-wrap"><div class="panel">
     <fieldset><legend>Claw</legend>
@@ -94,9 +101,11 @@
     <button id="reset">Reset to current icon</button>
     <button id="copy">Copy parameters</button>
     <button id="copyxml">Copy XML</button>
+    <button id="copymono">Copy monochrome XML</button>
     <button id="load" data-label="Load parameters">Load parameters</button>
     <textarea id="out" spellcheck="false"></textarea>
     <textarea id="xml" readonly></textarea>
+    <textarea id="mono" readonly></textarea>
     <div class="hint">
       The 144 px view is the 24 dp box at 6×. Drag the claw there to move it; drag the phone to move it (untick "phone centred"
       first, otherwise the frame follows the phone and nothing appears to move). Rotation and scale act about the claw's
@@ -317,6 +326,43 @@ function vectorXml(d) {
          '    <path\n        android:fillColor="#FFFFFFFF"\n        android:fillType="evenOdd"\n        android:pathData="' + d + '" />\n</vector>\n';
 }
 
+// The themed-icon layer of the launcher icon is this same glyph, inset so it sits in the central 66 dp of the
+// adaptive icon's 108 dp canvas: (108 - 66) / 2 / 108 = 19.44 % on each side. The drawable references
+// ic_stat_claw.xml, so it needs no regeneration when the glyph changes; it is emitted here so one page
+// exports every artifact the status glyph feeds.
+const MONO_INSET = (108 - 66) / 2 / 108;
+const MONO_XML = '<?xml version="1.0" encoding="utf-8"?>\n' +
+  '<!-- Themed-icon layer (Android 13+). The launcher tints it, so colour is\n' +
+  '     irrelevant; what matters is that the glyph sits inside the central\n' +
+  '     66 dp of the 108 dp canvas, which the fractional inset arranges:\n' +
+  '     (108 - 66) / 2 / 108 = 19.44 % on each side. -->\n' +
+  '<inset xmlns:android="http://schemas.android.com/apk/res/android"\n' +
+  '    android:drawable="@drawable/ic_stat_claw"\n' +
+  '    android:inset="' + (MONO_INSET * 100).toFixed(2) + '%" />\n';
+// How a launcher shows the themed icon: the monochrome layer tinted from the wallpaper palette over a
+// tinted background, cut to the launcher's mask (the central 72 dp of 108). Tones approximate Material
+// You's: a pale container with a dark glyph in light mode, the reverse at night.
+const THEMES = [
+  { card: "light", label: "light, blue",  bg: "#D3E3FD", fg: "#041E49", mask: "circle" },
+  { card: "light", label: "light, green", bg: "#C4EED0", fg: "#072711", mask: "squircle" },
+  { card: "night", label: "dark, blue",   bg: "#0842A0", fg: "#D3E3FD", mask: "circle" },
+  { card: "night", label: "dark, green",  bg: "#0F5223", fg: "#C4EED0", mask: "squircle" },
+];
+const SQUIRCLE = "M54,18 C78,18 90,30 90,54 C90,78 78,90 54,90 C30,90 18,78 18,54 C18,30 30,18 54,18 Z";
+function themedTile(t, d, i) {
+  const clip = t.mask === "circle" ? '<circle cx="54" cy="54" r="36"/>' : `<path d="${SQUIRCLE}"/>`;
+  const k = 66 / 24, off = 108 * MONO_INSET;
+  return `<div><svg viewBox="0 0 108 108" xmlns="http://www.w3.org/2000/svg"><defs><clipPath id="tm${i}">${clip}</clipPath></defs>` +
+         `<g clip-path="url(#tm${i})"><rect width="108" height="108" fill="${t.bg}"/>` +
+         `<path d="${d}" fill-rule="evenodd" fill="${t.fg}" transform="translate(${off},${off}) scale(${k})"/></g></svg>${t.label}</div>`;
+}
+function renderThemed(d) {
+  const cards = { light: [], night: [] };
+  THEMES.forEach((t, i) => cards[t.card].push(themedTile(t, d, i)));
+  $("themed").innerHTML = `<div class="card light">${cards.light.join("")}</div><div class="card night">${cards.night.join("")}</div>` +
+    `<div class="note">themed icon (Android 13+): the glyph as the launcher tints it, inset to the 66 dp safe zone, under the circle and squircle masks</div>`;
+}
+
 const $ = id => document.getElementById(id);
 let cur = null;
 function render() {
@@ -350,6 +396,8 @@ function render() {
   };
   $("out").value = JSON.stringify(out, null, 2);
   $("xml").value = vectorXml(cur.d);
+  $("mono").value = MONO_XML;
+  renderThemed(cur.d);
 }
 for (const k of RANGES) $(k).addEventListener("input", e => { S[k] = parseFloat(e.target.value); render(); });
 for (const k of SELECTS) $(k).addEventListener("change", e => { S[k] = e.target.value; render(); });
@@ -394,6 +442,7 @@ $("reset").onclick = () => { S = chosenState(); render(); };
 async function copyText(btn, text, label) { try { await navigator.clipboard.writeText(text); btn.textContent = "Copied"; setTimeout(() => btn.textContent = label, 1200); } catch (_) {} }
 $("copy").onclick = () => copyText($("copy"), $("out").value, "Copy parameters");
 $("copyxml").onclick = () => copyText($("copyxml"), $("xml").value, "Copy XML");
+$("copymono").onclick = () => copyText($("copymono"), $("mono").value, "Copy monochrome XML");
 // Restore the state from a pasted parameter block: the full readout (claw / phone / frame), or just its centred
 // block. Only the keys present are applied, so a partial block adjusts rather than resets.
 const num = v => (typeof v === "number" && isFinite(v)) ? v : undefined;
