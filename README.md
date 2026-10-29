@@ -44,7 +44,7 @@ nothing works:
 | ✅ [Simple Radio](skills/android-apps/simple-radio.md) | any station by name, favourites, pause |
 | ✅ [Libro.fm](skills/android-apps/librofm.md) | any owned book by ISBN or title, from cold; the cleanest interface |
 | 🟡 [Substack](skills/android-apps/substack.md) | recent episodes and narrated posts, queue edits; no search, no older posts |
-| 🟡 [AIMP](skills/android-apps/aimp.md) | browse only; playback stops when the connection closes |
+| ✅ [AIMP](skills/android-apps/aimp.md) | any track or playlist from the library, locked; one service-start call first |
 | 🟡 [YouTube](skills/android-apps/youtube.md) | start any video by URL on screen; transport and URL switching while in the foreground |
 | ✅ [YouTube Music](skills/android-apps/youtube-music.md) | revive from dead with the screen locked; any song or playlist by URL |
 | ✅ [Smart AudioBook Player](skills/android-apps/smart-audiobook.md) | resume from a dead process, jump, pause; any book by name |
