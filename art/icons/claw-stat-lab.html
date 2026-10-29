@@ -310,10 +310,10 @@ function build(S) {
 
 // ---- state: the status icon as shipped -----------------------------------------------------------
 function chosenState() {
-  return { cs: 0.98, ang: -37, tilt: -23, px: 13, py: 134, wx: -119.23, wy: 250.82,
-           teeth: true, lo: false, jt: false, jw: 1.3, jl: 1.15, gi: 1.31, op: -15, sc: "solid", sp: "inverted", ow: 1.5,
-           arm: false, bx: 69, bb: 1.75, bl: 0.31,
-           slit: false, auto: false, pad: 1.5, gap: 1.3, fz: 1, fdx: 6.8, fdy: -3, fcx: 61, fcy: 118 };
+  return { cs: 0.97, ang: -7, tilt: 0, px: 82, py: 143, wx: -122, wy: 159,
+           teeth: true, lo: true, jt: false, jw: 1.3, jl: 1.02, gi: 1.31, op: -15, sc: "solid", sp: "inverted", ow: 1.5,
+           arm: false, bx: 84, bb: 2.05, bl: 0.2,
+           slit: false, auto: false, pad: 1.5, gap: 1.3, fz: 1, fdx: 3, fdy: -3, fcx: 61, fcy: 118 };
 }
 let S = chosenState();
 const RANGES = ["cs","ang","jl","gi","op","jw","ow","wx","wy","bl","bx","bb","tilt","px","py","pad","gap","fz","fdx","fdy"], CHECKS = ["teeth","lo","jt","arm","slit","auto"], SELECTS = ["sc","sp"];
