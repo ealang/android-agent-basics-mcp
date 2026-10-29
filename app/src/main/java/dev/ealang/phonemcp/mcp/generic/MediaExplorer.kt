@@ -521,14 +521,15 @@ object MediaExplorer {
         } catch (e: Exception) {
             null
         }
-        val stateName = when (state?.state) {
+        val noState = "no state — the command was likely ignored"
+        val stateName = if (state == null) noState else when (state.state) {
             PlaybackState.STATE_PLAYING -> "PLAYING"
             PlaybackState.STATE_PAUSED -> "paused"
             PlaybackState.STATE_BUFFERING -> "buffering"
             PlaybackState.STATE_CONNECTING -> "connecting"
             PlaybackState.STATE_STOPPED -> "stopped"
             PlaybackState.STATE_ERROR -> "error: ${state.errorMessage ?: "unspecified"}"
-            PlaybackState.STATE_NONE, null -> "no state — the command was likely ignored"
+            PlaybackState.STATE_NONE -> noState
             else -> "state ${state.state}"
         }
         val playing = title?.let { " Now loaded: \"$it\"." } ?: ""

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<lint>
+    <!-- The status-bar glyph is a polygon-boolean silhouette and its path
+         is long for a reason (art/icons/README.md). It is rasterised once
+         per notification, so the performance warning does not apply. -->
+    <issue id="VectorPath">
+        <ignore path="src/main/res/drawable/ic_stat_claw.xml" />
+    </issue>
+</lint>

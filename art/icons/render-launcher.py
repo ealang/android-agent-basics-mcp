@@ -4,7 +4,8 @@ Usage: render-launcher.py adaptive.svg app/src/main/res
 
 The SVG is rasterised at 432 px (xxxhdpi, 108 dp) by headless Chromium, the same renderer the lab page
 is viewed in, then downsampled with Lanczos into ic_launcher_foreground.png (the full 108 dp canvas)
-and ic_launcher.png (the central 72 dp, for launchers without adaptive icons) at each density.
+at each density. No legacy ic_launcher.png: minSdk is 29 and every Android from 8.0 draws the
+adaptive icon, so the PNG would never be shown.
 Needs Pillow and a Chromium or Chrome binary on PATH (or set CHROME=/path/to/it).
 """
 import os, shutil, subprocess, sys, tempfile
@@ -23,8 +24,7 @@ with tempfile.TemporaryDirectory() as tmp:
                     "--screenshot=" + png, "file://" + html], check=True, capture_output=True)
     im = Image.open(png).convert("RGB")
 assert im.size == (432, 432), im.size
-for dens, fg, lg in (("mdpi", 108, 48), ("hdpi", 162, 72), ("xhdpi", 216, 96), ("xxhdpi", 324, 144), ("xxxhdpi", 432, 192)):
+for dens, fg in (("mdpi", 108), ("hdpi", 162), ("xhdpi", 216), ("xxhdpi", 324), ("xxxhdpi", 432)):
     d = os.path.join(res, f"mipmap-{dens}"); os.makedirs(d, exist_ok=True)
     im.resize((fg, fg), Image.LANCZOS).save(os.path.join(d, "ic_launcher_foreground.png"))
-    im.crop((72, 72, 360, 360)).resize((lg, lg), Image.LANCZOS).save(os.path.join(d, "ic_launcher.png"))
 print("mipmaps written under", res)

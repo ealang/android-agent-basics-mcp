@@ -27,12 +27,18 @@ adaptive-icon foreground, with the background baked in. Then:
 python3 render-launcher.py adaptive.svg ../../app/src/main/res
 ```
 
-writes `ic_launcher_foreground.png` and `ic_launcher.png` into each
-`mipmap-*` directory. It rasterises at 432 px with headless Chromium and
-downsamples, so it needs Pillow and a Chromium or Chrome on `PATH` (or
-`CHROME=/path/to/binary`). The adaptive icon itself is
-`mipmap-anydpi-v26/ic_launcher.xml`, with the background colour in
-`values/ic_launcher_background.xml`.
+writes `ic_launcher_foreground.png` into each `mipmap-*` directory. It
+rasterises at 432 px with headless Chromium and downsamples, so it needs
+Pillow and a Chromium or Chrome on `PATH` (or `CHROME=/path/to/binary`).
+The adaptive icon itself is `mipmap/ic_launcher.xml`, with the
+background colour in `values/ic_launcher_background.xml`. There is no
+legacy `ic_launcher.png`: every Android the app installs on draws the
+adaptive icon.
+
+The adaptive icon's `<monochrome>` layer, used by themed icons on Android
+13 and later, is `drawable/ic_launcher_monochrome.xml`: the status-bar
+glyph below, inset so it sits in the 66 dp safe zone. It needs no
+regeneration of its own; it follows `ic_stat_claw.xml`.
 
 ## Status bar
 
@@ -41,4 +47,7 @@ silhouette with real polygon booleans: the upper jaw in front of the phone
 with a gap cut around it, the phone hiding the lower jaw. Each shape can be
 drawn as white fill with a black outline, as a white outline with black fill,
 or both. The XML box is the finished drawable: copy it over
-`app/src/main/res/drawable/ic_stat_claw.xml`.
+`app/src/main/res/drawable/ic_stat_claw.xml`. Its path runs to about 1800
+characters, over lint's 800-character `VectorPath` threshold; the drawable
+is rasterised once per notification, so `app/lint.xml` ignores the check
+for this file rather than coarsening the outline.
