@@ -90,6 +90,13 @@ class McpServer(
         log.bump("requests")
         defaultToUtf8(session)
         val response = handle(session)
+        // One request per connection. NanoHTTPD otherwise keeps the connection
+        // open and drops it after SOCKET_READ_MS of silence, and a client that
+        // pools connections (an HTTP proxy, a keep-alive agent) can reuse one
+        // at the moment it is being closed and get an empty reply. With this
+        // header the response is flushed and the socket closed; the client
+        // opens a fresh connection next time.
+        response.closeConnection(true)
         val what = detail.get()?.let { " $it" } ?: ""
         // Every request, at debug: the wire-level record underneath whatever
         // higher-level line the handler wrote about the same exchange.
