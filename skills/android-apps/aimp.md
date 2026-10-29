@@ -1,6 +1,6 @@
 ---
 name: android-aimp
-description: AIMP local music player. Play any track, album or playlist from the library hands-free with the screen locked, pause, skip, seek; needs one service-start call before the play call.
+description: AIMP local music player. Play any track from the library hands-free with the screen locked, pause, resume, skip to the next track; needs one service-start call before the play call.
 verified: 2026-10-29
 ---
 
@@ -13,7 +13,7 @@ its playback engine, and it never promotes itself out of the bound state
 on its own, so playback begun by a browser client alone ends the moment
 the connection closes, about three seconds after the call. One
 `send_intent` at the service first, and playback outlives every
-connection; pause, resume, skip and seek then work on either route.
+connection; pause, resume and next track then work.
 
 ## Start the service
 
