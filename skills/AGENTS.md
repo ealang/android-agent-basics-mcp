@@ -61,11 +61,8 @@ manifest suggests it could do. The work runs in this order.
 - **Test from cold.** The hardest case, and the one a media app will
   usually meet, is a cold start: process dead, no notification, no live
   session, screen locked. Force stop (App info, Force stop) produces it
-  on demand and is the standard cold test. One exception: a force-stopped
-  app receives no broadcasts and is not revived by `media_key` until the
-  user opens it again, so those two routes are tested from a process
-  that died on its own. A route that only works while the app is warm is
-  a 🟡, and the file says so.
+  on demand and is the standard cold test. A route that only works while
+  the app is warm is a 🟡, and the file says so.
 - **Run a failure down to its cause.** A negative result goes in the file
   with its reason, so the test is not finished at "did not work":
   distinguish a connection refused by allowlist, an action advertised
