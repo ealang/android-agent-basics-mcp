@@ -26,6 +26,49 @@ The user-facing summary, app by app, is the pair of tables in the root
 README, Android then Pebble, ✅ rows first. They are maintained by hand: a
 new app file gets a row.
 
+## Before writing: discover, then verify
+
+A file is written from what the device did, not from what the app's
+manifest suggests it could do. The work runs in this order.
+
+- **Start from the app's job.** Decide what the user mainly wants from
+  the app before probing anything: resume and play a show for a podcast
+  app, start navigation for a maps app, start a timer for a clock. That
+  headline job, hands-free with the screen locked, is what the README
+  marker rates; queue reading, search, speed and the rest are the extras
+  to try once it works.
+- **Read the nearest existing file first.** Another app of the same kind
+  has usually met the same obstacle, and its file shows the route that
+  solved it and the shape the new file should take.
+- **Discover with the generic tools.** `media_apps` says whether the app
+  has a browser service; `inspect` lists its exported services,
+  receivers and providers with the actions their filters declare. The
+  generic skill files give the routes and the order to try them. A route
+  that `inspect` reveals is a lead, not a result, until it has been
+  fired.
+- **Verify every claim on the device.** Predict what a call should do,
+  send it, and compare the read-back against the prediction: a media
+  session's state, title and advancing position; a timer appearing; a
+  navigation screen up. "Sent without error" proves nothing. Where no
+  tool can read the outcome back, the user confirms it.
+- **Test the conditions the file will claim.** Screen locked means the
+  screen is actually off, not the app merely in the background. Try
+  transport verbs both while paused and while playing. A play or search
+  test must switch to different content, since resuming what was already
+  there proves nothing. Read the session again after the connection has
+  closed, because some apps stop when it does. Try a stored id later, so
+  the file can say whether ids outlive a session.
+- **Run a failure down to its cause.** A negative result goes in the file
+  with its reason, so the test is not finished at "did not work":
+  distinguish a connection refused by allowlist, an action advertised
+  but ignored, a permission guard, and a call accepted that does
+  nothing.
+- **Leave the device as found.** Stop what the test started. Anything
+  that rings, speaks or vibrates is announced before it is fired.
+- **Acceptance.** An agent with no familiarity with the project drives
+  the app from the finished file alone. If it needs an `inspect` or a
+  question, the file is not self-contained yet.
+
 ## Front matter
 
 Every file starts with YAML front matter in the shape agent skill
