@@ -252,15 +252,28 @@ class MainActivity : ComponentActivity() {
             // do nothing visible, so Settings is the only lever left.
             startActivity(appDetailsSettings())
         } else {
-            requestPermissionOrSettings("location", Locator.PERMISSIONS, 2, appDetailsSettings())
+            // Android 10 is the one release whose dialog offers "Allow all
+            // the time" — when the background permission is in the same
+            // request. Asking for all three makes it one dialog there.
+            val wanted = if (backgroundIsDialogGrantable) {
+                Locator.PERMISSIONS + Locator.BACKGROUND_PERMISSION
+            } else {
+                Locator.PERMISSIONS
+            }
+            requestPermissionOrSettings("location", wanted, 2, appDetailsSettings())
         }
     }
+
+    /** Android 10 only: from 11 the system never prompts for background location. */
+    private val backgroundIsDialogGrantable
+        get() = Build.VERSION.SDK_INT < Build.VERSION_CODES.R
 
     /**
      * "Allow all the time" is not grantable from a dialog: since Android 11 the
      * system refuses to prompt for it and the request returns denied without
      * showing anything. The only route is the app's own permission screen, so
-     * this explains where to go and then goes there.
+     * this explains where to go and then goes there. Android 10 still prompts,
+     * so there the request goes through the usual dialog-or-Settings rule.
      *
      * It also cannot be asked for before the foreground pair is held — the
      * setting is a widening of that grant and the option is absent without it —
@@ -274,6 +287,15 @@ class MainActivity : ComponentActivity() {
         }
         if (Locator.hasBackgroundPermission(this)) {
             toast("Already allowed all the time.")
+            return
+        }
+        if (backgroundIsDialogGrantable) {
+            requestPermissionOrSettings(
+                "background_location",
+                arrayOf(Locator.BACKGROUND_PERMISSION),
+                2,
+                appDetailsSettings(),
+            )
             return
         }
         android.app.AlertDialog.Builder(this)
