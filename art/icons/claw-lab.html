@@ -22,6 +22,12 @@
   .sel { font-size: 12px; margin-top: 6px; color: #444; }
   fieldset { border: 1px solid #ccc; border-radius: 8px; margin: 10px 0; padding: 6px 12px 10px; }
   legend { font-size: 12px; color: #666; padding: 0 4px; }
+  .themed { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; margin-top: 14px; }
+  .themed .card { padding: 10px 12px 6px; border-radius: 12px; display: flex; gap: 14px; }
+  .themed .card.light { background: #F7F2FA; } .themed .card.night { background: #141218; }
+  .themed .card > div { text-align: center; font-size: 11px; color: #666; line-height: 1.3; }
+  .themed .card svg { display: block; width: 96px; height: 96px; margin-bottom: 4px; }
+  .themed .note { font-size: 11px; color: #666; align-self: center; max-width: 240px; line-height: 1.4; }
 </style>
 </head>
 <body>
@@ -35,6 +41,7 @@
       <div><svg id="pcircle" viewBox="0 0 256 256" width="160" height="160"></svg><br>circle mask (adaptive)</div>
       <div><svg id="psquircle" viewBox="0 0 256 256" width="160" height="160"></svg><br>squircle mask</div>
     </div>
+    <div class="themed" id="themed"></div>
   </div>
   <div class="panel">
     <fieldset><legend>Claw</legend>
@@ -61,6 +68,7 @@
     <button id="load" data-label="Load parameters">Load parameters</button>
     <button id="center">Centre phone</button>
     <button id="svg">Download adaptive SVG</button>
+    <button id="monosvg">Download monochrome SVG</button>
     <textarea id="out" spellcheck="false"></textarea>
     <div class="hint">
       Drag on the claw moves the claw; drag on the phone moves the phone. Rotating the claw turns it about its wrist, so
@@ -152,14 +160,14 @@ function bgSunburst() {
 }
 const BG = bgSunburst();
 
-function claw(x, y, scale, rot, fill, {clip=null, stroke=null, sw=0, twoTone=false, shade=null, hit=false, lo=false, jl=1, gi=1, op=0} = {}) {
+function claw(x, y, scale, rot, fill, {clip=null, stroke=null, sw=0, twoTone=false, shade=null, mono=false, hit=false, lo=false, jl=1, gi=1, op=0} = {}) {
   const g = geom(jl, gi, op);
   const st = stroke ? ` stroke="${stroke}" stroke-width="${sw}" stroke-linejoin="round" stroke-linecap="round"` : "";
   let s = `<g ${hit ? 'data-drag="claw"' : ""} transform="translate(${x},${y}) rotate(${rot}) scale(${scale}) translate(0,-71)">`;
   if (clip === "upper") { const c = uid("c"); s += `<clipPath id="${c}"><polygon points="${g.frontPts}"/></clipPath><g clip-path="url(#${c})">`; }
   const shape = `<path d="${g.forearm}"/><path d="${g.claw}"/>${g.teethUp}${lo ? g.teethLo : ""}`;
   s += `<g fill="${fill}"${st}>${shape}</g>`;
-  if (!stroke) {
+  if (!stroke && !mono) {
     if (twoTone) { const j = uid("j"); s += `<clipPath id="${j}"><path d="${g.jaws}"/></clipPath><g clip-path="url(#${j})" fill="${RED}">${shape}</g>`; }
     if (shade) { const k = uid("k"); s += `<clipPath id="${k}">${shape}</clipPath><g clip-path="url(#${k})" fill="none" stroke-linecap="round"><path d="${g.hiUpper}" stroke="${RED_HI}" stroke-width="7" opacity="0.9"/></g>`; }
     s += `<path d="${g.joint}" fill="none" stroke="rgba(0,0,0,0.22)" stroke-width="6" stroke-linecap="round"/>`;
@@ -208,11 +216,56 @@ function adaptiveSvg() {
          `<rect x="${A0}" y="${A0}" width="${A1}" height="${A1}" fill="${CREAM}"/>` +
          `<g transform="translate(128,128) scale(${FIT}) translate(-128,-128)">${bg}${body(false)}</g></svg>`;
 }
+// The themed-icon (monochrome) layer, Android 13+: the same drawing flattened to ink on paper. The halo
+// passes keep their job, paper separating the claw from the phone, and the screen and speaker slit are
+// paper too. render-launcher.py turns paper into transparency; the launcher tints whatever is left.
+const INK = "#000000", PAPER = "#FFFFFF";
+function monoBody() {
+  const o = {lo: S.lo, jl: S.jl, gi: S.gi, op: S.op};
+  let b = "";
+  b += claw(S.wx, S.wy, S.cs, S.ang, PAPER, {stroke: PAPER, sw: 18/S.cs, ...o});
+  b += phone(S.px, S.py, PW, PH, S.tilt, {body: PAPER, stroke: PAPER, sw: 18});
+  b += claw(S.wx, S.wy, S.cs, S.ang, INK, {mono: true, ...o});
+  b += phone(S.px, S.py, PW, PH, S.tilt, {body: INK, screen: PAPER});
+  b += claw(S.wx, S.wy, S.cs, S.ang, INK, {clip: "upper", mono: true, ...o});
+  return `<g transform="translate(128,128) scale(${S.z}) translate(-142,-122)">${b}</g>`;
+}
+// Same canvas and fit as adaptiveSvg(), so the themed icon lines up with the colour one exactly.
+function monoSvg() {
+  const A0 = -64, A1 = 384, FIT = 0.93;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${A0} ${A0} ${A1} ${A1}" width="${A1}" height="${A1}">` +
+         `<rect x="${A0}" y="${A0}" width="${A1}" height="${A1}" fill="${PAPER}"/>` +
+         `<g transform="translate(128,128) scale(${FIT}) translate(-128,-128)">${monoBody()}</g></svg>`;
+}
+// How a launcher shows the themed icon: the monochrome layer tinted from the wallpaper palette over a
+// tinted background, cut to the launcher's mask, the central 72 dp of the 108 dp canvas. Tones approximate
+// Material You's: a pale container with a dark glyph in light mode, the reverse at night.
+const THEMES = [
+  { card: "light", label: "light, blue",  bg: "#D3E3FD", fg: "#041E49", mask: "circle" },
+  { card: "light", label: "light, green", bg: "#C4EED0", fg: "#072711", mask: "squircle" },
+  { card: "night", label: "dark, blue",   bg: "#0842A0", fg: "#D3E3FD", mask: "circle" },
+  { card: "night", label: "dark, green",  bg: "#0F5223", fg: "#C4EED0", mask: "squircle" },
+];
+const SQUIRCLE = "M54,18 C78,18 90,30 90,54 C90,78 78,90 54,90 C30,90 18,78 18,54 C18,30 30,18 54,18 Z";
+function themedTile(t, i) {
+  const clip = t.mask === "circle" ? '<circle cx="54" cy="54" r="36"/>' : `<path d="${SQUIRCLE}"/>`;
+  const art = monoBody().split(INK).join(t.fg).split(PAPER).join(t.bg);
+  return `<div><svg viewBox="0 0 108 108" xmlns="http://www.w3.org/2000/svg"><defs><clipPath id="tm${i}">${clip}</clipPath></defs>` +
+         `<g clip-path="url(#tm${i})"><rect width="108" height="108" fill="${t.bg}"/>` +
+         `<g transform="translate(54,54) scale(${0.93 * 108 / 384}) translate(-128,-128)">${art}</g></g></svg>${t.label}</div>`;
+}
+function renderThemed() {
+  const cards = { light: [], night: [] };
+  THEMES.forEach((t, i) => cards[t.card].push(themedTile(t, i)));
+  $("themed").innerHTML = `<div class="card light">${cards.light.join("")}</div><div class="card night">${cards.night.join("")}</div>` +
+    `<div class="note">themed icon (Android 13+): with themed icons on, the launcher shows the monochrome layer tinted from the wallpaper instead of the colour icon, under its circle or squircle mask</div>`;
+}
 const $ = id => document.getElementById(id);
 function render() {
   $("stage").innerHTML = tile(true);
   const t = tile(false); $("p96").innerHTML = t; $("p48").innerHTML = t;
   $("pcircle").innerHTML = tile(false, "circle"); $("psquircle").innerHTML = tile(false, "squircle");
+  renderThemed();
   $("lo").checked = S.lo;
   for (const k of KEYS) { $(k).value = S[k]; $(k + "_v").textContent = (k === "cs" || k === "z" || k === "jl" || k === "gi") ? S[k].toFixed(2) : Math.round(S[k]); }
   // derived: intersection of the claw axis (from the wrist, along ang) with the phone's long axis,
@@ -261,6 +314,7 @@ window.addEventListener("keydown", e => {
 $("reset").onclick = () => { S = lockedState(); render(); };
 $("center").onclick = () => { S.px = 142; S.py = 122; render(); };
 $("svg").onclick = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([adaptiveSvg()], { type: "image/svg+xml" })); a.download = "adaptive.svg"; a.click(); URL.revokeObjectURL(a.href); };
+$("monosvg").onclick = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([monoSvg()], { type: "image/svg+xml" })); a.download = "monochrome.svg"; a.click(); URL.revokeObjectURL(a.href); };
 $("copy").onclick = async () => { try { await navigator.clipboard.writeText($("out").value); $("copy").textContent = "Copied"; setTimeout(() => $("copy").textContent = "Copy parameters", 1200); } catch (_) { $("out").select(); } };
 // Restore the state from a pasted parameter block: the full readout (claw / phone / frame), or just its grip
 // block. Only the keys present are applied, so a partial block adjusts rather than resets.

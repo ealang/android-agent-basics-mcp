@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Themed-icon layer (Android 13+). The launcher tints it, so colour is
-     irrelevant; what matters is that the glyph sits inside the central
-     66 dp of the 108 dp canvas, which the fractional inset arranges:
-     (108 - 66) / 2 / 108 = 19.44 % on each side. -->
-<inset xmlns:android="http://schemas.android.com/apk/res/android"
-    android:drawable="@drawable/ic_stat_claw"
-    android:inset="19.44%" />
