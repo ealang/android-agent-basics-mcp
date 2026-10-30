@@ -155,7 +155,12 @@ val BATTERY_GRANT = Grant(
     ask = "The server needs to be exempt from battery optimization, or power " +
         "management can stop it and close the listening socket. On the next " +
         "screen, " + if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            "open Battery and choose Unrestricted."
+            // 12–14 show Unrestricted / Optimized / Restricted directly;
+            // 15+ call the page App battery usage and put an Allow background
+            // usage switch in front of that choice. One sentence covers both,
+            // and skins that rename the menus.
+            "open Battery, allow background use if asked, and choose " +
+                "Unrestricted."
         } else {
             // Before 12 there is no Unrestricted: the exemption is a list of
             // its own, one screen further down (Battery sits under Advanced
