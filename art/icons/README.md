@@ -9,7 +9,7 @@ self-contained pages. Open them from a file URL; no server or build step.
 | `claw-lab.html` | Launcher icon. Drag the claw or the phone, adjust the sliders, copy the parameter block. |
 | `launcher.json` | The parameter block of the launcher icon as shipped. |
 | `render-launcher.py` | Turns the page's adaptive SVG into the mipmap PNGs. |
-| `claw-stat-lab.html` | Status-bar icon, 24 dp, white on transparent. Emits the finished `VectorDrawable` and the launcher's monochrome (themed-icon) layer, and previews the themed icon. |
+| `claw-stat-lab.html` | Status-bar icon, 24 dp, white on transparent. Emits the finished `VectorDrawable` and the launcher icon's monochrome layer, which reuses this glyph, and previews that themed launcher icon. The status bar never masks the icon; the circle and squircle previews are the launcher's. |
 | `status.json` | The parameter block of the status-bar icon as shipped. |
 | `clipper-6.4.2.js` | Polygon boolean library used by the status page (Angus Johnson, Boost licence). |
 
@@ -38,7 +38,7 @@ adaptive icon.
 The adaptive icon's `<monochrome>` layer, used by themed icons on Android
 13 and later, is `drawable/ic_launcher_monochrome.xml`: the status-bar
 glyph below, inset so it sits in the 66 dp safe zone. The status page
-emits it (*Copy monochrome XML*) and shows how a launcher tints it. It
+emits it (*Copy themed launcher layer XML*) and shows how a launcher tints it. It
 references `ic_stat_claw.xml`, so a new status glyph changes the themed
 icon with it and the inset file itself never needs regenerating.
 

@@ -101,7 +101,7 @@
     <button id="reset">Reset to current icon</button>
     <button id="copy">Copy parameters</button>
     <button id="copyxml">Copy XML</button>
-    <button id="copymono">Copy monochrome XML</button>
+    <button id="copymono">Copy themed launcher layer XML</button>
     <button id="load" data-label="Load parameters">Load parameters</button>
     <textarea id="out" spellcheck="false"></textarea>
     <textarea id="xml" readonly></textarea>
@@ -360,7 +360,7 @@ function renderThemed(d) {
   const cards = { light: [], night: [] };
   THEMES.forEach((t, i) => cards[t.card].push(themedTile(t, d, i)));
   $("themed").innerHTML = `<div class="card light">${cards.light.join("")}</div><div class="card night">${cards.night.join("")}</div>` +
-    `<div class="note">themed icon (Android 13+): the glyph as the launcher tints it, inset to the 66 dp safe zone, under the circle and squircle masks</div>`;
+    `<div class="note">themed <b>launcher</b> icon (Android 13+): with themed icons on, the launcher shows this glyph instead of the colour icon, tinted and inset to the 66 dp safe zone, under its circle or squircle mask. The status bar itself never masks the icon.</div>`;
 }
 
 const $ = id => document.getElementById(id);
@@ -442,7 +442,7 @@ $("reset").onclick = () => { S = chosenState(); render(); };
 async function copyText(btn, text, label) { try { await navigator.clipboard.writeText(text); btn.textContent = "Copied"; setTimeout(() => btn.textContent = label, 1200); } catch (_) {} }
 $("copy").onclick = () => copyText($("copy"), $("out").value, "Copy parameters");
 $("copyxml").onclick = () => copyText($("copyxml"), $("xml").value, "Copy XML");
-$("copymono").onclick = () => copyText($("copymono"), $("mono").value, "Copy monochrome XML");
+$("copymono").onclick = () => copyText($("copymono"), $("mono").value, "Copy themed launcher layer XML");
 // Restore the state from a pasted parameter block: the full readout (claw / phone / frame), or just its centred
 // block. Only the keys present are applied, so a partial block adjusts rather than resets.
 const num = v => (typeof v === "number" && isFinite(v)) ? v : undefined;
