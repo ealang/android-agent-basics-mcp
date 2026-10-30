@@ -179,7 +179,8 @@ val BATTERY_GRANT = Grant(
 /** The one background-activity-start exemption; every launch rides on it. */
 val OVERLAY_GRANT = Grant(
     ask = "The intent tools need \"Display over other apps\" to open another " +
-        "app while Phone MCP is in the background.",
+        "app while Phone MCP is in the background. If the next screen lists " +
+        "every app, pick Phone MCP first.",
     button = "Allow opening other apps",
     granted = { Clock.canStartFromBackground(it) },
     open = settingsFor(Settings.ACTION_MANAGE_OVERLAY_PERMISSION),
