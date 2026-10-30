@@ -4,6 +4,7 @@ import android.app.NotificationManager
 import android.content.ComponentName
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.compose.foundation.background
@@ -153,7 +154,20 @@ private fun settingsFor(action: String): (MainActivity) -> Unit = { activity ->
 val BATTERY_GRANT = Grant(
     ask = "The server needs to be exempt from battery optimization, or power " +
         "management can stop it and close the listening socket. On the next " +
-        "screen, open Battery and choose Unrestricted.",
+        "screen, " + if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            // 12–14 show Unrestricted / Optimized / Restricted directly;
+            // 15+ call the page App battery usage and put an Allow background
+            // usage switch in front of that choice. One sentence covers both,
+            // and skins that rename the menus.
+            "open Battery, allow background use if asked, and choose " +
+                "Unrestricted."
+        } else {
+            // Before 12 there is no Unrestricted: the exemption is a list of
+            // its own, one screen further down (Battery sits under Advanced
+            // on 10).
+            "open Battery, then Battery optimization, find Phone MCP under " +
+                "All apps and choose Don't optimize."
+        },
     button = "Battery settings",
     granted = {
         it.getSystemService(PowerManager::class.java)
@@ -165,7 +179,8 @@ val BATTERY_GRANT = Grant(
 /** The one background-activity-start exemption; every launch rides on it. */
 val OVERLAY_GRANT = Grant(
     ask = "The intent tools need \"Display over other apps\" to open another " +
-        "app while Phone MCP is in the background.",
+        "app while Phone MCP is in the background. If the next screen lists " +
+        "every app, pick Phone MCP first.",
     button = "Allow opening other apps",
     granted = { Clock.canStartFromBackground(it) },
     open = settingsFor(Settings.ACTION_MANAGE_OVERLAY_PERMISSION),
