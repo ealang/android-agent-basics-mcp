@@ -184,7 +184,7 @@ val OVERLAY_GRANT = Grant(
 )
 
 val MEDIA_GRANT = Grant(
-    ask = "Used for media control only: message contents are not visible to the app.",
+    ask = "Used for media control only: the app does not read notification contents.",
     button = "Allow notification access",
     granted = {
         it.getSystemService(NotificationManager::class.java)
