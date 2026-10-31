@@ -177,19 +177,15 @@ val BATTERY_GRANT = Grant(
 
 /** The one background-activity-start exemption; every launch rides on it. */
 val OVERLAY_GRANT = Grant(
-    ask = "The intent tools need \"Display over other apps\" to open another " +
-        "app while Puck MCP is in the background.",
-    button = "Allow opening other apps",
+    ask = "Used to open other apps while Puck MCP is in the background.",
+    button = "Allow display over other apps",
     granted = { Clock.canStartFromBackground(it) },
     open = settingsFor(Settings.ACTION_MANAGE_OVERLAY_PERMISSION),
 )
 
 val MEDIA_GRANT = Grant(
-    ask = "The media tools need notification access, the only way Android " +
-        "exposes other apps' media sessions. It is used for media control " +
-        "only: the app tells Android to deliver it no notifications, so " +
-        "message contents are never visible to it.",
-    button = "Allow media control",
+    ask = "Used for media control only: message contents are not visible to the app.",
+    button = "Allow notification access",
     granted = {
         it.getSystemService(NotificationManager::class.java)
             .isNotificationListenerAccessGranted(

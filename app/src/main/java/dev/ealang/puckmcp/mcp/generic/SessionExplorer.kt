@@ -47,7 +47,7 @@ object SessionExplorer {
     private const val NO_ACCESS =
         "FAILED: this app does not have notification access, which is what " +
             "exposes media sessions. Ask the user to open Puck MCP and tap " +
-            "\"Allow media control\"."
+            "\"Allow notification access\"."
 
     /** Null means notification access has not been granted. */
     private fun controllers(context: Context): List<MediaController>? = try {

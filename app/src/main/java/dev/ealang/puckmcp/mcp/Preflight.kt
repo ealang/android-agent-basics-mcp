@@ -34,7 +34,7 @@ object Preflight {
      */
     private const val NO_BACKGROUND_LAUNCH =
         "this app is not allowed to open other apps from the background. " +
-            "Ask the user to open Puck MCP and tap \"Allow opening other apps\". " +
+            "Ask the user to open Puck MCP and tap \"Allow display over other apps\". " +
             "Nothing was done."
 
     /** Any activity start on someone else's behalf needs the overlay grant. */
