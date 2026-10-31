@@ -12,6 +12,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -86,11 +87,15 @@ fun PuckMcpApp(activity: MainActivity) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            // The page is named once, in full; the header row below is the
+            // server and its switch, so it is called what it is.
+            Text("Android Puck MCP", style = MaterialTheme.typography.headlineSmall)
+
             ServerHeader(
-                title = "Puck MCP",
+                title = "MCP server",
                 on = config.enabled,
                 bound = McpService.running,
-                offText = "Off — MCP clients get connection refused.",
+                offText = "Off — the server is disabled.",
                 boundText = "Listening on ${listeningOn(config.bindAddress)}:${config.port}.",
                 failingText = "On but not listening — see the server log.",
                 onChange = { activity.setServerEnabled(it) },

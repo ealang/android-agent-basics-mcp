@@ -332,10 +332,7 @@ class MainActivity : ComponentActivity() {
             .setMessage(
                 "Android only lets this be changed in Settings.\n\n" +
                     "On the next screen: Permissions > Location > " +
-                    "\"Allow all the time\".\n\n" +
-                    "Without it the phone withholds location whenever the server " +
-                    "started on its own — after a reboot or an app update — and " +
-                    "get_location silently returns nothing.",
+                    "\"Allow all the time\".",
             )
             .setPositiveButton("Open settings") { _, _ ->
                 startActivity(appDetailsSettings())
