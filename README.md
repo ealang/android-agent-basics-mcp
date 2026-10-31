@@ -102,10 +102,14 @@ is recommended. The app installs on Android 10 (API 29) or later.
 
 1. **Set up Tailscale** on the phone and on the machine hosting the agent,
    signed into the same tailnet.
-2. **Open Puck MCP**, set **Bind address** to the phone's Tailscale IP
-   (`100.x.y.z`), **Save and apply**, and switch the server on at the top
-   of the screen. Bound to that address, the server does not answer on the
-   LAN at all. The port defaults to 8910.
+2. **Open Puck MCP** and check **Bind address** under Server settings. On
+   first launch it is filled in with the VPN's address when one is up, so
+   with Tailscale connected it already reads `100.x.y.z`; otherwise tap the
+   field and pick the VPN row from the list, then **Save and apply**. Bound
+   to that address, the server does not answer on the LAN at all. The last
+   row, **All IPv4 interfaces**, is the opt-in for answering on every
+   network the phone is on. Switch the server on at the top of the screen.
+   The port defaults to 8910.
 3. **Grant permissions** as the app asks. Each tool family states what it
    needs on its own row; a family you leave off asks for nothing.
 4. **Share the MCP link with the agent**: **Copy MCP URL** gives the URL,

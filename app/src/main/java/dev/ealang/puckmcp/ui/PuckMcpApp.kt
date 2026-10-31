@@ -26,6 +26,7 @@ import dev.ealang.puckmcp.LOG_DIALOG_LINES
 import dev.ealang.puckmcp.Logs
 import dev.ealang.puckmcp.MainActivity
 import dev.ealang.puckmcp.McpService
+import dev.ealang.puckmcp.Networks
 import dev.ealang.puckmcp.mcp.McpServer
 import kotlinx.coroutines.delay
 
@@ -90,8 +91,7 @@ fun PuckMcpApp(activity: MainActivity) {
                 on = config.enabled,
                 bound = McpService.running,
                 offText = "Off — MCP clients get connection refused.",
-                boundText = "Listening on " +
-                    "${config.bindAddress.ifBlank { "every interface" }}:${config.port}.",
+                boundText = "Listening on ${listeningOn(config.bindAddress)}:${config.port}.",
                 failingText = "On but not listening — see the server log.",
                 onChange = { activity.setServerEnabled(it) },
             )
@@ -132,16 +132,16 @@ fun PuckMcpApp(activity: MainActivity) {
 
                 HorizontalDivider()
 
+                val bind = config.bindAddress.ifBlank { Networks.ALL_IPV4 }
                 StatusText(
-                    if (config.bindAddress.isNotEmpty()) {
-                        "Reachable only on ${config.bindAddress}:\n\n" +
-                            "http://${config.bindAddress}:${config.port}${McpServer.MCP_PATH}"
+                    if (bind != Networks.ALL_IPV4) {
+                        "Reachable only on $bind:\n\n" +
+                            "http://${Networks.hostForUrl(bind)}:${config.port}${McpServer.MCP_PATH}"
                     } else {
-                        val urls = McpService.localAddresses().joinToString("\n") {
-                            "http://${it.substringBefore(' ')}:${config.port}" +
-                                "${McpServer.MCP_PATH}  ${it.substringAfter(' ')}"
+                        val urls = Networks.live(activity).joinToString("\n") {
+                            "http://${it.address}:${config.port}${McpServer.MCP_PATH}  ${it.kind}"
                         }
-                        "Bound to every interface, this phone's LAN included:\n\n" +
+                        "Bound to every IPv4 interface, this phone's LAN included:\n\n" +
                             urls.ifEmpty { "(no network interface found)" }
                     },
                 )
@@ -164,13 +164,10 @@ fun PuckMcpApp(activity: MainActivity) {
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
+                BindAddressField(
                     value = bindText,
                     onValueChange = { bindText = it },
-                    label = { Text("Bind address (blank = every interface)") },
-                    placeholder = { Text("e.g. 100.x.y.z") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
+                    live = { Networks.live(activity) },
                 )
                 OutlinedButton(onClick = { activity.saveNetwork(portText, bindText) }) {
                     Text("Save and apply")
@@ -233,3 +230,8 @@ fun PuckMcpApp(activity: MainActivity) {
         )
     }
 }
+
+/** The header's spelling of the bind address: the word for the wildcard, brackets for IPv6. */
+private fun listeningOn(bind: String): String =
+    bind.ifBlank { Networks.ALL_IPV4 }
+        .let { if (it == Networks.ALL_IPV4) "every interface" else Networks.hostForUrl(it) }

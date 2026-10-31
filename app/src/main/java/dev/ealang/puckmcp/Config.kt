@@ -11,7 +11,9 @@ import java.security.SecureRandom
  */
 class Config(context: Context) {
 
-    private val prefs = context.applicationContext
+    private val context = context.applicationContext
+
+    private val prefs = this.context
         .getSharedPreferences("puck-mcp", Context.MODE_PRIVATE)
 
     private val secrets = SecretStore(context)
@@ -21,21 +23,19 @@ class Config(context: Context) {
         set(value) = prefs.edit().putInt(KEY_PORT, value).apply()
 
     /**
-     * The address to listen on, or "" for every interface.
+     * The address to listen on. [Networks.ALL_IPV4] means every IPv4
+     * interface; "" from an older install means the same.
      *
-     * Set to the phone's tailnet address to keep the server off the LAN. The
-     * Tailscale interface is a generic `tunN` on Android, so there is nothing
-     * stable to match on by name — the address itself is the durable handle,
-     * since Tailscale pins it to the node.
-     *
-     * Open question (2026-09-04, deliberately unresolved): a blank field
-     * binds every interface, which a user without networking knowledge can
-     * do by accident. Auto-detecting tunnel interfaces or offering a
-     * dropdown of addresses might fix that; whether tunnels can be detected
-     * reliably is the unanswered part.
+     * Unset until first read, which fills in [Networks.defaultBind]: the
+     * VPN if there is one, else Wi-Fi, else everything. The Tailscale
+     * interface is a generic `tunN` on Android, so the address is the
+     * durable handle — Tailscale pins it to the node. The UI lists the
+     * phone's live addresses with what each one is, and keeps the saved
+     * value when its network is down.
      */
     var bindAddress: String
-        get() = prefs.getString(KEY_BIND, "") ?: ""
+        get() = prefs.getString(KEY_BIND, null)
+            ?: Networks.defaultBind(context).also { bindAddress = it }
         set(value) = prefs.edit().putString(KEY_BIND, value.trim()).apply()
 
     /** The bearer token every /mcp request must carry. */

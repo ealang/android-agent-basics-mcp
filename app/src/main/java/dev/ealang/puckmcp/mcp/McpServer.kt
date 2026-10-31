@@ -3,6 +3,7 @@ package dev.ealang.puckmcp.mcp
 import android.content.Context
 import android.util.Log
 import dev.ealang.puckmcp.Config
+import dev.ealang.puckmcp.Networks
 import dev.ealang.puckmcp.ResilientServerSocket
 import dev.ealang.puckmcp.ServerLog
 import dev.ealang.puckmcp.mcp.apps.AppTools
@@ -38,9 +39,11 @@ class McpServer(
     onDied: () -> Unit,
     /** The server's log; the socket and every request line go here too. */
     private val log: ServerLog,
-    // A null hostname makes NanoHTTPD bind the wildcard address; anything else
-    // binds that one address, which is how the server is kept off the LAN.
-) : NanoHTTPD(bindAddress.ifBlank { null }, port) {
+    // One literal address, or 0.0.0.0 for every IPv4 interface. The IPv4
+    // wildcard rather than NanoHTTPD's null (the dual-stack wildcard): a
+    // carrier hands the phone a public IPv6 address, and "everything" is
+    // meant to mean the LAN, not the open internet.
+) : NanoHTTPD(bindAddress.ifBlank { Networks.ALL_IPV4 }, port) {
 
     init {
         serverSocketFactory = ServerSocketFactory { ResilientServerSocket(log, onDied) }

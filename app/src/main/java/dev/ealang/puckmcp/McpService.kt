@@ -18,8 +18,6 @@ import android.os.SystemClock
 import android.util.Log
 import dev.ealang.puckmcp.mcp.McpServer
 import dev.ealang.puckmcp.mcp.apps.Sound
-import java.net.Inet4Address
-import java.net.NetworkInterface
 
 /**
  * Holds the HTTP server for as long as the user wants it up.
@@ -133,18 +131,6 @@ class McpService : Service() {
 
         fun stop(context: Context) {
             context.startService(Intent(context, McpService::class.java).setAction(ACTION_STOP))
-        }
-
-        /** The phone's address on the LAN/tailnet, or null if it isn't on a network. */
-        fun localAddresses(): List<String> = try {
-            NetworkInterface.getNetworkInterfaces().toList()
-                .filter { it.isUp && !it.isLoopback }
-                .flatMap { iface -> iface.inetAddresses.toList().map { iface.name to it } }
-                .filter { (_, addr) -> addr is Inet4Address }
-                .map { (name, addr) -> "${addr.hostAddress} ($name)" }
-        } catch (e: Exception) {
-            Log.w(TAG, "Could not enumerate network interfaces", e)
-            emptyList()
         }
     }
 
@@ -304,7 +290,9 @@ class McpService : Service() {
         if (server != null) return
 
         val config = Config(this)
-        val listeningOn = config.bindAddress.ifBlank { "every interface" }
+        val listeningOn = config.bindAddress
+            .ifBlank { Networks.ALL_IPV4 }
+            .let { if (it == Networks.ALL_IPV4) "every interface" else Networks.hostForUrl(it) }
         val instance = McpServer(
             applicationContext,
             config.bindAddress,

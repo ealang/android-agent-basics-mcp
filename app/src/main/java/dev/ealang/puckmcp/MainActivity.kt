@@ -8,6 +8,10 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.net.ConnectivityManager
+import android.net.LinkProperties
+import android.net.Network
+import android.net.NetworkRequest
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -59,6 +63,25 @@ class MainActivity : ComponentActivity() {
         override fun onReceive(context: Context?, intent: Intent?) = bump()
     }
 
+    /**
+     * A network coming or going — Tailscale connecting, Wi-Fi dropping — changes
+     * the address list and the line under the bind field, so repaint. The
+     * callbacks arrive on a binder thread; the repaint must not.
+     */
+    private val networksChanged = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) {
+            handler.post { bump() }
+        }
+
+        override fun onLost(network: Network) {
+            handler.post { bump() }
+        }
+
+        override fun onLinkPropertiesChanged(network: Network, lp: LinkProperties) {
+            handler.post { bump() }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Transparent system bars with icon contrast taken from the system's
@@ -99,6 +122,8 @@ class MainActivity : ComponentActivity() {
             IntentFilter(McpService.ACTION_STATE_CHANGED),
             ContextCompat.RECEIVER_NOT_EXPORTED,
         )
+        getSystemService(ConnectivityManager::class.java)
+            .registerNetworkCallback(NetworkRequest.Builder().build(), networksChanged)
         bump()
 
         // Two states only the open app can mend, so this is the moment:
@@ -127,6 +152,7 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         handler.removeCallbacksAndMessages(null)
         unregisterReceiver(stateChanged)
+        getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(networksChanged)
         super.onStop()
     }
 
@@ -144,11 +170,11 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        val bind = bindText.trim()
-        if (bind.isNotEmpty() && !LITERAL_IPV4.matches(bind)) {
+        val bind = bindText.trim().ifEmpty { Networks.ALL_IPV4 }
+        if (!Networks.isLiteral(bind)) {
             // Only literal addresses: NanoHTTPD would otherwise resolve the
             // string, and a name that resolves off-device binds nothing.
-            toast("Bind address must be a literal IPv4 address, or blank")
+            toast("Bind address must be an IP address, or 0.0.0.0 for every interface")
             return
         }
 
@@ -163,9 +189,9 @@ class MainActivity : ComponentActivity() {
         // Saving an address the phone does not currently hold is allowed — the
         // tailnet address is gone whenever Tailscale is down, and refusing it
         // would make the field unsettable exactly when it needs setting.
-        val present = McpService.localAddresses().any { it.substringBefore(' ') == bind }
-        if (bind.isNotEmpty() && !present) {
-            toast("Saved, but $bind is not on this phone right now — is Tailscale up?")
+        val present = bind == Networks.ALL_IPV4 || Networks.describe(this, bind) != null
+        if (!present) {
+            toast("Saved, but $bind is not on this phone right now — is the VPN up?")
         } else {
             toast("Saved")
         }
@@ -186,10 +212,13 @@ class MainActivity : ComponentActivity() {
      * (in every-interface mode any of them reaches the server), else null.
      */
     fun mcpUrl(): String? {
-        val host = config.bindAddress.ifBlank {
-            McpService.localAddresses().firstOrNull()?.substringBefore(' ')
-        } ?: return null
-        return "http://$host:${config.port}${McpServer.MCP_PATH}"
+        val bind = config.bindAddress.ifBlank { Networks.ALL_IPV4 }
+        val host = if (bind == Networks.ALL_IPV4) {
+            Networks.live(this).firstOrNull()?.address ?: return null
+        } else {
+            bind
+        }
+        return "http://${Networks.hostForUrl(host)}:${config.port}${McpServer.MCP_PATH}"
     }
 
     /** The one switch: on starts the service, off stops it. */
@@ -372,6 +401,3 @@ class MainActivity : ComponentActivity() {
 
 /** How much of a server log one dialog shows; the files keep more. */
 const val LOG_DIALOG_LINES = 50
-
-private val LITERAL_IPV4 =
-    Regex("""^((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$""")
