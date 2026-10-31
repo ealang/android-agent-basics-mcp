@@ -75,11 +75,13 @@
         <!-- DayNight: the platform's own pieces follow the system dark
              setting, the way the Compose theme already does. Without a theme
              the window, the system bars and the platform AlertDialog come
-             out of the light default beside a dark page. -->
+             out of the light default beside a dark page. Theme.PuckMcp is
+             that theme minus its action bar, which would put the app label
+             above the page's own title as a second one. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:theme="@android:style/Theme.DeviceDefault.DayNight">
+            android:theme="@style/Theme.PuckMcp">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
