@@ -10,7 +10,7 @@ intent actions, which the system hands to whichever app is registered for
 them: usually the stock clock, sometimes a third-party alarm app, and
 timers and alarms can land in different apps. The timer then lives where
 the user already looks for timers, rings with their own sound, and keeps
-running if phone-mcp dies.
+running if Puck MCP dies.
 
 This file is the starting point for a clock app with no file of its own
 in `android-apps/`. Where the handling app has one, use that file: its

@@ -1,4 +1,4 @@
-# phone-mcp
+# android-puck-mcp
 
 An MCP server that runs on an Android phone, so an agent can act on the device
 the user is actually carrying: open apps, control media, set timers, read the
@@ -102,7 +102,7 @@ is recommended. The app installs on Android 10 (API 29) or later.
 
 1. **Set up Tailscale** on the phone and on the machine hosting the agent,
    signed into the same tailnet.
-2. **Open Phone MCP**, set **Bind address** to the phone's Tailscale IP
+2. **Open Puck MCP**, set **Bind address** to the phone's Tailscale IP
    (`100.x.y.z`), **Save and apply**, and switch the server on at the top
    of the screen. Bound to that address, the server does not answer on the
    LAN at all. The port defaults to 8910.

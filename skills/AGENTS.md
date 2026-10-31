@@ -1,6 +1,6 @@
 # Skill files — how they are organised and written
 
-phone-mcp exposes generic automation interfaces rather than support for
+Puck MCP exposes generic automation interfaces rather than support for
 any particular app. These files are the knowledge that drives specific
 apps through them: verified recipes, found by experiment on a real
 device, written so that an agent reading one can act without
@@ -9,7 +9,7 @@ try search.
 
 ## Layout
 
-- **Top level** — generic skills. Each describes a *mechanism* phone-mcp
+- **Top level** — generic skills. Each describes a *mechanism* Puck MCP
   exposes that works the same way against any app: an Android or Pebble
   API, remoted, and how to use it well.
 - **`android-apps/`** — one file per Android app: what that app answers

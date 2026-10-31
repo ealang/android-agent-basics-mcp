@@ -1,4 +1,4 @@
-# Working on phone-mcp
+# Working on android-puck-mcp
 
 ## Generic-first: what the tool surface is
 
@@ -39,7 +39,7 @@ declared here, however useful the surface behind it: it ties the
 generic server to one app, and the signature-level ones cannot be
 granted to us at all. When an app's surface sits behind such a grant,
 the route is a bridge: a separate bridge or plugin app that can hold the
-grant and re-exposes the function over an interface phone-mcp reaches
+grant and re-exposes the function over an interface Puck MCP reaches
 through the generic tools, an exported provider or service. If the
 capability deserves protection, the bridge checks its caller's
 signature. The bridge then gets a skill file like any other app.

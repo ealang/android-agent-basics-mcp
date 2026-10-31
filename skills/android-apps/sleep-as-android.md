@@ -47,7 +47,7 @@ any other type the alarm comes out one-time.
 The provider is the only surface that could retime an alarm, and it is
 closed: `provider_query` against the alarm authority fails with a
 permission denial naming `READ` or `WRITE`, `READ` is a build-time
-manifest grant phone-mcp does not declare, and `WRITE` is
+manifest grant Puck MCP does not declare, and `WRITE` is
 signature-level, so only Urbandroid-signed apps can ever hold it. No
 Settings toggle and no manifest line changes that.
 
