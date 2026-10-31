@@ -117,7 +117,14 @@
         <!-- Empty listener; enabling it in Settings > Notification access is
              what authorizes MediaSessionManager.getActiveSessions — the route
              into media sessions whose apps block stranger connections to their
-             browser service. We never read notifications. -->
+             browser service. The grant is a credential only: the class reads
+             nothing, and the meta-data below tells Android to deliver it
+             nothing. Every notification is one of these four types, so on
+             Android 13+ the system withholds all of them before they reach
+             this process and shows the types as off and disabled in Settings.
+             Earlier releases ignore the tag; there the empty class is the
+             guarantee. The media-session check only asks whether the
+             listener is enabled, not what it may see. -->
         <service
             android:name=".MediaListenerService"
             android:exported="true"
@@ -125,6 +132,9 @@
             <intent-filter>
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
+            <meta-data
+                android:name="android.service.notification.disabled_filter_types"
+                android:value="conversations|alerting|silent|ongoing" />
         </service>
 
         <!-- The find-my-phone stop button. Fired only by our own pending

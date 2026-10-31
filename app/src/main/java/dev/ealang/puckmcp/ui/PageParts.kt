@@ -185,8 +185,10 @@ val OVERLAY_GRANT = Grant(
 )
 
 val MEDIA_GRANT = Grant(
-    ask = "The media tools need notification access, which is what exposes " +
-        "other apps' media sessions. No notifications are read.",
+    ask = "The media tools need notification access, the only way Android " +
+        "exposes other apps' media sessions. It is used for media control " +
+        "only: the app tells Android to deliver it no notifications, so " +
+        "message contents are never visible to it.",
     button = "Allow media control",
     granted = {
         it.getSystemService(NotificationManager::class.java)
