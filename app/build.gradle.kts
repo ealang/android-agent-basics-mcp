@@ -16,11 +16,11 @@ val localProps = Properties().apply {
 }
 
 android {
-    namespace = "dev.ealang.phonemcp"
+    namespace = "dev.ealang.puckmcp"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "dev.ealang.phonemcp"
+        applicationId = "dev.ealang.puckmcp"
         // Android 10: the first release where background activity starts
         // need the overlay grant and background location is its own
         // permission, so the code has no older branch to carry.

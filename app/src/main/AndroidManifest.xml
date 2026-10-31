@@ -63,7 +63,7 @@
         android:allowBackup="false"
         android:fullBackupContent="@xml/backup_rules"
         android:dataExtractionRules="@xml/data_extraction_rules"
-        android:label="Phone MCP"
+        android:label="Puck MCP"
         android:icon="@mipmap/ic_launcher"
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
@@ -98,7 +98,7 @@
             android:foregroundServiceType="specialUse|location|mediaPlayback">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Local MCP server for the paired Pebble/agent to call" />
+                android:value="MCP server for the paired Pebble/agent to call" />
         </service>
 
         <!-- The locked-phone gate's flare: invisible, shows over the keyguard

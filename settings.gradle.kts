@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "phone-mcp"
+rootProject.name = "android-puck-mcp"
 include(":app")
