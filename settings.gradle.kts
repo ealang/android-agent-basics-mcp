@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "android-puck-mcp"
+rootProject.name = "android-agent-basics-mcp"
 include(":app")

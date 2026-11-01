@@ -3,7 +3,7 @@
     <!-- The platform's DayNight theme without its action bar. There is no
          public NoActionBar variant of Theme.DeviceDefault.DayNight, so this
          is that: the page draws its own title. -->
-    <style name="Theme.PuckMcp" parent="@android:style/Theme.DeviceDefault.DayNight">
+    <style name="Theme.AgentBasicsMcp" parent="@android:style/Theme.DeviceDefault.DayNight">
         <item name="android:windowActionBar">false</item>
         <item name="android:windowNoTitle">true</item>
     </style>

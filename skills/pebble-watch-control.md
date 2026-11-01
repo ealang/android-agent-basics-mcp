@@ -74,7 +74,7 @@ decides whether an empty ping is safe.
 - **System apps.** Stock watchapps cannot be sent to at all; the only
   route is a sideloaded copy or fork.
 - **Apps that declare an Android companion app.** Their sends go through
-  a path that checks the calling package, and Puck MCP is not it.
+  a path that checks the calling package, and Agent Basics MCP is not it.
 - **No watch connected.** This one is caught: every watch tool preflights
   the link and fails fast naming it.
 

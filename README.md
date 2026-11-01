@@ -1,4 +1,4 @@
-# android-puck-mcp
+# Android Agent Basics MCP
 
 An MCP server that runs on an Android phone, so an agent can act on the device
 the user is actually carrying: open apps, control media, set timers, read the
@@ -102,7 +102,7 @@ is recommended. The app installs on Android 10 (API 29) or later.
 
 1. **Set up Tailscale** on the phone and on the machine hosting the agent,
    signed into the same tailnet.
-2. **Open Puck MCP** and check **Bind address** under Server settings. On
+2. **Open Agent Basics MCP** and check **Bind address** under Server settings. On
    first launch it is filled in with the VPN's address when one is up, so
    with Tailscale connected it already reads `100.x.y.z`; otherwise tap the
    field and pick the VPN row from the list, then **Save and apply**. Bound
