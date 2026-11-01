@@ -275,7 +275,7 @@ class McpServer(
                         // the handshake still arrives here by name.
                         !enabled(spec) ->
                             "FAILED: the user has switched this tool off in the " +
-                                "Puck MCP app." to true
+                                "Agent Basics MCP app." to true
                         else -> spec.handler(args)
                     }
                 } catch (t: Throwable) {

@@ -164,7 +164,7 @@ val BATTERY_GRANT = Grant(
             // Before 12 there is no Unrestricted: the exemption is a list of
             // its own, one screen further down (Battery sits under Advanced
             // on 10).
-            "open Battery, then Battery optimization, and set Puck MCP to " +
+            "open Battery, then Battery optimization, and set Agent Basics MCP to " +
                 "Don't optimize."
         },
     button = "Battery settings",
@@ -177,7 +177,7 @@ val BATTERY_GRANT = Grant(
 
 /** The one background-activity-start exemption; every launch rides on it. */
 val OVERLAY_GRANT = Grant(
-    ask = "Used to open other apps while Puck MCP is in the background.",
+    ask = "Used to open other apps while Agent Basics MCP is in the background.",
     button = "Allow display over other apps",
     granted = { Clock.canStartFromBackground(it) },
     open = settingsFor(Settings.ACTION_MANAGE_OVERLAY_PERMISSION),

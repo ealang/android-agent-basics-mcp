@@ -46,7 +46,7 @@ object SessionExplorer {
 
     private const val NO_ACCESS =
         "FAILED: this app does not have notification access, which is what " +
-            "exposes media sessions. Ask the user to open Puck MCP and tap " +
+            "exposes media sessions. Ask the user to open Agent Basics MCP and tap " +
             "\"Allow notification access\"."
 
     /** Null means notification access has not been granted. */

@@ -89,7 +89,7 @@ fun PuckMcpApp(activity: MainActivity) {
         ) {
             // The page is named once, in full; the header row below is the
             // server and its switch, so it is called what it is.
-            Text("Android Puck MCP", style = MaterialTheme.typography.headlineSmall)
+            Text("Agent Basics MCP", style = MaterialTheme.typography.headlineSmall)
 
             ServerHeader(
                 title = "MCP server",

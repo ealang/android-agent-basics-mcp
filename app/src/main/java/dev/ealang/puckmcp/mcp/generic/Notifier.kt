@@ -54,7 +54,7 @@ object Notifier {
             NotificationManager.IMPORTANCE_NONE
         ) {
             return "FAILED: the user has blocked this notification category for " +
-                "Puck MCP. They can re-enable it under Settings > Notifications." to true
+                "Agent Basics MCP. They can re-enable it under Settings > Notifications." to true
         }
 
         // A posted notification cannot move channels: notify() with the same

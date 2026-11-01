@@ -83,7 +83,7 @@ object AppTools {
                             "FAILED: the phone is withholding location from this app. The " +
                                 "server started on its own (a reboot or an app update), and " +
                                 "location is only allowed while the app is in use. Ask the " +
-                                "user to open Puck MCP and set location to \"all the time\" " +
+                                "user to open Agent Basics MCP and set location to \"all the time\" " +
                                 "— that fixes it for good. Opening the app also works once." to true
                         } else {
                             "FAILED: location is on and permitted, but no fix came back in " +

@@ -34,7 +34,7 @@ object Preflight {
      */
     private const val NO_BACKGROUND_LAUNCH =
         "this app is not allowed to open other apps from the background. " +
-            "Ask the user to open Puck MCP and tap \"Allow display over other apps\". " +
+            "Ask the user to open Agent Basics MCP and tap \"Allow display over other apps\". " +
             "Nothing was done."
 
     /** Any activity start on someone else's behalf needs the overlay grant. */
@@ -52,7 +52,7 @@ object Preflight {
 
     fun location(context: Context): String? = when {
         !Locator.hasPermission(context) ->
-            "this app does not have location access. Ask the user to open Puck MCP " +
+            "this app does not have location access. Ask the user to open Agent Basics MCP " +
                 "and tap \"Allow location\"."
         !Locator.servicesEnabled(context) ->
             "location is switched off on the phone, so nothing can answer. Ask the " +
@@ -70,7 +70,7 @@ object Preflight {
                 .areNotificationsEnabled()
         ) {
             "this app is not allowed to post notifications. Ask the user to open " +
-                "Puck MCP and tap \"Allow notifications\"."
+                "Agent Basics MCP and tap \"Allow notifications\"."
         } else {
             null
         }

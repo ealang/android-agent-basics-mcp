@@ -425,7 +425,7 @@ class McpService : Service() {
         )
 
         return Notification.Builder(this, channel)
-            .setContentTitle(if (trouble) "Puck MCP server is down" else "Puck MCP")
+            .setContentTitle(if (trouble) "Agent Basics MCP server is down" else "Agent Basics MCP")
             .setContentText(text)
             .setStyle(Notification.BigTextStyle().bigText(text))
             .setOnlyAlertOnce(true)
