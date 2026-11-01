@@ -130,10 +130,25 @@ is recommended. The app installs on Android 10 (API 29) or later.
 
 ```bash
 ./gradlew :app:assembleDebug     # debug APK, signed with the local debug key
-./gradlew :app:assembleRelease   # unsigned release APK; sign it however you ship
+./gradlew :app:assembleRelease   # unsigned release APK, to be signed below
 ```
 
-Output lands under `app/build/outputs/apk/`. The build needs an Android SDK
+Output lands under `app/build/outputs/apk/`. The debug build has the package
+suffix `.debug` and a "(debug)" label, so it installs alongside a release
+build as a separate app with its own settings and token.
+
+A release APK is signed after the build, with `apksigner` from the SDK's
+build-tools and a keystore that lives wherever you keep secrets:
+
+```bash
+apksigner sign --ks release.jks --ks-key-alias <alias> \
+  --out agent-basics-mcp-<version>.apk app/build/outputs/apk/release/app-release-unsigned.apk
+apksigner verify --print-certs agent-basics-mcp-<version>.apk
+```
+
+The key is permanent: Android only installs an update signed with the same key
+as the copy already on the phone. Bump `versionCode` in `app/build.gradle.kts`
+for every release, or the install is refused as a downgrade. The build needs an Android SDK
 (`sdk.dir` in `local.properties`, which is gitignored). Optionally
 `local.properties` can also carry `DEBUG_KEYSTORE=/path/to/debug.keystore`
 to sign debug builds with a key of your choosing instead of the SDK's

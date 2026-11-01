@@ -26,8 +26,11 @@ android {
         // permission, so the code has no older branch to carry.
         minSdk = 29
         targetSdk = 35
+        // versionCode is what Android compares on install: it must rise with
+        // every release, or the new APK is refused as a downgrade.
+        // versionName is the string people see in Settings and in `inspect`.
         versionCode = 1
-        versionName = "0.1"
+        versionName = "1.0"
     }
 
     localProps["DEBUG_KEYSTORE"]?.toString()?.let { path ->
@@ -41,9 +44,26 @@ android {
         }
     }
 
+    // Labels live here rather than in the manifest so each build type can
+    // carry its own. app_label names the app in Settings and notifications;
+    // launcher_label is the shorter one under the home-screen icon.
     buildTypes {
         getByName("debug") {
             isMinifyEnabled = false
+            // A debug build installs beside a release one rather than over
+            // it: different package, own data, own token and port, so a
+            // release-signed copy can stay on the phone while development
+            // builds come and go.
+            applicationIdSuffix = ".debug"
+            resValue("string", "app_label", "Agent Basics MCP (debug)")
+            resValue("string", "launcher_label", "Agent Basics (debug)")
+        }
+        getByName("release") {
+            // Not shrunk: a release behaves exactly like the debug build it
+            // was tested as. Signing is a step after the build (see README).
+            isMinifyEnabled = false
+            resValue("string", "app_label", "Agent Basics MCP")
+            resValue("string", "launcher_label", "Agent Basics")
         }
     }
 

@@ -66,7 +66,7 @@
         android:allowBackup="false"
         android:fullBackupContent="@xml/backup_rules"
         android:dataExtractionRules="@xml/data_extraction_rules"
-        android:label="Agent Basics MCP"
+        android:label="@string/app_label"
         android:icon="@mipmap/ic_launcher"
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
@@ -81,7 +81,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:label="Agent Basics"
+            android:label="@string/launcher_label"
             android:theme="@style/Theme.AgentBasicsMcp">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
