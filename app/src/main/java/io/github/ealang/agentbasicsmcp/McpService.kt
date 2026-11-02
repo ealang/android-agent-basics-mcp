@@ -142,9 +142,18 @@ class McpService : Service() {
 
     /** elapsedRealtime of the first failed bind in the current run of failures, 0 when bound. */
     private var failingSince = 0L
-    /** What [show] last displayed, so a channel block/unblock can redraw it. */
+    /**
+     * What [show] last displayed, so a channel block/unblock can redraw it,
+     * and so a repeat start keeps showing it: [goForeground] runs on every
+     * start, including the ones the activity sends to regain the location
+     * type once the socket is already up, and [attemptStart] then returns
+     * without redrawing. Posting a fixed "Starting…" there left the
+     * notification saying so for the life of a server that was listening.
+     */
     private var lastText = "Starting…"
     private var lastTrouble = false
+
+    private fun currentNotification() = notification(lastText, lastTrouble, QUIET_CHANNEL_ID)
 
     /**
      * The user blocking or unblocking one of our channels: redraw at once,
@@ -235,7 +244,7 @@ class McpService : Service() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             // Types are not enforced before 34; asking for one is what breaks.
             return try {
-                startForeground(QUIET_NOTIFICATION_ID, notification("Starting…", false, QUIET_CHANNEL_ID))
+                startForeground(QUIET_NOTIFICATION_ID, currentNotification())
                 degraded = false
                 true
             } catch (e: Exception) {
@@ -248,7 +257,7 @@ class McpService : Service() {
             ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION or
             ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
         try {
-            startForeground(QUIET_NOTIFICATION_ID, notification("Starting…", false, QUIET_CHANNEL_ID), full)
+            startForeground(QUIET_NOTIFICATION_ID, currentNotification(), full)
             if (degraded) Logs.mcp.info("location foreground type regained")
             degraded = false
             return true
@@ -259,7 +268,7 @@ class McpService : Service() {
         return try {
             startForeground(
                 QUIET_NOTIFICATION_ID,
-                notification("Starting…", false, QUIET_CHANNEL_ID),
+                currentNotification(),
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
             )
             degraded = true
