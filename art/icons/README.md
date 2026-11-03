@@ -9,6 +9,7 @@ self-contained pages. Open them from a file URL; no server or build step.
 | `claw-lab.html` | Launcher icon. Drag the claw or the phone, adjust the sliders, copy the parameter block. Downloads the adaptive-icon SVG and the monochrome (themed-icon) SVG, and previews the themed icon. |
 | `launcher.json` | The parameter block of the launcher icon as shipped. |
 | `render-launcher.py` | Turns the page's two SVGs into the mipmap PNGs. |
+| `launcher.png` | The launcher icon as a launcher shows it: the inner 72 dp of the xxxhdpi foreground under a squircle mask, 288 px, for the README. |
 | `claw-stat-lab.html` | Status-bar icon, 24 dp, white on transparent. Emits the finished `VectorDrawable`. |
 | `status.json` | The parameter block of the status-bar icon as shipped. |
 | `clipper-6.4.2.js` | Polygon boolean library used by the status page (Angus Johnson, Boost licence). |
