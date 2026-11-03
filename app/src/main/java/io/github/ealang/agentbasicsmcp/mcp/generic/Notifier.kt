@@ -82,10 +82,10 @@ object Notifier {
             // to one line.
             .setStyle(Notification.BigTextStyle().bigText(text))
             // The status bar icon carries the level: info circle or warning
-            // triangle. The pyramid stays the service's alone, so agent
+            // triangle. The claw stays the service's alone, so agent
             // notifications are tellable from it at a glance.
             .setSmallIcon(
-                if (alert) R.drawable.ic_stat_warning else R.drawable.ic_stat_claw,
+                if (alert) R.drawable.ic_stat_warning else R.drawable.ic_stat_info,
             )
             .setContentIntent(open)
             .setAutoCancel(true)
