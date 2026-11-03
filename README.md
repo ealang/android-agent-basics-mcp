@@ -1,4 +1,4 @@
-# Android Agent Basics MCP
+# Agent Basics MCP
 
 ![icon](art/icons/launcher-50pct.png)
 
