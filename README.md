@@ -4,7 +4,7 @@
 
 An MCP server that runs on an Android phone, so an agent can act on the device
 the user is actually carrying: open apps, control media, set timers, read the
-phone's location, ring it, drive a paired Pebble watch.
+phone's location, drive a paired Pebble watch, etc.
 
 ## Design
 
@@ -14,8 +14,7 @@ launch and messaging) — rather than including support for any particular
 app. Driving a specific app is done through those interfaces, and the
 knowledge of how — verified recipes for individual apps, found by
 experiment on a real device — lives in skill files under `skills/`. The
-only other tools are the phone's own capabilities: location, ringing
-itself, notifications.
+only other tools are the phone's basic capabilities.
 
 ## Agent skill file library
 
@@ -89,7 +88,7 @@ is absent from `tools/list`, and its tools refuse to run.
 
 The app runs a plain HTTP server on the phone with a single endpoint,
 `POST /mcp`, speaking JSON-RPC 2.0 / MCP and requiring
-`Authorization: Bearer <token>`; any other request is answered 401. The
+`Authorization: Bearer <token>`. The
 traffic is unencrypted, so it is meant to be reached over a VPN rather than
 the open network. [Tailscale](https://play.google.com/store/apps/details?id=com.tailscale.ipn)
 is recommended. The app installs on Android 10 (API 29) or later.
