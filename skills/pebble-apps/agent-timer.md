@@ -19,7 +19,7 @@ pebblekit_launch_and_send
 {
   "app": "6ba47813-25c2-4c9e-b93a-f6f24372b4c3",
   "ping": [],
-  "tuples": [{"key": 20, "type": "int", "length": 4, "value": <seconds>}]
+  "tuples": [{"key": 20, "type": "int", "value": <seconds>}]
 }
 ```
 

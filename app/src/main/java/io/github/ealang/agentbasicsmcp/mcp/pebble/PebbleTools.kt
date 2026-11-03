@@ -33,9 +33,9 @@ object PebbleTools {
                 JSONObject()
                     .put("key", JSONObject().put("type", "integer"))
                     .put("type", JSONObject().put("type", "string").put("enum", JSONArray().put("int").put("uint").put("string").put("bytes")))
-                    .put("length", JSONObject().put("type", "integer").put("description", "Required by the wire format. Byte width 1, 2, or 4 for int/uint; string length for string; byte count for bytes."))
-                    .put("value", JSONObject().put("description", "Number for int/uint, text for string, base64 for bytes.")),
-            ).put("required", JSONArray().put("key").put("type").put("length").put("value")),
+                    .put("length", JSONObject().put("type", "integer").put("description", "Integer width in bytes, 1, 2 or 4, default 4; ignored for string and bytes, which are measured."))
+                    .put("value", JSONObject().put("description", "Whole number for int/uint, text for string, base64 for bytes.")),
+            ).put("required", JSONArray().put("key").put("type").put("value")),
         ).put("description", description)
 
         val payloadProperty = tuplesProperty(
@@ -95,7 +95,7 @@ object PebbleTools {
             blocked(Preflight.watch(context)) ?: run {
                 val tuples = args.optJSONArray("tuples")
                 if (tuples == null) {
-                    "FAILED: give tuples, an array of {key, type, length, value}." to true
+                    "FAILED: give tuples, an array of {key, type, value}." to true
                 } else {
                     when (val result = Watch.sendMessage(context, args.optString("app"), tuples)) {
                         Watch.SendResult.Acknowledged ->
@@ -149,7 +149,7 @@ object PebbleTools {
                 if (ping == null) {
                     "FAILED: give ping, the message to repeat until the watchapp is up — usually []." to true
                 } else if (tuples == null) {
-                    "FAILED: give tuples, an array of {key, type, length, value}." to true
+                    "FAILED: give tuples, an array of {key, type, value}." to true
                 } else {
                     val result = Watch.launchAndSend(context, args.optString("app"), ping, tuples)
                     when (result) {
@@ -187,5 +187,5 @@ object PebbleTools {
         "FAILED: \"$given\" is not a UUID. Nothing was sent." to true
 
     private fun malformed(why: String): Pair<String, Boolean> =
-        "FAILED: not sent — $why. Every tuple needs key, type, length and value." to true
+        "FAILED: not sent — $why. Every tuple needs key, type and value." to true
 }

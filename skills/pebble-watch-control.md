@@ -18,16 +18,15 @@ pebblekit_launch_and_send
 {
   "app": "<watchapp uuid>",
   "ping": [],
-  "tuples": [{"key": <key>, "type": "int", "length": 4, "value": <value>}]
+  "tuples": [{"key": <key>, "type": "int", "value": <value>}]
 }
 ```
 
-- `tuples` is the AppMessage: an array of `{key, type, length, value}`,
-  all four fields required, `type` one of `int`, `uint`, `string`,
-  `bytes`. `length` is the byte width: 1, 2 or 4 for `int` and `uint`,
-  the string's length in bytes for `string`. An empty array is a valid
-  message. A tuple that does not fit the wire format is refused without
-  being sent.
+- `tuples` is the AppMessage: an array of `{key, type, value}`, `type`
+  one of `int`, `uint`, `string`, `bytes` (base64). Integers go 4 bytes
+  wide; add `"length": 1` or `2` when a watchapp reads a narrower value.
+  An empty array is a valid message. A tuple that does not fit the wire
+  format is refused without being sent.
 - `ping` is a message sent about once a second until the watch replies,
   then the payload is delivered exactly once. Take the ping from the
   app's file. It is usually `[]`, which is inert for any app whose

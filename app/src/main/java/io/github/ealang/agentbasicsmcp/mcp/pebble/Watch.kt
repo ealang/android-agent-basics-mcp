@@ -7,6 +7,7 @@ import android.content.IntentFilter
 import android.net.Uri
 import android.os.Build
 import android.os.SystemClock
+import android.util.Base64
 import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
@@ -118,20 +119,26 @@ object Watch {
         tuples: JSONArray,
     ): HandshakeResult {
         val uuid = resolve(app) ?: return HandshakeResult.NotAUuid(app)
-        checkWireFormat(ping)?.let { return HandshakeResult.Malformed("ping $it") }
-        checkWireFormat(tuples)?.let { return HandshakeResult.Malformed(it) }
+        val wirePing = when (val w = toWire(ping)) {
+            is Wire.Ready -> w.tuples
+            is Wire.Unsendable -> return HandshakeResult.Malformed("ping ${w.why}")
+        }
+        val wireTuples = when (val w = toWire(tuples)) {
+            is Wire.Ready -> w.tuples
+            is Wire.Unsendable -> return HandshakeResult.Malformed(w.why)
+        }
         val replies = Replies()
         registerForReplies(context, replies)
 
         return try {
-            if (!awaitWatchapp(context, replies, uuid, ping)) {
+            if (!awaitWatchapp(context, replies, uuid, wirePing)) {
                 return HandshakeResult.NeverCameUp
             }
 
             val transaction = nextTransaction()
             replies.expectMessage(transaction)
-            context.sendBroadcast(message(uuid, transaction, tuples.toString()))
-            Log.i(TAG, "launch_and_send -> $uuid, transaction $transaction: $tuples")
+            context.sendBroadcast(message(uuid, transaction, wireTuples.toString()))
+            Log.i(TAG, "launch_and_send -> $uuid, transaction $transaction: $wireTuples")
 
             when {
                 !replies.messageReplied.await(ACK_TIMEOUT_MS, TimeUnit.MILLISECONDS) -> {
@@ -165,15 +172,18 @@ object Watch {
      */
     fun sendMessage(context: Context, app: String, tuples: JSONArray): SendResult {
         val uuid = resolve(app) ?: return SendResult.NotAUuid(app)
-        checkWireFormat(tuples)?.let { return SendResult.Malformed(it) }
+        val wireTuples = when (val w = toWire(tuples)) {
+            is Wire.Ready -> w.tuples
+            is Wire.Unsendable -> return SendResult.Malformed(w.why)
+        }
         val replies = Replies()
         registerForReplies(context, replies)
 
         return try {
             val transaction = nextTransaction()
             replies.expectMessage(transaction)
-            context.sendBroadcast(message(uuid, transaction, tuples.toString()))
-            Log.i(TAG, "pebblekit_send_message -> $uuid, transaction $transaction: $tuples")
+            context.sendBroadcast(message(uuid, transaction, wireTuples.toString()))
+            Log.i(TAG, "pebblekit_send_message -> $uuid, transaction $transaction: $wireTuples")
 
             when {
                 !replies.messageReplied.await(ACK_TIMEOUT_MS, TimeUnit.MILLISECONDS) ->
@@ -186,33 +196,91 @@ object Watch {
         }
     }
 
+    private sealed interface Wire {
+        class Ready(val tuples: JSONArray) : Wire
+        class Unsendable(val why: String) : Wire
+    }
+
     /**
-     * The one validation the generic send performs, and it is wire format, not
-     * judgment: CoreApp's tuple parser hard-requires `length` on every tuple
-     * (`getInt` throws on absence) and only knows widths 1, 2 and 4 for
-     * int/uint — and it parses inside a flow collector with no catch, so one
-     * malformed tuple does not just fail, it kills CoreApp's send listener for
-     * that watchapp until the app is restarted on the watch. Found live,
-     * 2026-09-06. A message that would do that is refused here instead.
+     * Turns the caller's tuples into what CoreApp's parser will accept, or
+     * says why it cannot. Wire format, not judgment: what the keys mean is
+     * skill-file knowledge.
      *
-     * Returns the reason the tuples are unsendable, or null when they are fine.
+     * CoreApp parses inside a flow collector with no catch, so a tuple it
+     * chokes on does not just fail, it kills CoreApp's send listener for that
+     * watchapp until the app is restarted on the watch (found live,
+     * 2026-09-06). Everything that would do that is caught here instead: a
+     * missing field, a non-integer where an integer is read, base64 that
+     * does not decode.
+     *
+     * `length` is where CoreApp's format and its meaning part ways. The
+     * parser requires the field on every tuple, but only reads it for `int`
+     * and `uint`, where it is the integer's width on the watch; for `string`
+     * and `bytes` it measures the value itself. So the caller may leave it
+     * out: integers default to 4 bytes, the width PebbleKit JS sends and most
+     * watchapps read, and strings and bytes get their real size. A given
+     * width is kept, and a value that does not fit it is refused rather than
+     * silently truncated, which is what CoreApp would do.
      */
-    private fun checkWireFormat(tuples: JSONArray): String? {
+    private fun toWire(tuples: JSONArray): Wire {
+        val out = JSONArray()
         for (i in 0 until tuples.length()) {
             val t = tuples.optJSONObject(i)
-                ?: return "tuple $i is not an object"
-            if (!t.has("key")) return "tuple $i has no key"
+                ?: return Wire.Unsendable("tuple $i is not an object")
+            val key = t.opt("key") as? Number
+                ?: return Wire.Unsendable("tuple $i has no integer key")
             val type = t.optString("type")
-            if (type !in setOf("int", "uint", "string", "bytes")) {
-                return "tuple $i has type \"$type\"; the wire format knows int, uint, string, bytes"
+            val value = t.opt("value")
+                ?: return Wire.Unsendable("tuple $i has no value")
+            val length = when (type) {
+                "int", "uint" -> {
+                    if (value !is Number || value.toDouble() != value.toLong().toDouble()) {
+                        return Wire.Unsendable("tuple $i: an $type value must be a whole number")
+                    }
+                    val width = if (t.has("length")) t.optInt("length") else 4
+                    if (width !in setOf(1, 2, 4)) {
+                        return Wire.Unsendable(
+                            "tuple $i has length $width; int and uint are 1, 2 or 4 bytes",
+                        )
+                    }
+                    val v = value.toLong()
+                    val bits = width * 8
+                    val fits = if (type == "int") {
+                        v >= -(1L shl (bits - 1)) && v < (1L shl (bits - 1))
+                    } else {
+                        v >= 0 && v < (1L shl bits)
+                    }
+                    if (!fits) return Wire.Unsendable("tuple $i: $v does not fit a $width-byte $type")
+                    width
+                }
+                "string" -> {
+                    if (value !is String) return Wire.Unsendable("tuple $i: a string value must be text")
+                    value.toByteArray(Charsets.UTF_8).size
+                }
+                "bytes" -> {
+                    val decoded = try {
+                        Base64.decode(value as? String ?: "", Base64.NO_WRAP)
+                    } catch (e: IllegalArgumentException) {
+                        null
+                    }
+                    if (value !is String || decoded == null) {
+                        return Wire.Unsendable("tuple $i: a bytes value must be base64 text")
+                    }
+                    decoded.size
+                }
+                else -> return Wire.Unsendable(
+                    "tuple $i has type \"$type\"; the wire format knows int, uint, string, bytes",
+                )
             }
-            if (!t.has("value")) return "tuple $i has no value"
-            if (!t.has("length")) return "tuple $i has no length, which the wire format requires"
-            if (type in setOf("int", "uint") && t.optInt("length") !in setOf(1, 2, 4)) {
-                return "tuple $i has length ${t.optInt("length")}; int and uint must be 1, 2 or 4 bytes"
-            }
+            out.put(
+                JSONObject()
+                    .put("key", key.toInt())
+                    .put("type", type)
+                    .put("length", length)
+                    .put("value", if (value is Number && type != "string") value.toLong() else value),
+            )
         }
-        return null
+        return Wire.Ready(out)
     }
 
     /**

@@ -11,7 +11,7 @@ turn-by-turn directions on the watch. Driving it from the phone needs the
 fork github.com/ealang/TomBolger-PebbleMaps, which adds the two commands
 below to github.com/TomBolger/PebbleMaps; the store build ignores them.
 Each is one `pebblekit_launch_and_send` call with an empty message as the
-ping. A string's `length` is its length in bytes.
+ping.
 
 ## Search
 
@@ -25,8 +25,8 @@ pebblekit_launch_and_send
   "app": "cce60bc9-e29f-4988-a83b-b4652291650d",
   "ping": [],
   "tuples": [
-    {"key": 10000, "type": "int", "length": 4, "value": 120},
-    {"key": 10004, "type": "string", "length": <byte length>, "value": "<query>"}
+    {"key": 10000, "type": "int", "value": 120},
+    {"key": 10004, "type": "string", "value": "<query>"}
   ]
 }
 ```
@@ -47,9 +47,9 @@ pebblekit_launch_and_send
   "app": "cce60bc9-e29f-4988-a83b-b4652291650d",
   "ping": [],
   "tuples": [
-    {"key": 10000, "type": "int", "length": 4, "value": 121},
-    {"key": 10004, "type": "string", "length": <byte length>, "value": "<destination>"},
-    {"key": 10003, "type": "int", "length": 4, "value": <mode>}
+    {"key": 10000, "type": "int", "value": 121},
+    {"key": 10004, "type": "string", "value": "<destination>"},
+    {"key": 10003, "type": "int", "value": <mode>}
   ]
 }
 ```
