@@ -1,5 +1,7 @@
 # Android Agent Basics MCP
 
+![icon](art/icons/launcher-50pct.png)
+
 An MCP server that runs on an Android phone, so an agent can act on the device
 the user is actually carrying: open apps, control media, set timers, read the
 phone's location, ring it, drive a paired Pebble watch.
@@ -15,29 +17,9 @@ experiment on a real device — lives in skill files under `skills/`. The
 only other tools are the phone's own capabilities: location, ringing
 itself, notifications.
 
-`skills/` ships a starter set, generic mechanisms and per-app findings
-alike; the next section summarises what they cover.
+## Agent skill file library
 
-## What the skill files cover
-
-The generic mechanisms, one file each at the top of `skills/`:
-
-- **Media control** — play, pause, skip, seek and queue in any app with
-  a media session, including apps that refuse the standard route.
-- **Media discovery** — finding something playable: browse, search, the
-  queue, now playing, the vendor's web API.
-- **App launch** — when opening an app's screen is needed at all.
-- **Timers and alarms** — setting them on whatever clock app the phone
-  uses.
-- **Pebble watch control** — launching a watchapp and sending it a
-  message.
-
-The apps with a verified file, in `skills/android-apps/` and
-`skills/pebble-apps/`. ✅ means the app's main job works hands-free from
-the background, 🟡 means it works with a limit the row names, ❌ means
-nothing works.
-
-Android apps:
+**Android apps:**
 
 | App | What works |
 |---|---|
@@ -56,12 +38,24 @@ Android apps:
 | 🟡 [Sleep as Android](skills/android-apps/sleep-as-android.md) | create an alarm; existing alarms cannot be read or changed |
 | ❌ [Eleven Reader](skills/android-apps/eleven-reader.md) | nothing |
 
-Pebble watchapps:
+**Pebble watchapps:**
 
 | App | What works |
 |---|---|
 | ✅ [Agent Timer](skills/pebble-apps/agent-timer.md) | start a timer on the watch |
 | ✅ [Pebble Maps](skills/pebble-apps/pebble-maps.md) | search, or start navigation to a favourite, address or place |
+
+**Generic mechanisms:**
+
+- **Media control** — play, pause, skip, seek and queue in any app with
+  a media session, including apps that refuse the standard route.
+- **Media discovery** — finding something playable: browse, search, the
+  queue, now playing, the vendor's web API.
+- **App launch** — when opening an app's screen is needed at all.
+- **Timers and alarms** — setting them on whatever clock app the phone
+  uses.
+- **Pebble watch control** — launching a watchapp and sending it a
+  message.
 
 Give the agent only the files for the apps you use. The recommended way
 is a personal skill file, or a section of your own agent instructions,
