@@ -98,15 +98,12 @@ object Notifier {
             .build()
 
         manager.notify(key, ID, notification)
-        return "The notification is in the phone's shade. Posting the same key " +
-            "again replaces it: silently at the same alert level, audibly if " +
-            "raised to alert." to false
+        return "Notification posted." to false
     }
 
     fun dismiss(context: Context, key: String): Pair<String, Boolean> {
         context.getSystemService(NotificationManager::class.java).cancel(key, ID)
-        return "Dismissed. A key with nothing showing is a no-op, so this " +
-            "cannot fail." to false
+        return "Dismissed." to false
     }
 
     /**

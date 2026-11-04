@@ -298,7 +298,7 @@ object IntentExplorer {
                         try {
                             context.startActivity(intent)
                             Log.i(TAG, "intent: started activity ${describeIntent(intent)}")
-                            "Started activity for ${describeIntent(intent)}."
+                            "Activity start sent for ${describeIntent(intent)}."
                         } catch (e: Exception) {
                             // A component can resolve and still refuse us — a
                             // guarding permission we do not hold throws
@@ -339,7 +339,7 @@ object IntentExplorer {
                             context.startService(intent)
                         }
                         Log.i(TAG, "intent: started $mode ${describeIntent(intent)}")
-                        "Started $mode for ${describeIntent(intent)}."
+                        "Start sent to $mode for ${describeIntent(intent)}."
                     } catch (e: Exception) {
                         // Background-start restrictions land here as exceptions.
                         Log.w(TAG, "intent: $mode start failed", e)

@@ -55,7 +55,7 @@ object PebbleTools {
                 .put("inputSchema", appArgument),
         ) { args ->
             blocked(Preflight.watch(context))
-                ?: describe(Watch.launch(context, args.optString("app")), "opened")
+                ?: describe(Watch.launch(context, args.optString("app")), "START")
         }
 
         val stopApp = ToolSpec(
@@ -70,7 +70,7 @@ object PebbleTools {
                 .put("inputSchema", appArgument),
         ) { args ->
             blocked(Preflight.watch(context))
-                ?: describe(Watch.stop(context, args.optString("app")), "closed")
+                ?: describe(Watch.stop(context, args.optString("app")), "STOP")
         }
 
         val sendMessage = ToolSpec(
@@ -165,9 +165,8 @@ object PebbleTools {
                                 "no ACK or NACK came back within 5s. It may or may not " +
                                 "have arrived." to true
                         Watch.HandshakeResult.NeverCameUp ->
-                            "FAILED: the watchapp never answered a ping within 10s, so " +
-                                "the message was not sent. Ask the user to check the " +
-                                "watch is in range." to true
+                            "FAILED: no ping was acknowledged within 10s, so the " +
+                                "message was not sent." to true
                         is Watch.HandshakeResult.NotAUuid -> notAUuid(result.given)
                         is Watch.HandshakeResult.Malformed -> malformed(result.why)
                     }
@@ -179,7 +178,7 @@ object PebbleTools {
     }
 
     private fun describe(result: Watch.Result, verb: String): Pair<String, Boolean> = when (result) {
-        Watch.Result.Sent -> "The app is $verb on the watch." to false
+        Watch.Result.Sent -> "$verb sent to the Pebble app." to false
         is Watch.Result.NotAUuid -> notAUuid(result.given)
     }
 

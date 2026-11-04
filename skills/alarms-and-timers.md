@@ -94,6 +94,6 @@ all that can be assumed.
 ## No read-back
 
 Nothing can enumerate timers or alarms, so there is no list and no way to
-confirm state. "Started activity" means the handling app took the
-intent; that is all the platform offers. Sending SET_TIMER or SET_ALARM
-twice makes two.
+confirm state. "Activity start sent" means Android accepted the
+intent for the handling app; that is all the platform offers. Sending
+SET_TIMER or SET_ALARM twice makes two.
