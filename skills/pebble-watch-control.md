@@ -34,22 +34,26 @@ pebblekit_launch_and_send
 
 `pebblekit_send_message {"app", "tuples"}` sends to an app already
 running, and `pebblekit_launch_app` / `pebblekit_stop_app {"app"}` start
-and stop one. A launch is fire-and-forget: the watch never acknowledges
-it.
+and stop one. A launch waits, up to ten seconds, for the watch to report
+the app running, and fails with what was observed otherwise. If the watch
+never reports the app running, ensure the app is installed on the watch
+and the UUID is right. A stop is fire-and-forget: the watch never
+acknowledges it.
 
 ## Why the handshake
 
 A message to a watchapp that is not running is discarded in silence: the
 phone companion registers a receiver per running watchapp, so a closed
 app has none, nothing errors and nothing arrives. A launch alone is not
-enough either, because it takes a second or two and a send straight after
-loses the race. The launch-and-send loop waits for the first reply, which
-proves the app is up, and only then sends the payload. It gives up after
-ten seconds.
+quite enough either: the companion wires up that receiver a beat after
+the watch reports the app running, and a send straight after the launch
+can lose the race. The launch-and-send loop waits for the first reply,
+which proves the app can be reached, and only then sends the payload. It
+gives up after ten seconds of unanswered pings.
 
 If no inert ping is known for an app, there is no safe handshake:
-`pebblekit_launch_app`, wait a couple of seconds, `pebblekit_send_message`,
-and accept it as best-effort.
+`pebblekit_launch_app`, which returns once the watch reports the app
+running, then `pebblekit_send_message`, and accept it as best-effort.
 
 ## What the reply proves
 

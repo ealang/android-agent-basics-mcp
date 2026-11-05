@@ -21,16 +21,17 @@ import java.util.concurrent.atomic.AtomicInteger
  * Drives the Pebble watch through the CoreApp companion.
  *
  * CoreApp still listens for the PebbleKit Classic broadcasts, registered at
- * runtime and exported, so this needs no library and no cooperation from
+ * runtime and exported, so messaging needs no library and no cooperation from
  * CoreApp. Unlike the clock-app intents these are broadcasts, not activity
- * starts, so none of the background-activity restrictions apply.
+ * starts, so none of the background-activity restrictions apply. Launching
+ * is the one step that goes through PebbleKit 2 instead, and [PebbleKit2]
+ * says why.
  */
 object Watch {
 
     private const val TAG = "AgentBasicsMcpWatch"
     const val COREAPP_PACKAGE = "coredevices.coreapp"
 
-    private const val ACTION_START = "com.getpebble.action.app.START"
     private const val ACTION_STOP = "com.getpebble.action.app.STOP"
     private const val ACTION_SEND = "com.getpebble.action.app.SEND"
     private const val ACTION_RECEIVE_ACK = "com.getpebble.action.app.RECEIVE_ACK"
@@ -42,9 +43,9 @@ object Watch {
     /** Read-only, exported by CoreApp. The one thing here that can be read back. */
     private val STATE_URI: Uri = Uri.parse("content://com.getpebble.android.provider.basalt/state")
 
-    /** How long to keep trying to get the watchapp up, and how long each go gets. */
-    private const val APP_LAUNCH_TIMEOUT_MS = 10_000L
-    private const val LAUNCH_ATTEMPT_MS = 1_000L
+    /** How long to keep pinging a launched watchapp, and how long each ping gets. */
+    private const val PING_TIMEOUT_MS = 10_000L
+    private const val PING_ATTEMPT_MS = 1_000L
     private const val ACK_TIMEOUT_MS = 5_000L
 
     private val UUID_FORMAT = Regex("[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}")
@@ -58,6 +59,14 @@ object Watch {
         data class NotAUuid(val given: String) : Result
     }
 
+    sealed interface LaunchResult {
+        /** The watch reported the app running. */
+        data object Running : LaunchResult
+        /** The watch did not, and [why] says what CoreApp reported instead. */
+        data class Failed(val why: String) : LaunchResult
+        data class NotAUuid(val given: String) : LaunchResult
+    }
+
     sealed interface HandshakeResult {
         /** The watch acknowledged the payload. Delivery, not understanding. */
         data object Acknowledged : HandshakeResult
@@ -65,7 +74,9 @@ object Watch {
         data object Refused : HandshakeResult
         /** The payload was sent and nothing came back within the wait. */
         data object NoReply : HandshakeResult
-        /** No ping was ever acknowledged; the payload was never sent. */
+        /** The watch never reported the app running; nothing was sent. */
+        data class NotLaunched(val why: String) : HandshakeResult
+        /** The app is running but no ping was acknowledged; the payload was never sent. */
         data object NeverCameUp : HandshakeResult
         data class NotAUuid(val given: String) : HandshakeResult
         /** Never sent: the tuples do not fit CoreApp's wire format. */
@@ -84,7 +95,14 @@ object Watch {
         data class Malformed(val why: String) : SendResult
     }
 
-    fun launch(context: Context, app: String): Result = send(context, ACTION_START, app)
+    /** Starts the watchapp and waits for the watch to report it running. */
+    fun launch(context: Context, app: String): LaunchResult {
+        val uuid = resolve(app) ?: return LaunchResult.NotAUuid(app)
+        return when (val launched = PebbleKit2.start(context, uuid)) {
+            PebbleKit2.Launch.Running -> LaunchResult.Running
+            is PebbleKit2.Launch.Failed -> LaunchResult.Failed(launched.why)
+        }
+    }
 
     fun stop(context: Context, app: String): Result = send(context, ACTION_STOP, app)
 
@@ -93,13 +111,14 @@ object Watch {
      * up, send the payload once.
      *
      * CoreApp only forwards a message to a watchapp that is already running and
-     * drops it silently otherwise, so the app has to be launched first and the
-     * launch is fire-and-forget — nothing reports when it finishes. Rather than
-     * guess at a duration, wait for the app to say so itself: see
-     * [awaitWatchapp]. The [ping] is a message the target app does nothing
-     * with; the watch acknowledges and delivers every message alike, so a
-     * ping the app acts on *does* something, up to ten times per call.
-     * Which ping is inert for an app is the caller's knowledge.
+     * drops it silently otherwise, so the app has to be launched first. The
+     * launch reports when the watch sees the app running, but CoreApp wires up
+     * its receiver for the app a beat later, so rather than guess at that gap,
+     * wait for the app to answer itself: see [awaitWatchapp]. The [ping] is a
+     * message the target app does nothing with; the watch acknowledges and
+     * delivers every message alike, so a ping the app acts on *does*
+     * something, up to ten times per call. Which ping is inert for an app is
+     * the caller's knowledge.
      *
      * The payload is then sent exactly once and never repeated here. A repeat
      * could race a slow acknowledgement and apply the payload twice, and by
@@ -131,6 +150,10 @@ object Watch {
         registerForReplies(context, replies)
 
         return try {
+            when (val launched = PebbleKit2.start(context, uuid)) {
+                PebbleKit2.Launch.Running -> Unit
+                is PebbleKit2.Launch.Failed -> return HandshakeResult.NotLaunched(launched.why)
+            }
             if (!awaitWatchapp(context, replies, uuid, wirePing)) {
                 return HandshakeResult.NeverCameUp
             }
@@ -301,20 +324,17 @@ object Watch {
     }
 
     /**
-     * Gets a watchapp running, by launching it and asking whether it is
-     * there until it answers.
+     * Proves a launched watchapp can be reached, by asking until it answers.
      *
-     * An acknowledgement is the only evidence available that the app is up, and
-     * it is good evidence: CoreApp registers the `SEND` receiver per *running*
-     * watchapp, so with the app closed there is no receiver, the broadcast lands
-     * nowhere and nothing at all comes back. What an acknowledgement does not
-     * prove is that the message meant anything — which is the point here,
-     * because [ping] is a message the app does nothing with, so this can be
-     * repeated as often as needed with no effect on the watch.
-     *
-     * The launch is retried alongside the ping rather than sent once up front:
-     * it is fire-and-forget, so a lost one is otherwise indistinguishable from a
-     * slow one, and CoreApp documents it as idempotent.
+     * The launch itself ([PebbleKit2.start]) has already heard the watch report
+     * the app running. What that does not prove is that CoreApp's `SEND`
+     * receiver for the app is in place yet: it is registered per *running*
+     * watchapp off the same report, a beat later, and a message sent before it
+     * lands nowhere and nothing at all comes back. An acknowledgement is the
+     * evidence that the gap has closed. What it does not prove is that the
+     * message meant anything — which is the point here, because [ping] is a
+     * message the app does nothing with, so this can be repeated as often as
+     * needed with no effect on the watch.
      */
     private fun awaitWatchapp(
         context: Context,
@@ -322,17 +342,15 @@ object Watch {
         uuid: String,
         ping: JSONArray,
     ): Boolean {
-        val deadline = SystemClock.elapsedRealtime() + APP_LAUNCH_TIMEOUT_MS
+        val deadline = SystemClock.elapsedRealtime() + PING_TIMEOUT_MS
         while (true) {
-            context.sendBroadcast(intentTo(ACTION_START).putExtra(EXTRA_UUID, uuid))
-
             val transaction = nextTransaction()
             replies.expectPing(transaction)
             context.sendBroadcast(message(uuid, transaction, ping.toString()))
 
-            if (replies.watchappUp.await(LAUNCH_ATTEMPT_MS, TimeUnit.MILLISECONDS)) return true
+            if (replies.watchappUp.await(PING_ATTEMPT_MS, TimeUnit.MILLISECONDS)) return true
             if (SystemClock.elapsedRealtime() >= deadline) {
-                Log.w(TAG, "Watchapp $uuid did not come up within $APP_LAUNCH_TIMEOUT_MS ms")
+                Log.w(TAG, "Watchapp $uuid is running but answered no ping within $PING_TIMEOUT_MS ms")
                 return false
             }
         }
@@ -344,7 +362,7 @@ object Watch {
      *
      * Pings are pooled rather than tracked one by one: a late acknowledgement of
      * an earlier ping proves exactly what a prompt one does, so a round trip
-     * slower than [LAUNCH_ATTEMPT_MS] costs a few spare pings instead of the
+     * slower than [PING_ATTEMPT_MS] costs a few spare pings instead of the
      * whole wait.
      */
     private class Replies : BroadcastReceiver() {

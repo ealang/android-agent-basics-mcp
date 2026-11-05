@@ -44,7 +44,8 @@
         tools:ignore="QueryAllPackagesPermission" />
 
     <!-- Android 11+ hides other packages by default. Without these, the Pebble
-         companion looks uninstalled and its state provider unreadable. -->
+         companion looks uninstalled, its state provider unreadable and its
+         PebbleKit 2 service unbindable. -->
     <queries>
         <package android:name="coredevices.coreapp" />
         <provider android:authorities="com.getpebble.android.provider.basalt" />

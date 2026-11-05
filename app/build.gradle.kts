@@ -78,6 +78,9 @@ android {
 
     buildFeatures {
         compose = true
+        // Two interfaces under src/main/aidl: the PebbleKit 2 binder contract
+        // CoreApp's service speaks. See PebbleKit2.kt.
+        aidl = true
     }
 }
 

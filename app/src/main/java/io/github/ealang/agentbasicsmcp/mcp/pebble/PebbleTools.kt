@@ -8,10 +8,11 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * The tools that reach the Pebble on the user's wrist, through CoreApp. All
- * four ride the classic PebbleKit intent surface — hence the prefix, which
- * leaves room for a `pebblekit2_` family if the PebbleKit 2 channel is ever
- * built. The watch is a platform, not an app: these are generic over
+ * The tools that reach the Pebble on the user's wrist, through CoreApp.
+ * Messaging rides the classic PebbleKit intent surface — hence the prefix,
+ * which leaves room for a `pebblekit2_` family if the PebbleKit 2 channel is
+ * ever built in full; launching already borrows its start request, see
+ * [PebbleKit2]. The watch is a platform, not an app: these are generic over
  * *watchapps* the way `send_intent` is generic over apps, and what any
  * particular watchapp's keys mean is skill-file knowledge.
  */
@@ -49,13 +50,19 @@ object PebbleTools {
                 .put("name", "pebblekit_launch_app")
                 .put(
                     "description",
-                    "Open an app on the user's Pebble watch. The app starts in its " +
-                        "default state; no parameters can be passed.",
+                    "Open an app on the user's Pebble watch and wait, up to 10s, for the " +
+                        "watch to report it running. The app starts in its default state; " +
+                        "no parameters can be passed.",
                 )
                 .put("inputSchema", appArgument),
         ) { args ->
-            blocked(Preflight.watch(context))
-                ?: describe(Watch.launch(context, args.optString("app")), "START")
+            blocked(Preflight.watch(context)) ?: run {
+                when (val result = Watch.launch(context, args.optString("app"))) {
+                    Watch.LaunchResult.Running -> "The watch reports the app running." to false
+                    is Watch.LaunchResult.Failed -> "FAILED: ${result.why}" to true
+                    is Watch.LaunchResult.NotAUuid -> notAUuid(result.given)
+                }
+            }
         }
 
         val stopApp = ToolSpec(
@@ -69,8 +76,12 @@ object PebbleTools {
                 )
                 .put("inputSchema", appArgument),
         ) { args ->
-            blocked(Preflight.watch(context))
-                ?: describe(Watch.stop(context, args.optString("app")), "STOP")
+            blocked(Preflight.watch(context)) ?: run {
+                when (val result = Watch.stop(context, args.optString("app"))) {
+                    Watch.Result.Sent -> "STOP sent to the Pebble app." to false
+                    is Watch.Result.NotAUuid -> notAUuid(result.given)
+                }
+            }
         }
 
         val sendMessage = ToolSpec(
@@ -123,7 +134,7 @@ object PebbleTools {
                 .put("name", "pebblekit_launch_and_send")
                 .put(
                     "description",
-                    "Get a Pebble watchapp running, prove it is up, then deliver one AppMessage: launches the app and sends the ping (about once a second, up to 10s) until the watch ACKs one, then sends the tuples exactly once and reports the watch's answer. Any message is acknowledged by the watch and handed to the watchapp, so the ping must be one the app does nothing with — usually an empty message, []. Which ping is safe for an app is skill-file knowledge. Use this when the watchapp may not be running; pebblekit_send_message alone is enough when it is.",
+                    "Get a Pebble watchapp running, prove it is up, then deliver one AppMessage: launches the app and waits (up to 10s) for the watch to report it running, sends the ping (about once a second, up to 10s) until the watch ACKs one, then sends the tuples exactly once and reports the watch's answer. Any message is acknowledged by the watch and handed to the watchapp, so the ping must be one the app does nothing with — usually an empty message, []. Which ping is safe for an app is skill-file knowledge. Use this when the watchapp may not be running; pebblekit_send_message alone is enough when it is.",
                 )
                 .put(
                     "inputSchema",
@@ -164,9 +175,11 @@ object PebbleTools {
                             "FAILED: the watchapp came up and the message was sent, but " +
                                 "no ACK or NACK came back within 5s. It may or may not " +
                                 "have arrived." to true
+                        is Watch.HandshakeResult.NotLaunched ->
+                            "FAILED: ${result.why} The message was not sent." to true
                         Watch.HandshakeResult.NeverCameUp ->
-                            "FAILED: no ping was acknowledged within 10s, so the " +
-                                "message was not sent." to true
+                            "FAILED: the watch reports the app running, but no ping was " +
+                                "acknowledged within 10s, so the message was not sent." to true
                         is Watch.HandshakeResult.NotAUuid -> notAUuid(result.given)
                         is Watch.HandshakeResult.Malformed -> malformed(result.why)
                     }
@@ -175,11 +188,6 @@ object PebbleTools {
         }
 
         return listOf(launchApp, stopApp, sendMessage, launchAndSend)
-    }
-
-    private fun describe(result: Watch.Result, verb: String): Pair<String, Boolean> = when (result) {
-        Watch.Result.Sent -> "$verb sent to the Pebble app." to false
-        is Watch.Result.NotAUuid -> notAUuid(result.given)
     }
 
     private fun notAUuid(given: String): Pair<String, Boolean> =
