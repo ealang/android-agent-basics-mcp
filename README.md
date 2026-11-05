@@ -41,10 +41,10 @@ only other tools are the phone's basic capabilities.
 
 **Pebble watchapps:**
 
-| App | What works |
-|---|---|
-| ✅ [Agent Timer](skills/pebble-apps/agent-timer.md) | start a timer on the watch |
-| ✅ [Pebble Maps](skills/pebble-apps/pebble-maps.md) | search, or start navigation to a favourite, address or place |
+| App | What works | Required Pebble app |
+|---|---|---|
+| ✅ [Agent Timer](skills/pebble-apps/agent-timer.md) | start a timer on the watch | [Pebble Appstore](https://apps.repebble.com/a8e93aeb045440408d0543c0) |
+| ✅ [Pebble Maps](skills/pebble-apps/pebble-maps.md) | search, or start navigation to a favourite, address or place | [fork on GitHub](https://github.com/ealang/TomBolger-PebbleMaps) |
 
 **Generic mechanisms:**
 

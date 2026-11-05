@@ -6,11 +6,11 @@ verified: 2026-10-20
 
 # Agent Timer (Pebble watchapp)
 
-UUID `6ba47813-25c2-4c9e-b93a-f6f24372b4c3`. A fork of the stock Timer
-watchapp (github.com/ealang/coredevices-pebble-timer) that starts a timer
-on request from the phone; the stock app is a system app and cannot be
-sent to. One call starts a timer. Nothing can read, cancel or adjust one
-from the phone.
+UUID `6ba47813-25c2-4c9e-b93a-f6f24372b4c3`. The user must have installed
+Agent Timer on the watch first, from the Pebble Appstore:
+https://apps.repebble.com/a8e93aeb045440408d0543c0. Nothing here installs
+it. One call starts a timer. Nothing can read, cancel or adjust one from
+the phone.
 
 ## Start a timer
 

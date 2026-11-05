@@ -70,8 +70,7 @@ decides whether an empty ping is safe.
 
 ## Watchapps that cannot be reached
 
-- **System apps.** Stock watchapps cannot be sent to at all; the only
-  route is a sideloaded copy or fork.
+- **System apps.** Stock watchapps cannot be sent to at all.
 - **Apps that declare an Android companion app.** Their sends go through
   a path that checks the calling package, and Agent Basics MCP is not it.
 - **No watch connected.** This one is caught: every watch tool preflights
