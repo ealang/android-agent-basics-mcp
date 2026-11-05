@@ -6,6 +6,8 @@ An MCP server that runs on an Android phone, so an agent can act on the device
 the user is actually carrying: open apps, control media, set timers, read the
 phone's location, drive a paired Pebble watch, etc.
 
+Install the [latest release](https://github.com/ealang/android-agent-basics-mcp/releases).
+
 ## Design
 
 The app exposes **generic automation interfaces** — Android's (intents,
