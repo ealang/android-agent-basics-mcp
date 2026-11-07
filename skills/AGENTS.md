@@ -134,3 +134,9 @@ next.
   workspaces, no references to apps deliberately not documented here,
   and no snapshots of the user's own data (alarm rows, play history,
   library contents). Describe the schema, never the contents.
+- **This repository is public.** Nothing that identifies the person
+  whose device the files were verified on: no names, addresses,
+  coordinates, account ids, or specific content they own or follow (a
+  show, a book, a station, a favourite, an alarm). Invented examples
+  are fine, "Main Street" or a made-up song title; anything read off
+  the device is not.
