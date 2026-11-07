@@ -68,6 +68,13 @@ manifest suggests it could do. The work runs in this order.
   distinguish a connection refused by allowlist, an action advertised
   but ignored, a permission guard, and a call accepted that does
   nothing.
+- **Unreliable is failed.** A route that worked some of the time is
+  marked ❌ and described as not working, with what was seen. An agent
+  acting on the file cannot tell a call that will work from one that
+  will not, so "sometimes" is not a result it can use; a route earns ✅
+  only when every try under the stated conditions succeeded. When the
+  intermittent route is the only way to do something, the file says the
+  thing cannot be done.
 - **Acceptance.** An agent with no familiarity with the project drives
   the app from the finished file alone. If it needs an `inspect` or a
   question, the file is not self-contained yet.
@@ -111,7 +118,8 @@ next.
   sentence or two, before any detail.
 - **Capabilities table.** A two-column table, capability and result, as
   the human quick reference. Every row is judged with the screen off:
-  ✓ worked that way, ✗ was tried and did not, `not tested` says so.
+  ✅ worked that way every time, ❌ was tried and did not, or did not
+  every time, `not tested` says so.
   Media apps carry a standard set of rows, present whatever the app can
   do: screen off, cold start, resume and pause, play by name, play by
   id or URL, transport (previous episode, next, seek, jump, speed, a

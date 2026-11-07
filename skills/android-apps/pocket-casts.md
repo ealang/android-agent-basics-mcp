@@ -15,17 +15,17 @@ app.
 
 | Capability | Pocket Casts |
 |---|---|
-| Screen off | ✓ everything below |
-| Cold start | ✓ process dead, `play` revives it at the saved position |
-| Resume, pause | ✓ ✓ |
-| Play by name | ✓ any subscribed show or episode |
-| Play by id or URL | ✓ id from a browse · ✗ URL, `uri:` is ignored |
-| Transport | ✗ previous episode · ✓ next episode, by broadcast · ✓ seek · ✓ jump, +30 s and −10 s · ✓ speed, stepped through the app's presets |
-| Now playing | ✓ title, position, duration, speed |
-| Queue | ✓ read · ✓ jump to an entry · ✓ add to top or bottom · ✓ move · ✓ remove, by archiving the episode |
-| Library | ✓ subscriptions, new releases, in progress, downloads |
-| Search | ✓ the whole catalogue, shows only |
-| Also | ✓ refresh the feeds · ✓ download an episode |
+| Screen off | ✅ everything below |
+| Cold start | ✅ process dead, `play` revives it at the saved position |
+| Resume, pause | ✅ ✅ |
+| Play by name | ✅ any subscribed show or episode |
+| Play by id or URL | ✅ id from a browse · ❌ URL, `uri:` is ignored |
+| Transport | ❌ previous episode · ✅ next episode, by broadcast · ✅ seek · ✅ jump, +30 s and −10 s · ✅ speed, stepped through the app's presets |
+| Now playing | ✅ title, position, duration, speed |
+| Queue | ✅ read · ✅ jump to an entry · ✅ add to top or bottom · ✅ move · ✅ remove, by archiving the episode |
+| Library | ✅ subscriptions, new releases, in progress, downloads |
+| Search | ✅ the whole catalogue, shows only |
+| Also | ✅ refresh the feeds · ✅ download an episode |
 
 ## Resume or revive
 

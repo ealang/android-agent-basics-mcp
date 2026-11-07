@@ -24,19 +24,19 @@ only other tools are the phone's basic capabilities.
 
 | App | What works |
 |---|---|
-| ✅ [Pocket Casts](skills/android-apps/pocket-casts.md) | play any show or episode by name, resume, queue, speed, refresh the feeds; screen locked |
-| ✅ [Podcast Addict](skills/android-apps/podcast-addict.md) | play by name, resume, pause, jump |
-| ✅ [Simple Radio](skills/android-apps/simple-radio.md) | any station by name, favourites, pause |
-| ✅ [Libro.fm](skills/android-apps/librofm.md) | any owned book by title, resume, pause |
-| ✅ [AIMP](skills/android-apps/aimp.md) | any track or playlist in the library, pause, skip; screen locked |
-| ✅ [YouTube Music](skills/android-apps/youtube-music.md) | any song or playlist, resume; screen locked |
-| ✅ [Smart AudioBook Player](skills/android-apps/smart-audiobook.md) | any book in the library by name, resume, pause, jump |
-| ✅ [Audible](skills/android-apps/audible.md) | any book by name, resume, pause, seek |
-| ✅ [Google Maps](skills/android-apps/google-maps.md) | start navigation hands-free, screen locked; multi-stop and search along the route are one tap away; cannot end navigation |
-| 🟡 [Substack](skills/android-apps/substack.md) | recent episodes and narrated posts; no search, no older posts |
-| 🟡 [YouTube](skills/android-apps/youtube.md) | start any video on screen, then pause, seek and switch videos while it stays in the foreground |
-| 🟡 [Samsung Clock](skills/android-apps/samsung-clock.md) | set timers and alarms; cannot dismiss or snooze, no stopwatch |
-| 🟡 [Sleep as Android](skills/android-apps/sleep-as-android.md) | create an alarm; existing alarms cannot be read or changed |
+| ✅ [Pocket Casts](skills/android-apps/pocket-casts.md) | playback, queue editing, catalogue search, downloads, feed refresh; screen locked |
+| ✅ [Podcast Addict](skills/android-apps/podcast-addict.md) | playback, chapters, downloads, feed refresh; no search, queue editing limited; screen locked |
+| ✅ [Simple Radio](skills/android-apps/simple-radio.md) | playback, any station by name, favourites, recents; screen locked |
+| ✅ [Libro.fm](skills/android-apps/librofm.md) | playback, any owned book, catalogue search, speed; screen locked |
+| ✅ [AIMP](skills/android-apps/aimp.md) | playback, library, playlists; no speed, no queue editing; screen locked |
+| ✅ [Smart AudioBook Player](skills/android-apps/smart-audiobook.md) | playback, any book in the library, jumps; no seek, no speed; screen locked |
+| ✅ [Audible](skills/android-apps/audible.md) | playback, any book, chapters, speed; screen locked |
+| ✅ [Google Maps](skills/android-apps/google-maps.md) | start navigation, screen locked; cannot end it |
+| 🟡 [YouTube Music](skills/android-apps/youtube-music.md) | playback by URL only, like; no search; screen locked |
+| 🟡 [Substack](skills/android-apps/substack.md) | playback of recent posts, queue editing, speed; no search, no older posts; screen locked |
+| 🟡 [YouTube](skills/android-apps/youtube.md) | playback by URL; launch needs the phone unlocked, then transport screen locked |
+| 🟡 [Samsung Clock](skills/android-apps/samsung-clock.md) | timers, alarms; cannot dismiss or snooze |
+| 🟡 [Sleep as Android](skills/android-apps/sleep-as-android.md) | create alarms; cannot read or change them |
 | ❌ [Eleven Reader](skills/android-apps/eleven-reader.md) | nothing |
 
 **Pebble watchapps:**
@@ -44,7 +44,7 @@ only other tools are the phone's basic capabilities.
 | App | What works | Required Pebble app |
 |---|---|---|
 | ✅ [Agent Timer](skills/pebble-apps/agent-timer.md) | start a timer on the watch | [Pebble Appstore](https://apps.repebble.com/a8e93aeb045440408d0543c0) |
-| ✅ [Pebble Maps](skills/pebble-apps/pebble-maps.md) | search, or start navigation to a favourite, address or place | [fork on GitHub](https://github.com/ealang/TomBolger-PebbleMaps) |
+| ✅ [Pebble Maps](skills/pebble-apps/pebble-maps.md) | start navigation, search | [fork on GitHub](https://github.com/ealang/TomBolger-PebbleMaps) |
 
 **Generic mechanisms:**
 
