@@ -104,10 +104,20 @@ operating knowledge, so every sentence should change what a caller does
 next.
 
 - **Header shape.** After the front matter: the title, one line naming
-  the package (or the watchapp's UUID), then the verdict. No other
-  metadata in the body; the front matter holds it.
+  the package (or the watchapp's UUID), the verdict, then the
+  capabilities table. No other metadata in the body; the front matter
+  holds it.
 - **Verdict first.** Open with what the app can and cannot do, in a
   sentence or two, before any detail.
+- **Capabilities table.** A two-column table, capability and result, as
+  the human quick reference. Every row is judged with the screen off:
+  ✓ worked that way, ✗ was tried and did not, `not tested` says so.
+  Media apps carry a standard set of rows, present whatever the app can
+  do: screen off, cold start, resume and pause, play by name, play by
+  id or URL, transport (previous episode, next, seek, jump, speed, a
+  mark each), now playing, queue, library, search, then `Also` for the
+  app's own extras. Other apps have one standard row, screen off, then
+  whatever the app does.
 - **Literal calls.** Every working route is shown as the exact call an
   agent would make: tool, arguments, typed extras. The `app` argument is
   always the package name. Use placeholders for the variable parts
@@ -129,7 +139,9 @@ next.
   `verified` stamp.
 - **No untested, future or to-do sections.** A route is either verified
   and documented or left out. Settle it before the file ships, or omit
-  it.
+  it. The capabilities table is the one exception: a standard row that
+  failed or was not tested stays in the table, marked, so a reader knows
+  the question was asked.
 - **Nothing outside the repo's own world.** No paths into agent
   workspaces, no references to apps deliberately not documented here,
   and no snapshots of the user's own data (alarm rows, play history,
