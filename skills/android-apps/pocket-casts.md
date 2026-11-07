@@ -1,15 +1,16 @@
 ---
 name: android-pocket-casts
-description: Pocket Casts podcast app. Resume or start playback, play any subscribed show or episode by name or id, read and jump within the Up Next queue, change speed; all of it works cold with the screen locked.
-verified: 2026-10-02
+description: Pocket Casts podcast app. Resume or start playback, play any subscribed show or episode by name or id, read and jump within the Up Next queue, change speed, refresh the feeds; all of it works cold with the screen locked.
+verified: 2026-11-06
 ---
 
 # Pocket Casts
 
 Package `au.com.shiftyjelly.pocketcasts`. Everything works through the
 browser route, from a cold process with the screen locked: resume, play
-by name, play by id, search, the queue, speed. Playback continues after
-the connection closes. `media_key` does not work on this app.
+by name, play by id, search, the queue, speed. A broadcast refreshes the
+feeds. Playback continues after the connection closes. `media_key` does
+not work on this app.
 
 ## Resume or revive
 
@@ -65,6 +66,21 @@ media_command {"app": "au.com.shiftyjelly.pocketcasts", "action": "jumpFwd"}
 - Custom actions: `jumpBack`, `jumpFwd`, `changeSpeed`, `star`,
   `markAsPlayed`. Case-sensitive: `jumpfwd` is dropped, `jumpFwd` works.
 - `pause` works on either route.
+
+## Refresh the feeds
+
+```
+send_intent
+{
+  "action": "au.com.shiftyjelly.pocketcasts.action.REFRESH_PODCASTS",
+  "package": "au.com.shiftyjelly.pocketcasts",
+  "mode": "broadcast"
+}
+```
+
+Pulls every subscribed show for new episodes, the same refresh the app
+runs on its own schedule. There is no read-back; the app's own
+last-refresh time is the only sign.
 
 ## `media_key`
 

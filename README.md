@@ -24,7 +24,7 @@ only other tools are the phone's basic capabilities.
 
 | App | What works |
 |---|---|
-| ✅ [Pocket Casts](skills/android-apps/pocket-casts.md) | play any show or episode by name, resume, queue, speed; screen locked |
+| ✅ [Pocket Casts](skills/android-apps/pocket-casts.md) | play any show or episode by name, resume, queue, speed, refresh the feeds; screen locked |
 | ✅ [Podcast Addict](skills/android-apps/podcast-addict.md) | play by name, resume, pause, jump |
 | ✅ [Simple Radio](skills/android-apps/simple-radio.md) | any station by name, favourites, pause |
 | ✅ [Libro.fm](skills/android-apps/librofm.md) | any owned book by title, resume, pause |
