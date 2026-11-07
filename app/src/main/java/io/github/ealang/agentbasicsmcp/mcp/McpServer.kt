@@ -327,5 +327,7 @@ private const val INSTRUCTIONS = """Tools that run on the user's Android phone, 
 The tools are generic Android mechanisms (intents, content providers, media
 sessions, Pebble AppMessages), not commands for particular apps. How to drive a
 specific app through them is skill-file knowledge: check the skill files the user
-has provided before experimenting, and if they have none, suggest they add some.
-The android-agent-basics-mcp repository ships a set under skills/."""
+has provided before experimenting. The android-agent-basics-mcp repository ships a
+set, indexed app by app in its README with a link to each file:
+https://raw.githubusercontent.com/ealang/android-agent-basics-mcp/main/README.md
+The links are relative paths; fetch them under the same raw base."""
