@@ -117,9 +117,10 @@ next.
 - **Verdict first.** Open with what the app can and cannot do, in a
   sentence or two, before any detail.
 - **Capabilities table.** A two-column table, capability and result, as
-  the human quick reference. Every row is judged with the screen off:
-  ✅ worked that way every time, ❌ was tried and did not, or did not
-  every time, `not tested` says so.
+  the human quick reference. The mark is a subjective judgement of how
+  well each function can be automated. A ✅ normally requires headless
+  operation, the phone in a pocket with the screen off; `not tested`
+  says so.
   Media apps carry a standard set of rows, present whatever the app can
   do: screen off, cold start, resume and pause, play by name, play by
   id or URL, transport (previous episode, next, seek, jump, speed, a
