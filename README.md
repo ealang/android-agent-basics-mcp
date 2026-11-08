@@ -31,7 +31,7 @@ only other tools are the phone's basic capabilities.
 | ✅ [AIMP](skills/android-apps/aimp.md) | playback, library, playlists; no speed, no queue editing; screen locked |
 | ✅ [Smart AudioBook Player](skills/android-apps/smart-audiobook.md) | playback, any book in the library, jumps; no seek, no speed; screen locked |
 | ✅ [Audible](skills/android-apps/audible.md) | playback, any book, chapters, speed; screen locked |
-| ✅ [Google Maps](skills/android-apps/google-maps.md) | start navigation, screen locked; cannot end it |
+| ✅ [Google Maps](skills/android-apps/google-maps.md) | start navigation, screen must be unlocked to start; cannot end it |
 | 🟡 [YouTube Music](skills/android-apps/youtube-music.md) | playback by URL only, like; no search; screen locked |
 | 🟡 [Substack](skills/android-apps/substack.md) | playback of recent posts, queue editing, speed; no search, no older posts; screen locked |
 | 🟡 [YouTube](skills/android-apps/youtube.md) | playback by URL; launch needs the phone unlocked, then transport screen locked |
