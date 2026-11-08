@@ -11,6 +11,17 @@ navigation is fully hands-free; on a locked phone it costs the user
 their normal unlock. Everything beyond that costs exactly one on-screen
 tap. Navigation cannot be ended from the phone.
 
+| Capability | Google Maps |
+|---|---|
+| Screen off | ❌ the phone must be unlocked to start navigation; every other route is one tap on screen |
+| Start navigation | ✅ place name, address, coordinates, saved home or work · driving, walking or biking · phone unlocked |
+| Change destination mid-navigation | ✅ same call; the user accepts Maps' exit-navigation prompt, one tap |
+| Multi-stop route | ✅ route preview from the web directions URL; the user taps to begin |
+| Search along route | ✅ opens the panel with the search box focused; the query cannot be passed in, the user types it |
+| Destination entry | ✅ opens Maps ready for the user to type |
+| End navigation | ❌ nothing exported |
+| Add a stop to an active route | ❌ nothing exported |
+
 ## Start navigation
 
 A VIEW intent on Maps' `google.navigation:` URI starts turn-by-turn

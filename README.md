@@ -35,7 +35,7 @@ only other tools are the phone's basic capabilities.
 | 🟡 [YouTube Music](skills/android-apps/youtube-music.md) | playback by URL only, like; no search; screen locked |
 | 🟡 [Substack](skills/android-apps/substack.md) | playback of recent posts, queue editing, speed; no search, no older posts; screen locked |
 | 🟡 [YouTube](skills/android-apps/youtube.md) | playback by URL; launch needs the phone unlocked, then transport screen locked |
-| 🟡 [Samsung Clock](skills/android-apps/samsung-clock.md) | timers, alarms; cannot dismiss or snooze |
+| 🟡 [Samsung Clock](skills/android-apps/samsung-clock.md) | timers, alarms, silence a ringing timer; cannot dismiss, snooze or cancel alarms; screen locked |
 | 🟡 [Sleep as Android](skills/android-apps/sleep-as-android.md) | create alarms; cannot read or change them |
 | ❌ [Eleven Reader](skills/android-apps/eleven-reader.md) | nothing |
 

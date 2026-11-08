@@ -18,7 +18,7 @@ known URL.
 | Capability | YouTube |
 |---|---|
 | Screen off | ✅ transport and switching by URL, once a session exists |
-| Cold start | ❌ the VIEW launch is reliable only through the unlock gate, so the user unlocks; the ungated launch produced a session from a force-stopped process and nothing from a warm one |
+| Cold start | ❌ the phone must be unlocked for the VIEW launch to be reliable; with the phone locked it produced a session from a force-stopped process and nothing from a warm one |
 | Resume, pause | ✅ ✅ while a session exists · ❌ with no session, refused |
 | Play by name | ❌ query accepted, nothing changes |
 | Play by id or URL | ❌ id, "Action not supported" · ✅ any watch URL, `uri:` on the session |

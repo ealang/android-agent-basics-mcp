@@ -1,7 +1,7 @@
 ---
 name: pebble-maps
 description: Pebble Maps watchapp, forked build. Show Google Maps search results on the watch, or start turn-by-turn navigation to a favourite, address, place or coordinate with an optional travel mode.
-verified: 2026-10-20
+verified: 2026-11-08
 ---
 
 # Pebble Maps (Pebble watchapp)
@@ -12,6 +12,13 @@ fork github.com/ealang/TomBolger-PebbleMaps, which adds the two commands
 below to github.com/TomBolger/PebbleMaps; the store build ignores them.
 Each is one `pebblekit_launch_and_send` call with an empty message as the
 ping.
+
+| Capability | Pebble Maps |
+|---|---|
+| Screen off | ✅ everything below |
+| Search | ✅ results on the watch · ends any navigation in progress |
+| Navigate | ✅ favourite, address, place or coordinates · travel mode optional: drive, walk, bike, transit · replaces any navigation in progress |
+| End navigation | ❌ no command; a search ends it as a side effect |
 
 ## Search
 

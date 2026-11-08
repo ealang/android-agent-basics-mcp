@@ -1,15 +1,31 @@
 ---
 name: android-samsung-clock
-description: Samsung Clock, the stock clock on Samsung phones. Set a timer or alarm and open the timer or alarm list. Dismiss and snooze do nothing; the stopwatch is unreachable.
-verified: 2026-10-01
+description: Samsung Clock, the stock clock on Samsung phones. Set a timer or alarm, one-time or repeating, and silence a ringing timer. Alarms cannot be dismissed, snoozed for a chosen duration or cancelled, a running timer cannot be cancelled, and the stopwatch is unreachable.
+verified: 2026-11-08
 ---
 
 # Samsung Clock
 
 Package `com.sec.android.app.clockpackage`. Timers and alarms are set
-through the standard AlarmClock intents and the lists open on screen.
-Dismiss and snooze are accepted and do nothing. The stopwatch cannot be
+through the standard AlarmClock intents. A ringing timer can be
+silenced. A ringing alarm cannot be dismissed, and snoozing it ignores
+the requested duration; nothing reaches a timer still counting or an
+alarm not yet ringing, so neither can be cancelled. The stopwatch cannot be
 reached at all.
+
+| Capability | Samsung Clock |
+|---|---|
+| Screen off | ✅ everything below |
+| Set a timer | ✅ seconds and a label, no UI · each call adds a timer |
+| Set an alarm | ✅ hour, minutes and a label, no UI · a new time adds a new alarm |
+| Repeating alarm | ✅ `DAYS` as `int_arraylist` of `java.util.Calendar` day constants |
+| Read timers or alarms | ❌ nothing lists them |
+| Silence a ringing timer | ✅ `DISMISS_TIMER`, no extras |
+| Silence a ringing alarm | ❌ `DISMISS_ALARM` accepted, it keeps ringing |
+| Snooze a ringing alarm | ❌ `SNOOZE_DURATION` is ignored; `SNOOZE_ALARM` snoozes for the alarm's own interval only |
+| Cancel a running timer | ❌ `DISMISS_TIMER` accepted, the timer keeps counting |
+| Cancel a scheduled or snoozed alarm | ❌ `DISMISS_ALARM` accepted, the alarm stays |
+| Stopwatch | ❌ signature-guarded · the Clock app can be opened for the user to tap it |
 
 ## Set a timer
 
@@ -51,16 +67,26 @@ Only ever creates: a new time makes a second alarm. For a repeating
 alarm add `android.intent.extra.alarm.DAYS` as an `int_arraylist` of
 `java.util.Calendar` day constants (Sunday = 1).
 
-## Show the lists
+## Silence a ringing timer
 
-`android.intent.action.SHOW_TIMERS` and `SHOW_ALARMS`, same shape with
-no extras, open the Clock app at the list.
+```
+send_intent
+{"action": "android.intent.action.DISMISS_TIMER", "package": "com.sec.android.app.clockpackage", "mode": "activity"}
+```
 
-## Does nothing
+Stops the ringing. Sent while the timer is still counting it is accepted
+and the timer keeps counting; Android defines `DISMISS_TIMER` for expired
+timers only.
 
-`DISMISS_TIMER`, `DISMISS_ALARM` and `SNOOZE_ALARM` resolve to the app's
-handler activity and are accepted; the timer keeps running. A timer or
-alarm, once set, is the user's to stop.
+## Alarms, once set, are the user's
+
+`DISMISS_ALARM` is accepted in every state and changes nothing: a
+ringing alarm keeps ringing, a snoozed or scheduled alarm stays set,
+with or without the label search extras. `SNOOZE_ALARM` at a ringing
+alarm does snooze it, but only for the interval set on the alarm itself
+(the Samsung default is five minutes); the
+`android.intent.extra.alarm.SNOOZE_DURATION` extra is ignored, so the
+caller cannot choose how long.
 
 ## Stopwatch: unreachable
 

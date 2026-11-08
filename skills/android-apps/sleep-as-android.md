@@ -1,7 +1,7 @@
 ---
 name: android-sleep-as-android
 description: Sleep as Android alarm clock. Create an alarm, and nothing else. The alarm table is closed, so an existing alarm cannot be read, retimed, enabled or deleted, and every create adds a new one.
-verified: 2026-10-04
+verified: 2026-11-08
 ---
 
 # Sleep as Android
@@ -12,6 +12,16 @@ thing that works is creating an alarm through the standard intent. The
 alarm table cannot be read or written, so an existing alarm cannot be
 retimed, enabled, disabled or deleted, and each create adds a new alarm
 the user has to remove by hand.
+
+| Capability | Sleep as Android |
+|---|---|
+| Screen off | ✅ create an alarm |
+| Create an alarm | ✅ hour, minutes and a label, no UI · a new time adds a new alarm |
+| Repeating alarm | ✅ `DAYS` as `int_arraylist` of `java.util.Calendar` day constants |
+| Read alarms | ❌ provider closed, `READ` not held |
+| Retime, enable, disable, delete | ❌ provider closed, `WRITE` signature-level · the enable broadcast addresses alarms by label, which intent-created alarms lack |
+| Dismiss, snooze | ❌ the app declares no handler for `DISMISS_ALARM` or `SNOOZE_ALARM`; the send fails to resolve |
+| Nap | ❌ no action |
 
 ## Create an alarm
 
@@ -41,6 +51,7 @@ any other type the alarm comes out one-time.
 | Surface | Create | Read | Change | Guard |
 |---|---|---|---|---|
 | `SET_ALARM` intent | yes, and duplicates | no | no | normal permission, held |
+| `DISMISS_ALARM`, `SNOOZE_ALARM` intents | no | no | no handler declared | — |
 | `ALARM_STATE_CHANGE` broadcast | no | no | enable/disable only, addressed by label | none |
 | `content://com.urbandroid.sleep.alarmclock/alarm` provider | yes | yes | yes | `com.urbandroid.sleep.READ` / `.WRITE` |
 

@@ -1,7 +1,7 @@
 ---
 name: pebble-agent-timer
 description: Agent Timer, a Pebble watchapp. Start a countdown timer on the watch in one call. Timers cannot be read, cancelled or changed from the phone.
-verified: 2026-10-20
+verified: 2026-11-08
 ---
 
 # Agent Timer (Pebble watchapp)
@@ -11,6 +11,12 @@ Agent Timer on the watch first, from the Pebble Appstore:
 https://apps.repebble.com/a8e93aeb045440408d0543c0. Nothing here installs
 it. One call starts a timer. Nothing can read, cancel or adjust one from
 the phone.
+
+| Capability | Agent Timer |
+|---|---|
+| Screen off | ✅ everything below |
+| Start a timer | ✅ 5 to 86399 s · each call adds a timer |
+| Read, cancel or change a timer | ❌ nothing from the phone |
 
 ## Start a timer
 
