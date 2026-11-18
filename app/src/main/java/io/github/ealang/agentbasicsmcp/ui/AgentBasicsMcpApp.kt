@@ -45,7 +45,7 @@ private val GENERIC = listOf(
     Feature("intents", "Intents", "inspect, intent_resolve, send_intent — raw Android intents, sent exactly as given.", listOf(OVERLAY_GRANT)),
     Feature("content_providers", "Content providers", "provider_query, provider_call — reading other apps' automation surfaces and invoking the commands they expose."),
     Feature("media_control", "Media control", "The media_* family — sessions, playback, browse and search in any media app.", listOf(MEDIA_GRANT)),
-    Feature("watch_control", "Pebble control", "The pebblekit_* family — launching watchapps and raw AppMessage delivery."),
+    Feature("pebblekit", "PebbleKit", "The pebblekit_* and pebblekit2_* families — launching watchapps, watch state, and AppMessages to and from them."),
     Feature("notifications", "Notifications", "post_notification, dismiss_notification — text notifications in the phone's shade.", listOf(NOTIFICATIONS_GRANT)),
     Feature("location", "Location", "get_location — the phone's position.", listOf(LOCATION_GRANT)),
     Feature("find_my_phone", "Find my phone", "find_my_phone_play, find_my_phone_stop — ring the phone audibly, even on silent or Do Not Disturb."),

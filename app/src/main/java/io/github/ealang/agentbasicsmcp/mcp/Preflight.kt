@@ -41,6 +41,14 @@ object Preflight {
     fun activityLaunch(context: Context): String? =
         if (!Clock.canStartFromBackground(context)) NO_BACKGROUND_LAUNCH else null
 
+    /** For what the Pebble app can answer with no watch in reach. */
+    fun pebbleApp(context: Context): String? =
+        if (!installed(context, Watch.COREAPP_PACKAGE)) {
+            "the Pebble companion app is not installed on the phone."
+        } else {
+            null
+        }
+
     fun watch(context: Context): String? = when {
         !installed(context, Watch.COREAPP_PACKAGE) ->
             "the Pebble companion app is not installed on the phone. Nothing was sent."

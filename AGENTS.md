@@ -23,7 +23,7 @@ Two kinds of specific tools sit beside them:
   `find_my_phone_*` pair, the notification pair, the volume pair.
   Capabilities of the phone with no generic route. Not app
   integrations at all.
-- **Pebble tools** — the `pebblekit_*` four. The watch is a platform
+- **Pebble tools** — the `pebblekit2_*` and `pebblekit_*` families. The watch is a platform
   (there is no generic Android route to a BLE peripheral), so watch
   operations are specific the way phone operations are: generic over
   *watchapps*, specific to none.

@@ -141,6 +141,18 @@
                 android:value="conversations|alerting|silent|ongoing" />
         </service>
 
+        <!-- Where the Pebble app delivers what a watchapp sends to its Android
+             companion: it binds here for a watchapp that names this package.
+             Exported for that, and the service itself refuses any caller that
+             is not the Pebble app. -->
+        <service
+            android:name=".mcp.pebble.PebbleKit2ListenerService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="io.rebble.pebblekit2.RECEIVE_DATA_FROM_WATCH" />
+            </intent-filter>
+        </service>
+
         <!-- The find-my-phone stop button. Fired only by our own pending
              intent, hence not exported. -->
         <receiver

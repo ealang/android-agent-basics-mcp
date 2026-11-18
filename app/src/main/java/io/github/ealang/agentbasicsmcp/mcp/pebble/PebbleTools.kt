@@ -1,6 +1,7 @@
 package io.github.ealang.agentbasicsmcp.mcp.pebble
 
 import android.content.Context
+import io.github.ealang.agentbasicsmcp.mcp.ClientConnection
 import io.github.ealang.agentbasicsmcp.mcp.Preflight
 import io.github.ealang.agentbasicsmcp.mcp.ToolSpec
 import io.github.ealang.agentbasicsmcp.mcp.blocked
@@ -9,14 +10,37 @@ import org.json.JSONObject
 
 /**
  * The tools that reach the Pebble on the user's wrist, through CoreApp.
- * Messaging rides the classic PebbleKit intent surface — hence the prefix,
- * which leaves room for a `pebblekit2_` family if the PebbleKit 2 channel is
- * ever built in full; launching already borrows its start request, see
- * [PebbleKit2]. The watch is a platform, not an app: these are generic over
- * *watchapps* the way `send_intent` is generic over apps, and what any
- * particular watchapp's keys mean is skill-file knowledge.
+ *
+ * Two families, named for the CoreApp API each rides. `pebblekit2_` is
+ * PebbleKit 2: launching, stopping and reading state for any watchapp, and
+ * messaging in both directions with a watchapp that names this app as its
+ * Android companion. `pebblekit_` is the classic broadcast surface, kept for
+ * the one thing PebbleKit 2 will not do: send to a watchapp that names no
+ * companion.
+ *
+ * The watch is a platform, not an app: these are generic over *watchapps*
+ * the way `send_intent` is generic over apps, and what any particular
+ * watchapp's keys mean is skill-file knowledge.
  */
 object PebbleTools {
+
+    /** The one switch every tool here and the inbound listener sit behind. */
+    const val FEATURE = "pebblekit"
+
+    private const val DEFAULT_MAX_AGE_S = 3600L
+    /**
+     * The longest one read is held open. A caller that vanished without
+     * closing its connection cannot be told from one waiting, so this is
+     * what bounds the thread it holds. A longer wait is shortened, not
+     * refused: the caller asks again and the queue has kept what came.
+     */
+    private const val MAX_WAIT_S = 600L
+
+    private const val MAX_AGE_CEILING_S = 10L * 365 * 24 * 3600
+
+    private const val COMPANION_ONLY =
+        "Works only for a watchapp that names this app as its Android companion; " +
+            "for any other, use the pebblekit_ tool of the same name."
 
     fun specs(context: Context): List<ToolSpec> {
         val appProperty = JSONObject().put("type", "string")
@@ -43,55 +67,210 @@ object PebbleTools {
             "The AppMessage, as tuples, passed to the watch as-is. May be empty.",
         )
 
+        val messageArguments = JSONObject().put("type", "object").put(
+            "properties",
+            JSONObject()
+                .put("app", appProperty)
+                .put("tuples", payloadProperty),
+        ).put("required", JSONArray().put("app").put("tuples"))
+
         val launchApp = ToolSpec(
-            name = "pebblekit_launch_app",
-            featureKey = "watch_control",
+            name = "pebblekit2_launch_app",
+            featureKey = FEATURE,
             definition = JSONObject()
-                .put("name", "pebblekit_launch_app")
+                .put("name", "pebblekit2_launch_app")
                 .put(
                     "description",
                     "Open an app on the user's Pebble watch and wait, up to 10s, for the " +
-                        "watch to report it running. The app starts in its default state; " +
-                        "no parameters can be passed.",
+                        "watch to report it running. Works for any watchapp. The app starts " +
+                        "in its default state; no parameters can be passed.",
                 )
                 .put("inputSchema", appArgument),
         ) { args ->
-            blocked(Preflight.watch(context)) ?: run {
-                when (val result = Watch.launch(context, args.optString("app"))) {
-                    Watch.LaunchResult.Running -> "The watch reports the app running." to false
-                    is Watch.LaunchResult.Failed -> "FAILED: ${result.why}" to true
-                    is Watch.LaunchResult.NotAUuid -> notAUuid(result.given)
+            blocked(Preflight.watch(context)) ?: withUuid(args) { uuid ->
+                when (val result = PebbleKit2.start(context, uuid)) {
+                    PebbleKit2.Launch.Running -> "The watch reports the app running." to false
+                    is PebbleKit2.Launch.Failed -> "FAILED: ${result.why}" to true
                 }
             }
         }
 
         val stopApp = ToolSpec(
-            name = "pebblekit_stop_app",
-            featureKey = "watch_control",
+            name = "pebblekit2_stop_app",
+            featureKey = FEATURE,
             definition = JSONObject()
-                .put("name", "pebblekit_stop_app")
+                .put("name", "pebblekit2_stop_app")
                 .put(
                     "description",
-                    "Close an app on the user's Pebble watch, returning it to the watchface.",
+                    "Close an app on the user's Pebble watch, returning it to the " +
+                        "watchface. Works for any watchapp. The watch does not confirm the " +
+                        "close; pebblekit2_watch_state shows what is open afterwards.",
                 )
                 .put("inputSchema", appArgument),
         ) { args ->
-            blocked(Preflight.watch(context)) ?: run {
-                when (val result = Watch.stop(context, args.optString("app"))) {
-                    Watch.Result.Sent -> "STOP sent to the Pebble app." to false
-                    is Watch.Result.NotAUuid -> notAUuid(result.given)
+            blocked(Preflight.watch(context)) ?: withUuid(args) { uuid ->
+                when (val result = PebbleKit2.stop(context, uuid)) {
+                    PebbleKit2.Stop.Accepted -> "Stop passed to the watch." to false
+                    is PebbleKit2.Stop.Failed -> "FAILED: ${result.why}" to true
+                }
+            }
+        }
+
+        val watchState = ToolSpec(
+            name = "pebblekit2_watch_state",
+            featureKey = FEATURE,
+            definition = JSONObject()
+                .put("name", "pebblekit2_watch_state")
+                .put(
+                    "description",
+                    "The Pebble watches connected to the phone and what each has open. " +
+                        "Returns {\"watches\": [{name, platform, firmware, running}]}, where " +
+                        "running is {app, name, type} — the open app's UUID, its name, and " +
+                        "watchface, watchapp or unknown — or null. No watch connected is an " +
+                        "empty list, not an error.",
+                )
+                .put("inputSchema", JSONObject().put("type", "object").put("properties", JSONObject())),
+        ) { _ ->
+            blocked(Preflight.pebbleApp(context)) ?: run {
+                PebbleKit2.state(context)?.let { it.toString() to false }
+                    ?: ("FAILED: the Pebble app did not report its watches." to true)
+            }
+        }
+
+        val sendMessage2 = ToolSpec(
+            name = "pebblekit2_send_message",
+            featureKey = FEATURE,
+            definition = JSONObject()
+                .put("name", "pebblekit2_send_message")
+                .put(
+                    "description",
+                    "Send a raw AppMessage to an app on the user's Pebble watch. Tuples go " +
+                        "to the watchapp exactly as given; the watch's own ACK or NACK comes " +
+                        "back. An ACK proves delivery to the running app, not that the keys " +
+                        "meant anything. The watchapp must be open on the watch, and the " +
+                        "failure says so when it is not — use pebblekit2_launch_and_send " +
+                        "when it may not be. $COMPANION_ONLY",
+                )
+                .put("inputSchema", messageArguments),
+        ) { args ->
+            blocked(Preflight.watch(context)) ?: withMessage(args) { uuid, tuples ->
+                when (val result = PebbleKit2.send(context, uuid, tuples)) {
+                    PebbleKit2.Send.Acknowledged ->
+                        "The watch acknowledged delivery. That proves the message " +
+                            "reached the running watchapp — not that the keys meant " +
+                            "anything to it." to false
+                    PebbleKit2.Send.NotOpen ->
+                        "FAILED: the app is not open on the watch, or it does not name " +
+                            "this app as its Android companion. The message was not " +
+                            "delivered. pebblekit2_launch_and_send opens it first; " +
+                            "pebblekit2_watch_state shows what is open." to true
+                    is PebbleKit2.Send.Failed -> "FAILED: ${result.why}" to true
+                }
+            }
+        }
+
+        val launchAndSend2 = ToolSpec(
+            name = "pebblekit2_launch_and_send",
+            featureKey = FEATURE,
+            definition = JSONObject()
+                .put("name", "pebblekit2_launch_and_send")
+                .put(
+                    "description",
+                    "Open a Pebble watchapp, then deliver one AppMessage: launches the app " +
+                        "and waits (up to 10s) for the watch to report it running, then " +
+                        "sends the tuples and reports the watch's answer. The message is " +
+                        "delivered at most once. Use this when the watchapp may not be " +
+                        "open; pebblekit2_send_message alone is enough when it is. " +
+                        COMPANION_ONLY,
+                )
+                .put("inputSchema", messageArguments),
+        ) { args ->
+            blocked(Preflight.watch(context)) ?: withMessage(args) { uuid, tuples ->
+                when (val result = PebbleKit2.launchAndSend(context, uuid, tuples)) {
+                    PebbleKit2.LaunchAndSend.Acknowledged ->
+                        "The watchapp came up and the watch acknowledged the message. " +
+                            "That proves delivery to the running app — not that the " +
+                            "keys meant anything to it." to false
+                    is PebbleKit2.LaunchAndSend.NotLaunched ->
+                        "FAILED: ${result.why} The message was not sent." to true
+                    is PebbleKit2.LaunchAndSend.NotSent ->
+                        "FAILED: the watchapp came up, but ${result.why}" to true
+                }
+            }
+        }
+
+        val receiveMessages = ToolSpec(
+            name = "pebblekit2_receive_messages",
+            featureKey = FEATURE,
+            definition = JSONObject()
+                .put("name", "pebblekit2_receive_messages")
+                .put(
+                    "description",
+                    "Read what a Pebble watchapp has sent to the phone, and when it was " +
+                        "opened and closed. Returns {\"events\": [...], \"dropped\": n}: " +
+                        "events in arrival order, each {type, received_at}, type one of " +
+                        "message, app_opened, app_closed, and a message also carrying " +
+                        "tuples in the form the send tools take. Reading empties the queue, " +
+                        "so each event is returned once. Events are held in memory only, at " +
+                        "most ${WatchInbox.CAPACITY} per watchapp; dropped counts those lost to that " +
+                        "limit since the last read. Nothing queued is an empty list, not " +
+                        "an error. The watch was already told each message arrived, " +
+                        "whether or not anything reads it. " +
+                        "Only a watchapp that names this app as its Android companion " +
+                        "is heard from.",
+                )
+                .put(
+                    "inputSchema",
+                    JSONObject().put("type", "object").put(
+                        "properties",
+                        JSONObject()
+                            .put("app", appProperty)
+                            .put(
+                                "max_age_seconds",
+                                JSONObject().put("type", "integer").put(
+                                    "description",
+                                    "Events older than this are discarded instead of " +
+                                        "returned. Default $DEFAULT_MAX_AGE_S.",
+                                ),
+                            )
+                            .put(
+                                "wait_seconds",
+                                JSONObject().put("type", "integer").put(
+                                    "description",
+                                    "With nothing queued, wait up to this long for the " +
+                                        "first event and return when it arrives. Default 0. " +
+                                        "Anything over $MAX_WAIT_S is treated as $MAX_WAIT_S: " +
+                                        "to keep listening, call again.",
+                                ),
+                            ),
+                    ).put("required", JSONArray().put("app")),
+                ),
+        ) { args ->
+            withUuid(args) { uuid ->
+                val maxAge = if (args.has("max_age_seconds")) args.optLong("max_age_seconds", -1) else DEFAULT_MAX_AGE_S
+                val wait = args.optLong("wait_seconds", 0)
+                when {
+                    maxAge <= 0 -> "FAILED: max_age_seconds must be a whole number above 0." to true
+                    wait < 0 -> "FAILED: wait_seconds must be 0 or more." to true
+                    else -> WatchInbox.take(
+                        uuid,
+                        // Far past any uptime, and safely short of overflow.
+                        maxAge.coerceAtMost(MAX_AGE_CEILING_S) * 1000,
+                        wait.coerceAtMost(MAX_WAIT_S) * 1000,
+                        ClientConnection::alive,
+                    ).toString() to false
                 }
             }
         }
 
         val sendMessage = ToolSpec(
             name = "pebblekit_send_message",
-            featureKey = "watch_control",
+            featureKey = FEATURE,
             definition = JSONObject()
                 .put("name", "pebblekit_send_message")
                 .put(
                     "description",
-                    "Send a raw AppMessage to an app on the user's Pebble watch — the watch equivalent of send_intent. Tuples go to the watchapp exactly as given; the watch's own ACK or NACK comes back. An ACK proves delivery to the running app, not that the keys meant anything: a key the app ignores is still acknowledged. Key meanings per app are skill-file knowledge. The watchapp must already be running or the message vanishes silently — use pebblekit_launch_and_send when it may not be.",
+                    "Send a raw AppMessage to an app on the user's Pebble watch over the classic PebbleKit broadcasts, which reach any watchapp — the watch equivalent of send_intent. Tuples go to the watchapp exactly as given; the watch's own ACK or NACK comes back. An ACK proves delivery to the running app, not that the keys meant anything: a key the app ignores is still acknowledged. Key meanings per app are skill-file knowledge. The watchapp must already be running or the message vanishes silently — use pebblekit_launch_and_send when it may not be. A watchapp that names this app as its Android companion is better served by pebblekit2_send_message, which says why a send failed.",
                 )
                 .put(
                     "inputSchema",
@@ -129,12 +308,12 @@ object PebbleTools {
 
         val launchAndSend = ToolSpec(
             name = "pebblekit_launch_and_send",
-            featureKey = "watch_control",
+            featureKey = FEATURE,
             definition = JSONObject()
                 .put("name", "pebblekit_launch_and_send")
                 .put(
                     "description",
-                    "Get a Pebble watchapp running, prove it is up, then deliver one AppMessage: launches the app and waits (up to 10s) for the watch to report it running, sends the ping (about once a second, up to 10s) until the watch ACKs one, then sends the tuples exactly once and reports the watch's answer. Any message is acknowledged by the watch and handed to the watchapp, so the ping must be one the app does nothing with — usually an empty message, []. Which ping is safe for an app is skill-file knowledge. Use this when the watchapp may not be running; pebblekit_send_message alone is enough when it is.",
+                    "Get a Pebble watchapp running, prove it is up, then deliver one AppMessage over the classic PebbleKit broadcasts, which reach any watchapp: launches the app and waits (up to 10s) for the watch to report it running, sends the ping (about once a second, up to 10s) until the watch ACKs one, then sends the tuples exactly once and reports the watch's answer. Any message is acknowledged by the watch and handed to the watchapp, so the ping must be one the app does nothing with — usually an empty message, []. Which ping is safe for an app is skill-file knowledge. Use this when the watchapp may not be running; pebblekit_send_message alone is enough when it is. A watchapp that names this app as its Android companion needs no ping: use pebblekit2_launch_and_send.",
                 )
                 .put(
                     "inputSchema",
@@ -187,7 +366,32 @@ object PebbleTools {
             }
         }
 
-        return listOf(launchApp, stopApp, sendMessage, launchAndSend)
+        return listOf(
+            launchApp, stopApp, watchState,
+            sendMessage2, launchAndSend2, receiveMessages,
+            sendMessage, launchAndSend,
+        )
+    }
+
+    private inline fun withUuid(
+        args: JSONObject,
+        then: (String) -> Pair<String, Boolean>,
+    ): Pair<String, Boolean> {
+        val app = args.optString("app")
+        return Watch.resolve(app)?.let(then) ?: notAUuid(app)
+    }
+
+    /** The app and tuples of a PebbleKit 2 send, checked before anything is sent. */
+    private inline fun withMessage(
+        args: JSONObject,
+        then: (String, JSONArray) -> Pair<String, Boolean>,
+    ): Pair<String, Boolean> = withUuid(args) { uuid ->
+        val tuples = args.optJSONArray("tuples")
+            ?: return "FAILED: give tuples, an array of {key, type, value}." to true
+        when (val wire = Watch.toWire(tuples)) {
+            is Watch.Wire.Ready -> then(uuid, wire.tuples)
+            is Watch.Wire.Unsendable -> malformed(wire.why)
+        }
     }
 
     private fun notAUuid(given: String): Pair<String, Boolean> =

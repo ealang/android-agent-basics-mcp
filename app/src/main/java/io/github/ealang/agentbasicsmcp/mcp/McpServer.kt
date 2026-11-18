@@ -10,6 +10,8 @@ import io.github.ealang.agentbasicsmcp.mcp.apps.AppTools
 import io.github.ealang.agentbasicsmcp.mcp.generic.GenericTools
 import io.github.ealang.agentbasicsmcp.mcp.pebble.PebbleTools
 import fi.iki.elonen.NanoHTTPD
+import java.io.InputStream
+import java.net.Socket
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -48,6 +50,16 @@ class McpServer(
     init {
         serverSocketFactory = ServerSocketFactory { ResilientServerSocket(log, onDied) }
     }
+
+    /**
+     * Each connection is handled on a thread of its own. Noting the socket
+     * against that thread is what lets a tool that waits ask whether its
+     * client is still there: see [ClientConnection].
+     */
+    override fun createClientHandler(finalAccept: Socket, inputStream: InputStream): ClientHandler =
+        object : ClientHandler(inputStream, finalAccept) {
+            override fun run() = ClientConnection.serving(finalAccept) { super.run() }
+        }
 
     /**
      * The whole tool surface, one [ToolSpec] per tool, in the order tools/list

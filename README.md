@@ -78,10 +78,13 @@ authoritative reference and carries each tool's full description.
 - **Phone** — `get_location`, `find_my_phone_play` / `find_my_phone_stop`,
   `get_volume` / `set_volume`, `set_flashlight`, and
   `post_notification` / `dismiss_notification`.
-- **Pebble watch** — the `pebblekit_*` family launches a watchapp, sends
-  it a message, or does both in one call. It works against any watchapp;
-  what the messages mean is per-app skill-file knowledge. Needs the
-  Pebble companion app on the phone.
+- **Pebble watch** — the `pebblekit2_*` family launches and stops a
+  watchapp and reports what the watch has open, for any watchapp. For a
+  watchapp that names this app as its Android companion it also sends
+  messages and reads the ones the watchapp sends back. The two
+  `pebblekit_*` tools send to a watchapp that names no companion. What
+  the messages mean is per-app skill-file knowledge. Needs the Pebble
+  companion app on the phone.
 
 Each family has its own switch in the app. A family that is switched off
 is absent from `tools/list`, and its tools refuse to run.

@@ -61,8 +61,13 @@ class Config(context: Context) {
      *
      * Keys are namespaced with "feature_" so they can be enumerated later.
      */
-    fun featureEnabled(key: String, default: Boolean = true): Boolean =
-        prefs.getBoolean("feature_$key", default)
+    fun featureEnabled(key: String, default: Boolean = true): Boolean {
+        // "pebblekit" was "watch_control" until the switch grew to cover
+        // PebbleKit 2; a choice made under the old name still stands.
+        val legacy = RENAMED_FEATURES[key]
+        val fallback = if (legacy != null) prefs.getBoolean("feature_$legacy", default) else default
+        return prefs.getBoolean("feature_$key", fallback)
+    }
 
     fun setFeatureEnabled(key: String, value: Boolean) =
         prefs.edit().putBoolean("feature_$key", value).apply()
@@ -118,5 +123,8 @@ class Config(context: Context) {
         private const val KEY_TOKEN = "token"
         private const val KEY_ENABLED = "enabled"
         private const val KEY_START_FAILURE = "last_start_failure"
+
+        /** New key to the key it replaced. */
+        private val RENAMED_FEATURES = mapOf("pebblekit" to "watch_control")
     }
 }

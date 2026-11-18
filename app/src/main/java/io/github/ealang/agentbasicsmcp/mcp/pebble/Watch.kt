@@ -18,21 +18,21 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * Drives the Pebble watch through the CoreApp companion.
+ * Sends AppMessages to a Pebble watchapp over the classic PebbleKit
+ * broadcasts, through the CoreApp companion.
  *
  * CoreApp still listens for the PebbleKit Classic broadcasts, registered at
  * runtime and exported, so messaging needs no library and no cooperation from
  * CoreApp. Unlike the clock-app intents these are broadcasts, not activity
- * starts, so none of the background-activity restrictions apply. Launching
- * is the one step that goes through PebbleKit 2 instead, and [PebbleKit2]
- * says why.
+ * starts, so none of the background-activity restrictions apply. This is the
+ * route to a watchapp that names no Android companion; one that names this
+ * app is reached through [PebbleKit2], which also does every launch.
  */
 object Watch {
 
     private const val TAG = "AgentBasicsMcpWatch"
     const val COREAPP_PACKAGE = "coredevices.coreapp"
 
-    private const val ACTION_STOP = "com.getpebble.action.app.STOP"
     private const val ACTION_SEND = "com.getpebble.action.app.SEND"
     private const val ACTION_RECEIVE_ACK = "com.getpebble.action.app.RECEIVE_ACK"
     private const val ACTION_RECEIVE_NACK = "com.getpebble.action.app.RECEIVE_NACK"
@@ -52,20 +52,6 @@ object Watch {
 
     /** CoreApp narrows this to a byte, so it has to stay in range. */
     private val transactions = AtomicInteger(0)
-
-    sealed interface Result {
-        /** The broadcast was sent. The watch does not report back. */
-        data object Sent : Result
-        data class NotAUuid(val given: String) : Result
-    }
-
-    sealed interface LaunchResult {
-        /** The watch reported the app running. */
-        data object Running : LaunchResult
-        /** The watch did not, and [why] says what CoreApp reported instead. */
-        data class Failed(val why: String) : LaunchResult
-        data class NotAUuid(val given: String) : LaunchResult
-    }
 
     sealed interface HandshakeResult {
         /** The watch acknowledged the payload. Delivery, not understanding. */
@@ -94,17 +80,6 @@ object Watch {
         /** Never sent: the tuples do not fit CoreApp's wire format. */
         data class Malformed(val why: String) : SendResult
     }
-
-    /** Starts the watchapp and waits for the watch to report it running. */
-    fun launch(context: Context, app: String): LaunchResult {
-        val uuid = resolve(app) ?: return LaunchResult.NotAUuid(app)
-        return when (val launched = PebbleKit2.start(context, uuid)) {
-            PebbleKit2.Launch.Running -> LaunchResult.Running
-            is PebbleKit2.Launch.Failed -> LaunchResult.Failed(launched.why)
-        }
-    }
-
-    fun stop(context: Context, app: String): Result = send(context, ACTION_STOP, app)
 
     /**
      * The whole handshake in one call: get the watchapp running, prove it is
@@ -219,7 +194,7 @@ object Watch {
         }
     }
 
-    private sealed interface Wire {
+    internal sealed interface Wire {
         class Ready(val tuples: JSONArray) : Wire
         class Unsendable(val why: String) : Wire
     }
@@ -245,7 +220,7 @@ object Watch {
      * width is kept, and a value that does not fit it is refused rather than
      * silently truncated, which is what CoreApp would do.
      */
-    private fun toWire(tuples: JSONArray): Wire {
+    internal fun toWire(tuples: JSONArray): Wire {
         val out = JSONArray()
         for (i in 0 until tuples.length()) {
             val t = tuples.optJSONObject(i)
@@ -404,16 +379,7 @@ object Watch {
 
     private fun intentTo(action: String): Intent = Intent(action).setPackage(COREAPP_PACKAGE)
 
-    private fun send(context: Context, action: String, app: String): Result {
-        val uuid = resolve(app) ?: return Result.NotAUuid(app)
-        // Addressed to CoreApp rather than broadcast at large: nothing else
-        // should see it, and an implicit broadcast is easier to lose.
-        context.sendBroadcast(intentTo(action).putExtra(EXTRA_UUID, uuid))
-        Log.i(TAG, "$action -> $uuid")
-        return Result.Sent
-    }
-
-    private fun resolve(app: String): String? =
+    internal fun resolve(app: String): String? =
         app.trim().takeIf { UUID_FORMAT.matches(it) }?.lowercase()
 
     /**
