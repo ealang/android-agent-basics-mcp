@@ -29,8 +29,8 @@ android {
         // versionCode is what Android compares on install: it must rise with
         // every release, or the new APK is refused as a downgrade.
         // versionName is the string people see in Settings and in `inspect`.
-        versionCode = 3
-        versionName = "1.0.2"
+        versionCode = 4
+        versionName = "1.1.0"
     }
 
     localProps["DEBUG_KEYSTORE"]?.toString()?.let { path ->
