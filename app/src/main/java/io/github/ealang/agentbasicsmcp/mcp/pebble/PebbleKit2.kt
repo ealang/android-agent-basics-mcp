@@ -313,9 +313,11 @@ object PebbleKit2 {
 
     /**
      * A dictionary CoreApp delivered, as the same tuples a send takes, in key
-     * order: integers keep their width, so a received message can be handed
-     * back to a send unchanged. An entry of a type this does not know is
-     * left out and logged, as the client library does.
+     * order. An integer carries the width CoreApp gave it, which is not
+     * always the width the watchapp wrote: CoreApp decodes every integer
+     * from the watch to 64 bits and hands it on as 32, so a 1-byte value
+     * arrives here as 4. Sign and value survive. An entry of a type this
+     * does not know is left out and logged, as the client library does.
      */
     internal fun toTuples(dictionary: Bundle): JSONArray {
         val keys = dictionary.keySet()

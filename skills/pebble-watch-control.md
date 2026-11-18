@@ -122,7 +122,8 @@ returns
 ```
 
 - Events come in arrival order, for that watchapp only. `tuples` is in
-  the form the send tools take, so a message can be sent back unchanged.
+  the form the send tools take. Integers arrive with `"length": 4`
+  whatever width the watchapp wrote; the value and its sign are right.
 - **Reading empties the queue.** Each event is returned once, to
   whichever call reads it first. One reader per watchapp.
 - `wait_seconds` holds the call open until the first event arrives.
