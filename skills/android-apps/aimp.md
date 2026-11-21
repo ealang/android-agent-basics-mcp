@@ -82,6 +82,21 @@ replaces the current playlist's contents with the file's folder**; the
 previous entries are gone and nothing through the session puts them
 back. Play playlist entries unless replacing the playlist is intended.
 
+That replacement is how an album is played, and it clears whatever the
+playlist held. Browse Folders down to the album's folder and play its
+first track:
+
+```
+media_play {"app": "com.aimp.player", "media_id": "folder/local://primary/Music/<artist>/<album>/<first track file>"}
+```
+
+The playlist becomes that folder's tracks in file-name order, starting
+at the track played.
+
+A file opened in AIMP from outside, such as `send_intent` VIEW with a
+file's `content://` uri, plays and is added to the current playlist
+without replacing it.
+
 `query` with an exact track title switches to that track. A query that
 matches nothing does not fail: it starts some other track from the
 playlist, so a misspelt title changes what is playing.
