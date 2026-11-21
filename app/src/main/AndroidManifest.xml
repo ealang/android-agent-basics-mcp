@@ -153,6 +153,20 @@
             </intent-filter>
         </service>
 
+        <!-- Lends files in the file tools' tmp folder to other apps, one
+             content:// URI and one read grant at a time. Not exported: an
+             app reaches a file only through a grant send_intent attached
+             to the intent that named it. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <!-- The find-my-phone stop button. Fired only by our own pending
              intent, hence not exported. -->
         <receiver

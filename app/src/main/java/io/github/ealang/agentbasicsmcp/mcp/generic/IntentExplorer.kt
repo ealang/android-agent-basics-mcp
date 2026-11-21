@@ -12,6 +12,7 @@ import android.util.Log
 import android.view.KeyEvent
 import io.github.ealang.agentbasicsmcp.mcp.Preflight
 import io.github.ealang.agentbasicsmcp.mcp.UnlockGate
+import io.github.ealang.agentbasicsmcp.mcp.files.FileStore
 import org.json.JSONArray
 import org.json.JSONObject
 import org.xmlpull.v1.XmlPullParser
@@ -283,6 +284,7 @@ object IntentExplorer {
                 } else {
                     Preflight.activityLaunch(context)?.let { return "FAILED: $it" }
                     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    lendFiles(context, intent)
                     val locked = context.getSystemService(KeyguardManager::class.java)
                         ?.isKeyguardLocked == true
                     if (args.optBoolean("via_unlock_gate", false) && locked) {
@@ -332,6 +334,7 @@ object IntentExplorer {
                 if (pm.queryIntentServices(intent, 0).isEmpty()) {
                     "FAILED: no service on the device handles this intent."
                 } else {
+                    lendFiles(context, intent)
                     try {
                         if (mode == "foreground_service") {
                             context.startForegroundService(intent)
@@ -353,6 +356,29 @@ object IntentExplorer {
     }
 
     // ------------------------------------------------------------- helpers
+
+    /**
+     * Lets the receiving app read the files the intent points at, when they
+     * are ours to lend: a content:// URI opens only for an app that holds a
+     * grant for it, and an intent is how one is handed over. Without this a
+     * URI from the file tools would resolve, launch, and then fail to open.
+     * Added only when every content URI in the intent is one of ours, since
+     * a grant we cannot give makes Android refuse the whole send.
+     */
+    private fun lendFiles(context: Context, intent: Intent) {
+        val uris = buildList {
+            intent.data?.let { add(it) }
+            intent.extras?.let { extras ->
+                for (key in extras.keySet()) {
+                    @Suppress("DEPRECATION")
+                    (extras.get(key) as? Uri)?.let { add(it) }
+                }
+            }
+        }.filter { it.scheme == "content" }
+        if (uris.isNotEmpty() && uris.all { FileStore.lendable(context, it) }) {
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+    }
 
     /**
      * An Intent from JSON: action, data URI, MIME type, categories,

@@ -187,7 +187,7 @@ object GenericTools {
 
         val intentSpecProperties = JSONObject()
             .put("action", JSONObject().put("type", "string").put("description", "Intent action, e.g. android.intent.action.VIEW."))
-            .put("data", JSONObject().put("type", "string").put("description", "Data URI, e.g. https://... or geo:..."))
+            .put("data", JSONObject().put("type", "string").put("description", "Data URI, e.g. https://... or geo:... A content:// uri from the file tools is sent with read access for the receiving app."))
             .put("mime_type", JSONObject().put("type", "string").put("description", "MIME type of the data."))
             .put("categories", JSONObject().put("type", "array").put("items", JSONObject().put("type", "string")).put("description", "Intent categories."))
             .put("package", JSONObject().put("type", "string").put("description", "Limit to this package without naming a component."))

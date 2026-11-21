@@ -71,7 +71,17 @@ authoritative reference and carries each tool's full description.
   `intent_resolve` and `send_intent` dry-run and fire intents;
   `provider_query` and `provider_call` read app state and call methods
   through content providers; the `media_*` family browses, searches,
-  plays and controls any app with a media session.
+  plays and controls any app with a media session. See
+  [skills/app-launch.md](skills/app-launch.md) and
+  [skills/alarms-and-timers.md](skills/alarms-and-timers.md) for intents,
+  [skills/media-control.md](skills/media-control.md) and
+  [skills/media-discovery.md](skills/media-discovery.md) for media.
+- **Files** — the `file_*` family lists, moves and deletes files in a
+  private temporary folder and in folders you add in the app; file
+  content is uploaded and downloaded over `PUT` and `GET /files/<path>`
+  on the same port, and an uploaded file opens in another app through
+  `send_intent`. Off until switched on. See
+  [skills/files.md](skills/files.md).
 - **Phone** — `get_location`, `find_my_phone_play` / `find_my_phone_stop`,
   `get_volume` / `set_volume`, `set_flashlight`, and
   `post_notification` / `dismiss_notification`.
@@ -81,7 +91,8 @@ authoritative reference and carries each tool's full description.
   messages and reads the ones the watchapp sends back. The two
   `pebblekit_*` tools send to a watchapp that names no companion. What
   the messages mean is per-app skill-file knowledge. Needs the Pebble
-  companion app on the phone.
+  companion app on the phone. See
+  [skills/pebble-watch-control.md](skills/pebble-watch-control.md).
 
 Each family has its own switch in the app. A family that is switched off
 is absent from `tools/list`, and its tools refuse to run.

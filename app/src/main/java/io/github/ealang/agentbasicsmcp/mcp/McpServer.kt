@@ -7,10 +7,16 @@ import io.github.ealang.agentbasicsmcp.Networks
 import io.github.ealang.agentbasicsmcp.ResilientServerSocket
 import io.github.ealang.agentbasicsmcp.ServerLog
 import io.github.ealang.agentbasicsmcp.mcp.apps.AppTools
+import io.github.ealang.agentbasicsmcp.mcp.files.FileProblem
+import io.github.ealang.agentbasicsmcp.mcp.files.FileStore
+import io.github.ealang.agentbasicsmcp.mcp.files.FileTools
+import io.github.ealang.agentbasicsmcp.mcp.files.UploadCut
 import io.github.ealang.agentbasicsmcp.mcp.generic.GenericTools
 import io.github.ealang.agentbasicsmcp.mcp.pebble.PebbleTools
 import fi.iki.elonen.NanoHTTPD
+import java.io.IOException
 import java.io.InputStream
+import java.net.SocketTimeoutException
 import java.net.Socket
 import org.json.JSONArray
 import org.json.JSONObject
@@ -26,6 +32,11 @@ import org.json.JSONObject
  * The HTTP layer is here too: bearer-token auth, the resilient socket,
  * request logging, with the MCP dispatch past them. Every path requires
  * the token; nothing is answered without it.
+ *
+ * Beside /mcp sit the /files routes, PUT and GET of one file's raw bytes.
+ * They exist because MCP is JSON: a file sent as a tool argument would be
+ * base64 text the calling model has to write out, which stops being
+ * practical well under a megabyte.
  */
 class McpServer(
     private val context: Context,
@@ -67,11 +78,14 @@ class McpServer(
      * as long as the app does.
      */
     private val tools: List<ToolSpec> =
-        AppTools.specs(context) + PebbleTools.specs(context) + GenericTools.specs(context)
+        AppTools.specs(context) + PebbleTools.specs(context) + GenericTools.specs(context) +
+            FileTools.specs(context)
 
     private val byName: Map<String, ToolSpec> = tools.associateBy { it.name }
 
     private val config = Config(context)
+
+    private val files = FileStore(context)
 
     /**
      * The MCP Tools card's feature switches, honoured per request — SharedPreferences
@@ -86,6 +100,10 @@ class McpServer(
         private const val TAG = "AgentBasicsMcpServer"
         private const val FALLBACK_PROTOCOL = "2025-11-25"
         const val MCP_PATH = "/mcp"
+        const val FILES_PATH = "/files"
+
+        /** How much of a refused upload is read before answering; see [filesRoute]. */
+        private const val DRAIN_LIMIT = 64L * 1024 * 1024
 
         /** Argument names that identify a call's subject, most specific first. */
         private val SUBJECT_KEYS =
@@ -133,6 +151,10 @@ class McpServer(
             return json(Response.Status.UNAUTHORIZED, JSONObject().put("error", "Unauthorized"))
         }
 
+        if (uri == FILES_PATH || uri.startsWith("$FILES_PATH/")) {
+            return filesRoute(session, uri.removePrefix(FILES_PATH))
+        }
+
         if (uri != MCP_PATH) {
             return json(Response.Status.NOT_FOUND, JSONObject().put("error", "Not found: $uri"))
         }
@@ -160,6 +182,118 @@ class McpServer(
             ?: return newFixedLengthResponse(Response.Status.ACCEPTED, "text/plain", "")
 
         return json(Response.Status.OK, response)
+    }
+
+    // ------------------------------- files -------------------------------
+
+    /**
+     * PUT writes the request body to the path, GET returns the file. The
+     * path is the same `<folder>/<sub/path>` the file tools take, and the
+     * same switch turns both off.
+     */
+    private fun filesRoute(session: IHTTPSession, path: String): Response {
+        if (session.method != Method.PUT && session.method != Method.GET) {
+            return json(
+                Response.Status.METHOD_NOT_ALLOWED,
+                JSONObject().put("error", "PUT uploads a file and GET downloads one."),
+            )
+        }
+        val upload = if (session.method == Method.PUT) {
+            // Without a length there is no telling where the body ends:
+            // NanoHTTPD does not decode chunked request bodies.
+            val length = session.headers["content-length"]?.toLongOrNull()
+                ?: return json(
+                    Response.Status.BAD_REQUEST,
+                    JSONObject().put("error", "A PUT needs a Content-Length header."),
+                )
+            BodyStream(session.inputStream, length)
+        } else {
+            null
+        }
+        return try {
+            if (!config.featureEnabled(FileTools.FEATURE)) {
+                throw FileProblem(
+                    FileProblem.Kind.FORBIDDEN,
+                    "The user has switched the file tools off in the Agent Basics MCP app.",
+                )
+            }
+            if (upload != null) {
+                val written = files.put(path, upload)
+                detail.set("put $path")
+                log.info("file uploaded", path)
+                json(Response.Status.OK, written)
+            } else {
+                val (entry, stream) = files.open(path)
+                detail.set("get $path")
+                log.info("file downloaded", path)
+                val mime = FileStore.mimeFor(entry.name)
+                entry.size?.let { newFixedLengthResponse(Response.Status.OK, mime, stream, it) }
+                    ?: newChunkedResponse(Response.Status.OK, mime, stream)
+            }
+        } catch (e: FileProblem) {
+            // A client that is still sending cannot read an answer, and
+            // closing on it mid-body turns the reason into a reset. So the
+            // rest of a refused upload is read and dropped, up to a limit.
+            upload?.drain(DRAIN_LIMIT)
+            log.warn("file request refused", e.message)
+            json(
+                when (e.kind) {
+                    FileProblem.Kind.BAD_REQUEST -> Response.Status.BAD_REQUEST
+                    FileProblem.Kind.NOT_FOUND -> Response.Status.NOT_FOUND
+                    FileProblem.Kind.FORBIDDEN -> Response.Status.FORBIDDEN
+                    FileProblem.Kind.CONFLICT -> Response.Status.CONFLICT
+                    FileProblem.Kind.FAILED -> Response.Status.INTERNAL_ERROR
+                },
+                JSONObject().put("error", e.message),
+            )
+        }
+    }
+
+    /**
+     * Exactly the request body and no further: the connection's stream has
+     * no end of its own while the client waits for the answer. A body that
+     * stops short is an error, so half an upload is never kept as a file.
+     */
+    private class BodyStream(private val source: InputStream, private var left: Long) : InputStream() {
+        override fun read(): Int {
+            val one = ByteArray(1)
+            return if (read(one, 0, 1) < 0) -1 else one[0].toInt() and 0xff
+        }
+
+        override fun read(b: ByteArray, off: Int, len: Int): Int {
+            if (left <= 0) return -1
+            // The socket gives up after a few seconds of silence, which is
+            // right for an idle connection and too quick for a phone-sized
+            // upload over a link that hiccups. A timed-out read leaves the
+            // socket usable, so an upload is allowed several in a row.
+            var silences = 0
+            while (true) {
+                val n = try {
+                    source.read(b, off, minOf(len.toLong(), left).toInt())
+                } catch (e: SocketTimeoutException) {
+                    if (++silences >= MAX_SILENCES) throw UploadCut("the upload stalled")
+                    continue
+                }
+                if (n < 0) throw UploadCut("the upload ended $left bytes early")
+                left -= n
+                return n
+            }
+        }
+
+        private companion object {
+            /** Consecutive socket timeouts an upload survives: about half a minute. */
+            const val MAX_SILENCES = 6
+        }
+
+        fun drain(limit: Long) {
+            if (left > limit) return
+            val buffer = ByteArray(64 * 1024)
+            try {
+                while (read(buffer, 0, buffer.size) >= 0) Unit
+            } catch (e: IOException) {
+                // The client went away; nothing left to be polite to.
+            }
+        }
     }
 
     /**

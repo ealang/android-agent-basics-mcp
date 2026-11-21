@@ -1,7 +1,11 @@
 package io.github.ealang.agentbasicsmcp
 
 import android.content.Context
+import io.github.ealang.agentbasicsmcp.mcp.files.FileFolder
 import java.security.SecureRandom
+import org.json.JSONArray
+import org.json.JSONException
+import org.json.JSONObject
 
 /**
  * Settings, in SharedPreferences.
@@ -61,7 +65,7 @@ class Config(context: Context) {
      *
      * Keys are namespaced with "feature_" so they can be enumerated later.
      */
-    fun featureEnabled(key: String, default: Boolean = true): Boolean {
+    fun featureEnabled(key: String, default: Boolean = key !in OFF_UNTIL_CHOSEN): Boolean {
         // "pebblekit" was "watch_control" until the switch grew to cover
         // PebbleKit 2; a choice made under the old name still stands.
         val legacy = RENAMED_FEATURES[key]
@@ -71,6 +75,29 @@ class Config(context: Context) {
 
     fun setFeatureEnabled(key: String, value: Boolean) =
         prefs.edit().putBoolean("feature_$key", value).apply()
+
+    /**
+     * The folders the user has shared with the file tools, in the order
+     * they were added. Each is a name agents see and the tree URI the
+     * system picker returned for it.
+     */
+    var fileFolders: List<FileFolder>
+        get() = try {
+            val a = JSONArray(prefs.getString(KEY_FILE_FOLDERS, null) ?: "[]")
+            List(a.length()) { i ->
+                val o = a.getJSONObject(i)
+                FileFolder(o.getString("name"), o.getString("uri"), o.optBoolean("writable", false))
+            }
+        } catch (e: JSONException) {
+            emptyList()
+        }
+        set(value) {
+            val a = JSONArray()
+            value.forEach {
+                a.put(JSONObject().put("name", it.name).put("uri", it.treeUri).put("writable", it.writable))
+            }
+            prefs.edit().putString(KEY_FILE_FOLDERS, a.toString()).apply()
+        }
 
     /**
      * Whether a runtime permission's system dialog has ever been shown,
@@ -123,6 +150,14 @@ class Config(context: Context) {
         private const val KEY_TOKEN = "token"
         private const val KEY_ENABLED = "enabled"
         private const val KEY_START_FAILURE = "last_start_failure"
+        private const val KEY_FILE_FOLDERS = "file_folders"
+
+        /**
+         * Features that stay off until the user switches them on. The file
+         * tools hand out what is on the phone's storage, so they are a
+         * choice to make rather than a default to discover.
+         */
+        private val OFF_UNTIL_CHOSEN = setOf("files")
 
         /** New key to the key it replaced. */
         private val RENAMED_FEATURES = mapOf("pebblekit" to "watch_control")

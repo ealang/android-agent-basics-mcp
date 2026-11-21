@@ -29,6 +29,7 @@ import io.github.ealang.agentbasicsmcp.MainActivity
 import io.github.ealang.agentbasicsmcp.McpService
 import io.github.ealang.agentbasicsmcp.Networks
 import io.github.ealang.agentbasicsmcp.mcp.McpServer
+import io.github.ealang.agentbasicsmcp.mcp.files.FileTools
 import kotlinx.coroutines.delay
 
 private data class Feature(
@@ -50,6 +51,7 @@ private val GENERIC = listOf(
     Feature("location", "Location", "get_location — the phone's position.", listOf(LOCATION_GRANT)),
     Feature("find_my_phone", "Find my phone", "find_my_phone_play, find_my_phone_stop — ring the phone audibly, even on silent or Do Not Disturb."),
     Feature("volume", "Volume", "get_volume, set_volume — the phone's volume sliders: media, call, ring, notification, alarm."),
+    Feature("files", "Files", "The file_* family, and upload and download of file content — in a private tmp folder and in the folders you add here.", emptyList()),
     Feature("flashlight", "Flashlight", "set_flashlight — the torch on the back of the phone."),
 )
 
@@ -209,6 +211,7 @@ fun AgentBasicsMcpApp(activity: MainActivity) {
                             activity.bump()
                         },
                     )
+                    if (checked && feature.key == FileTools.FEATURE) FilesBlock(activity)
                     if (checked) {
                         missing.forEach { grant ->
                             StatusText(grant.ask, warn = true)

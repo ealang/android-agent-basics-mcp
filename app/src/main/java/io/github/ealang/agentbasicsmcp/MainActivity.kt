@@ -22,10 +22,13 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.core.content.ContextCompat
 import io.github.ealang.agentbasicsmcp.mcp.McpServer
 import io.github.ealang.agentbasicsmcp.mcp.apps.Locator
+import io.github.ealang.agentbasicsmcp.mcp.files.FileFolder
 import io.github.ealang.agentbasicsmcp.ui.AgentBasicsMcpApp
 import io.github.ealang.agentbasicsmcp.ui.AgentBasicsMcpTheme
 
@@ -242,6 +245,51 @@ class MainActivity : ComponentActivity() {
         toast(echo)
     }
 
+    // ------------------------------------------------------- file folders
+
+    /** A folder back from the picker, waiting for the name agents will see. */
+    val pickedFolder = mutableStateOf<Uri?>(null)
+
+    private val folderPicker =
+        registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+            if (uri != null) {
+                // Persisted, or the grant ends with this activity and the
+                // server, which outlives it, is left holding a dead URI.
+                contentResolver.takePersistableUriPermission(uri, FOLDER_ACCESS)
+                pickedFolder.value = uri
+            }
+        }
+
+    fun pickFileFolder() = folderPicker.launch(null)
+
+    fun addFileFolder(name: String, tree: Uri) {
+        config.fileFolders = config.fileFolders + FileFolder(name, tree.toString(), writable = false)
+        pickedFolder.value = null
+        bump()
+    }
+
+    /** The picker was answered but the folder not named: hand the grant back. */
+    fun dropPickedFolder() {
+        pickedFolder.value?.let { releaseUnlessUsed(it) }
+        pickedFolder.value = null
+    }
+
+    fun removeFileFolder(folder: FileFolder) {
+        config.fileFolders = config.fileFolders.filterNot { it.name == folder.name }
+        releaseUnlessUsed(Uri.parse(folder.treeUri))
+        bump()
+    }
+
+    /** One place can be added under two names; the grant goes with the last. */
+    private fun releaseUnlessUsed(tree: Uri) {
+        if (config.fileFolders.any { it.treeUri == tree.toString() }) return
+        try {
+            contentResolver.releasePersistableUriPermission(tree, FOLDER_ACCESS)
+        } catch (e: SecurityException) {
+            // Already gone: the user revoked it in system settings.
+        }
+    }
+
     fun toast(text: String) = Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
 
     /**
@@ -393,6 +441,11 @@ class MainActivity : ComponentActivity() {
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         bump()
+    }
+
+    private companion object {
+        const val FOLDER_ACCESS =
+            Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
     }
 }
 

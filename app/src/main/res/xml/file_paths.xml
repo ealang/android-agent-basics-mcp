@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- What the FileProvider may lend out: the tmp folder of the file tools
+     and nothing else in the cache. The path must match TmpBackend.DIR. -->
+<paths>
+    <cache-path name="tmp" path="files-tmp/" />
+</paths>

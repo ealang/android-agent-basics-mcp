@@ -3,8 +3,8 @@
 ## Generic-first: what the tool surface is
 
 The product is **generic tools plus skill files**. The tools —
-`inspect`, `send_intent`, `intent_resolve`, the `provider_*` and
-`media_*` families — are raw Android capabilities, remoted, for a
+`inspect`, `send_intent`, `intent_resolve`, the `provider_*`,
+`media_*` and `file_*` families — are raw Android capabilities, remoted, for a
 capable agent. Per-app knowledge lives in `skills/`: an agent explores
 an app through the generic tools, and what it learns becomes a skill
 file, not a new tool. Maps is the worked example — `send_intent`
