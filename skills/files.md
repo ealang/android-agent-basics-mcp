@@ -76,14 +76,13 @@ cannot be moved or deleted, only what is in them.
 ## Opening a file in another app
 
 Every file entry, from a PUT, `file_list` or `file_info`, has a `uri`.
-Pass it to `send_intent` as `data` with the file's MIME type:
+Pass it to `send_intent` as `data`:
 
 ```
 send_intent
 {
   "action": "android.intent.action.VIEW",
   "data": "<uri>",
-  "mime_type": "application/pdf",
   "package": "<package>"
 }
 ```
@@ -91,11 +90,13 @@ send_intent
 `send_intent` attaches read access to the file for the receiving app
 whenever the URI is one from these folders; nothing needs to be added to
 the call. Without `package`, Android picks among every app that handles
-the type, which is a chooser on screen when there is no default;
+the file, which is a chooser on screen when there is no default;
 `intent_resolve` with the same arguments lists the candidates.
 
-A file with no registered type, such as an app's own package format,
-goes as `application/octet-stream` with `package` set.
+`mime_type` is optional. Left off, Android takes the type from the file
+name's extension, and `application/octet-stream` when it does not know
+the extension. Set `mime_type` to have the file handled as a different
+type.
 
 The rest is `send_intent` as for any launch, the locked phone included:
 see [app-launch.md](app-launch.md).
