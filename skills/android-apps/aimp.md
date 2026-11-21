@@ -83,19 +83,16 @@ previous entries are gone and nothing through the session puts them
 back. Play playlist entries unless replacing the playlist is intended.
 
 That replacement is how an album is played, and it clears whatever the
-playlist held. Browse Folders down to the album's folder and play its
-first track:
+playlist held. Find the album's folder with `media_browse` under
+Folders and play its first track by the id listed there:
 
 ```
-media_play {"app": "com.aimp.player", "media_id": "folder/local://primary/Music/<artist>/<album>/<first track file>"}
+media_browse {"app": "com.aimp.player", "node": "folder/local://primary/<path to the album>"}
+media_play {"app": "com.aimp.player", "media_id": "folder/local://primary/<path to the album>/<first track file>"}
 ```
 
 The playlist becomes that folder's tracks in file-name order, starting
 at the track played.
-
-A file opened in AIMP from outside, such as `send_intent` VIEW with a
-file's `content://` uri, plays and is added to the current playlist
-without replacing it.
 
 `query` with an exact track title switches to that track. A query that
 matches nothing does not fail: it starts some other track from the
