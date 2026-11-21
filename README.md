@@ -14,9 +14,7 @@ The app exposes **generic automation interfaces** — Android's (intents,
 content providers, media sessions) and the Pebble platform's (watchapp
 launch and messaging) — rather than including support for any particular
 app. Driving a specific app is done through those interfaces, and the
-knowledge of how — verified recipes for individual apps, found by
-experiment on a real device — lives in skill files under `skills/`. The
-only other tools are the phone's basic capabilities.
+knowledge of how, lives in skill files under [`skills/`](skills).
 
 ## Agent skill file library
 
