@@ -45,15 +45,19 @@ knowledge of how, lives in skill files under [`skills/`](skills).
 
 **Generic mechanisms:**
 
-- **Media control** — play, pause, skip, seek and queue in any app with
-  a media session, including apps that refuse the standard route.
-- **Media discovery** — finding something playable: browse, search, the
-  queue, now playing, the vendor's web API.
-- **App launch** — when opening an app's screen is needed at all.
-- **Timers and alarms** — setting them on whatever clock app the phone
-  uses.
-- **Pebble watch control** — launching a watchapp and sending it a
-  message.
+- [Media control](skills/media-control.md) — play, pause, skip, seek and
+  queue in any app with a media session, including apps that refuse the
+  standard route.
+- [Media discovery](skills/media-discovery.md) — finding something
+  playable: browse, search, the queue, now playing, the vendor's web API.
+- [App launch](skills/app-launch.md) — when opening an app's screen is
+  needed at all.
+- [Timers and alarms](skills/alarms-and-timers.md) — setting them on
+  whatever clock app the phone uses.
+- [Files](skills/files.md) — moving files on and off the phone and
+  opening one in another app.
+- [Pebble watch control](skills/pebble-watch-control.md) — launching a
+  watchapp and sending it a message.
 
 Give the agent only the files for the apps you use. The recommended way
 is a personal skill file, or a section of your own agent instructions,
@@ -64,38 +68,21 @@ how the files are organised and how to write one for a new app.
 
 ## Tools
 
-The families, not every tool: the server's own `tools/list` is the
-authoritative reference and carries each tool's full description.
+Each family has its own switch in the app, and a family that is switched
+off is absent from the server's `tools/list`.
 
-- **Generic Android** — `inspect` shows what an installed app exposes;
-  `intent_resolve` and `send_intent` dry-run and fire intents;
-  `provider_query` and `provider_call` read app state and call methods
-  through content providers; the `media_*` family browses, searches,
-  plays and controls any app with a media session. See
-  [skills/app-launch.md](skills/app-launch.md) and
-  [skills/alarms-and-timers.md](skills/alarms-and-timers.md) for intents,
-  [skills/media-control.md](skills/media-control.md) and
-  [skills/media-discovery.md](skills/media-discovery.md) for media.
-- **Files** — the `file_*` family lists, moves and deletes files in a
-  private temporary folder and in folders you add in the app; file
-  content is uploaded and downloaded over `PUT` and `GET /files/<path>`
-  on the same port, and an uploaded file opens in another app through
-  `send_intent`. Off until switched on. See
-  [skills/files.md](skills/files.md).
-- **Phone** — `get_location`, `find_my_phone_play` / `find_my_phone_stop`,
-  `get_volume` / `set_volume`, `set_flashlight`, and
-  `post_notification` / `dismiss_notification`.
-- **Pebble watch** — the `pebblekit2_*` family launches and stops a
-  watchapp and reports what the watch has open, for any watchapp. For a
-  watchapp that names this app as its Android companion it also sends
-  messages and reads the ones the watchapp sends back. The two
-  `pebblekit_*` tools send to a watchapp that names no companion. What
-  the messages mean is per-app skill-file knowledge. Needs the Pebble
-  companion app on the phone. See
-  [skills/pebble-watch-control.md](skills/pebble-watch-control.md).
-
-Each family has its own switch in the app. A family that is switched off
-is absent from `tools/list`, and its tools refuse to run.
+- **Generic Android**
+  - **Inspect** — shows what an installed app exposes.
+  - **Intents** — dry-run and send intents to any app.
+  - **Content providers** — read app state and call provider methods.
+  - **Media** — browse, search, play and control any app with a media
+    session.
+- **Files** — upload, download and manage files in a private temporary
+  folder and in folders you add in the app.
+- **Phone** — location, find my phone, volume, flashlight and
+  notifications.
+- **Pebble watch** — launch a watchapp and exchange messages with it;
+  needs the Pebble companion app on the phone.
 
 ## Setting up
 
@@ -106,60 +93,6 @@ traffic is unencrypted, so it is meant to be reached over a VPN rather than
 the open network. [Tailscale](https://play.google.com/store/apps/details?id=com.tailscale.ipn)
 is recommended. The app installs on Android 10 (API 29) or later.
 
-1. **Set up Tailscale** on the phone and on the machine hosting the agent,
-   signed into the same tailnet.
-2. **Open Agent Basics MCP** and check **Bind address** under Server settings. On
-   first launch it is filled in with the VPN's address when one is up, so
-   with Tailscale connected it already reads `100.x.y.z`; otherwise tap the
-   field and pick the VPN row from the list, then **Save and apply**. Bound
-   to that address, the server does not answer on the LAN at all. The last
-   row, **All IPv4 interfaces**, is the opt-in for answering on every
-   network the phone is on. Switch the server on at the top of the screen.
-   The port defaults to 8910.
-3. **Grant permissions** as the app asks. Each tool family states what it
-   needs on its own row; a family you leave off asks for nothing.
-4. **Share the MCP link with the agent**: **Copy MCP URL** gives the URL,
-   and the token is shown beside it. Confirm it works by asking the agent
-   what tools the phone offers, or with a direct call:
-
-   ```bash
-   curl -X POST http://<phone-tailscale-ip>:8910/mcp \
-     -H "Authorization: Bearer <token>" -H 'Content-Type: application/json' \
-     -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
-   ```
-
-5. **Curate skill files** for the apps you actually use, as described
-   above; what the agent learns about a new app belongs in a new file
-   under [skills/](skills/).
-
-## Building
-
-```bash
-./gradlew :app:assembleDebug     # debug APK, signed with the local debug key
-./gradlew :app:assembleRelease   # unsigned release APK, to be signed below
-```
-
-Output lands under `app/build/outputs/apk/`. The debug build has the package
-suffix `.debug` and a "(debug)" label, so it installs alongside a release
-build as a separate app with its own settings and token.
-
-A release APK is signed after the build, with `apksigner` from the SDK's
-build-tools and a keystore that lives wherever you keep secrets:
-
-```bash
-apksigner sign --ks release.jks --ks-key-alias <alias> \
-  --out agent-basics-mcp-<version>.apk app/build/outputs/apk/release/app-release-unsigned.apk
-apksigner verify --print-certs agent-basics-mcp-<version>.apk
-```
-
-The key is permanent: Android only installs an update signed with the same key
-as the copy already on the phone. Bump `versionCode` in `app/build.gradle.kts`
-for every release, or the install is refused as a downgrade. The build needs an Android SDK
-(`sdk.dir` in `local.properties`, which is gitignored). Optionally
-`local.properties` can also carry `DEBUG_KEYSTORE=/path/to/debug.keystore`
-to sign debug builds with a key of your choosing instead of the SDK's
-auto-generated one; Android's debug key is fine either way, as long as it stays
-the same key from build to build so each APK installs over the last one.
-
-The launcher and status-bar icons are generated by the pages in `art/icons/`;
-see the README there.
+Curate skill files for the apps you actually use, as described above;
+what the agent learns about a new app belongs in a new file under
+[skills/](skills/).
