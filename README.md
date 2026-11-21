@@ -44,7 +44,6 @@ only other tools are the phone's basic capabilities.
 | App | What works | Required Pebble app |
 |---|---|---|
 | ✅ [Agent Timer](skills/pebble-apps/agent-timer.md) | start a timer on the watch | [Pebble Appstore](https://apps.repebble.com/a8e93aeb045440408d0543c0) |
-| ✅ [Pebble Maps](skills/pebble-apps/pebble-maps.md) | start navigation, search | [fork on GitHub](https://github.com/ealang/TomBolger-PebbleMaps) |
 
 **Generic mechanisms:**
 
