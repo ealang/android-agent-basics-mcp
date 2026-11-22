@@ -37,7 +37,7 @@ object PebbleTools {
     private const val MAX_WAIT_S = 600L
 
     /** A send's whole allowance when the caller names none. */
-    private const val DEFAULT_SEND_TIMEOUT_S = 60L
+    private const val DEFAULT_SEND_TIMEOUT_S = 15L
 
     private const val MAX_AGE_CEILING_S = 10L * 365 * 24 * 3600
 
@@ -91,8 +91,7 @@ object PebbleTools {
                         "description",
                         "The longest the sending may take as a whole, counted from the " +
                             "first send. A message whose turn comes after that is not " +
-                            "sent. Default $DEFAULT_SEND_TIMEOUT_S. Anything over " +
-                            "$MAX_WAIT_S is treated as $MAX_WAIT_S.",
+                            "sent. Default $DEFAULT_SEND_TIMEOUT_S.",
                     ),
                 ),
         ).put("required", JSONArray().put("app"))

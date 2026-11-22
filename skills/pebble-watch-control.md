@@ -1,23 +1,9 @@
 ---
 name: pebble-watch-control
-description: How to drive any Pebble watchapp. Launch, stop, read what the watch has open, send an AppMessage, read what a companion watchapp sends back, what an ACK proves, and which watchapps cannot be reached.
+description: How to drive any Pebble watchapp. Launch, stop, read what the watch has open, send AppMessages one at a time or as a stream, and read what a companion watchapp sends back.
 ---
 
 # Driving a Pebble watchapp
-
-Two tool families, named for the phone companion's API each one uses.
-
-- `pebblekit2_*` launches and stops any watchapp and reports what the
-  watch has open. For a watchapp that names Agent Basics MCP as its
-  Android companion it also sends AppMessages and reads the ones the
-  watchapp sends to the phone.
-- `pebblekit_*` is two send tools for every other watchapp. They cannot
-  read anything back.
-
-Which family sends to a given watchapp is a fact about that watchapp, and
-its file in `pebble-apps/` says so along with its keys. With no file,
-assume `pebblekit_*`: few watchapps name a companion, and one that does
-not answers a `pebblekit2_` send with "not open" however open it is.
 
 ## Launch, stop, state
 
@@ -26,6 +12,8 @@ pebblekit2_launch_app  {"app": "<watchapp uuid>"}
 pebblekit2_stop_app    {"app": "<watchapp uuid>"}
 pebblekit2_watch_state {}
 ```
+
+These three work for any watchapp.
 
 A launch waits, up to ten seconds, for the watch to report the app
 running, and fails with what was observed otherwise. If the watch never
@@ -39,71 +27,62 @@ connected is an empty list.
 
 ## Tuples
 
-Every send takes `tuples`, the AppMessage: an array of
+A send takes `tuples`, the AppMessage: an array of
 `{key, type, value}`, `type` one of `int`, `uint`, `string`, `bytes`
 (base64). Integers go 4 bytes wide; add `"length": 1` or `2` when a
 watchapp reads a narrower value. An empty array is a valid message. A
 tuple that does not fit the wire format is refused without being sent.
 
-## Sending to a watchapp that names no companion
+In both families an ACK means only that the message reached the
+watchapp, not how the watchapp responded to it.
 
-One call does the whole job when the watchapp may not be running:
+## PebbleKit 2 (`pebblekit2_*`)
 
-```
-pebblekit_launch_and_send
-{
-  "app": "<watchapp uuid>",
-  "ping": [],
-  "tuples": [{"key": <key>, "type": "int", "value": <value>}]
-}
-```
+### Compatibility
 
-`ping` is a message sent about once a second until the watch replies,
-then the payload is delivered exactly once. Take the ping from the app's
-file. It is usually `[]`, which is inert for any app whose handler only
-reacts to keys it knows.
+Sending and receiving work only for a watchapp that names Agent Basics
+MCP as its Android companion. Use this family whenever it is available:
+it needs no ping, says why a send failed, is able to send multiple messages in one
+call, and reads what the watchapp sends back.
 
-`pebblekit_send_message {"app", "tuples"}` sends to an app already
-running.
-
-### Why the handshake
-
-A message to a watchapp that is not running is discarded in silence: the
-phone companion registers a receiver per running watchapp, so a closed
-app has none, nothing errors and nothing arrives. A launch alone is not
-quite enough either: the companion wires up that receiver a beat after
-the watch reports the app running, and a send straight after the launch
-can lose the race. The launch-and-send loop waits for the first reply,
-which proves the app can be reached, and only then sends the payload. It
-gives up after ten seconds of unanswered pings.
-
-If no inert ping is known for an app, there is no safe handshake:
-`pebblekit2_launch_app`, which returns once the watch reports the app
-running, then `pebblekit_send_message`, and accept it as best-effort.
-
-## Sending to a watchapp that names Agent Basics MCP as companion
+### Sending to a watchapp
 
 ```
 pebblekit2_launch_and_send {"app": "<watchapp uuid>", "tuples": [...]}
 pebblekit2_send_message    {"app": "<watchapp uuid>", "tuples": [...]}
 ```
 
-No ping. Here a send that cannot be delivered is refused with a reason
-instead of vanishing, so launch-and-send simply offers the message until
-the app accepts it, and it is delivered at most once.
+Use `pebblekit2_launch_and_send` whenever the watchapp may not be open.
+It opens the app if needed and waits until it can receive messages
+before sending.
 
-The failures are worth reading:
+### Several messages in one call
 
-- **Not open, or not a companion watchapp.** The phone companion gives
-  one answer for a closed app, an app that is not in front, and an open
-  app that does not name Agent Basics MCP. `pebblekit2_watch_state`
-  tells the first two from the third.
-- **Refused by the Pebble app.** The user has not allowed Agent Basics
-  MCP to talk to this watchapp. They are asked in the Pebble app.
-- **NACK.** The watch received the message and refused it.
-- **No answer within 10s.** It may or may not have arrived.
+Both tools take `messages` in place of `tuples`:
 
-## Reading what a watchapp sends
+```
+pebblekit2_launch_and_send
+{
+  "app": "<watchapp uuid>",
+  "messages": [
+    [{"key": 0, "type": "uint", "value": 1}],
+    [{"key": 0, "type": "uint", "value": 2}]
+  ],
+  "timeout_seconds": 15
+}
+```
+
+- This is much faster than one call per message.
+- Messages are sent in order, each after the watch acknowledged the one
+  before.
+- `timeout_seconds`, default 60, is the time allowed
+  for the whole array.
+- A failure is returned as an error that says how far the sending got,
+  for example: "FAILED: the watch acknowledged 11 of 30 messages.
+  Message 12 failed: the time allowed ran out before it was sent.
+  Nothing after it was sent."
+
+### Reading what a watchapp sends
 
 ```
 pebblekit2_receive_messages
@@ -125,7 +104,7 @@ returns
   the form the send tools take. Integers arrive with `"length": 4`
   whatever width the watchapp wrote; the value and its sign are right.
 - **Reading empties the queue.** Each event is returned once, to
-  whichever call reads it first. One reader per watchapp.
+  whichever call reads it first.
 - `wait_seconds` holds the call open until the first event arrives.
   Anything over 600 is treated as 600; to keep listening, call again.
   Nothing is lost between calls. Keep the wait shorter than the
@@ -141,33 +120,35 @@ returns
 - `app_opened` and `app_closed` bracket a session. `app_closed` is sent
   once, best-effort: a session can end without one.
 
-Only a watchapp that names Agent Basics MCP as its Android companion is
-heard from. An empty result for any other watchapp means nothing.
+## PebbleKit 1 (`pebblekit_*`)
 
-## What the reply proves
+### Compatibility
 
-The send tools return the watch's answer. ACK proves the firmware
-accepted delivery to the running app. It does not prove the handler
-acted: a key the app has never heard of is ACKed exactly like one it
-acts on, and there is no error for a wrong key. A payload that gets no
-reply is not resent by the tool, since it may have arrived with only the
-reply lost, and a resend does whatever the keys do a second time.
+The legacy API. It reaches any watchapp, and is the only way to send to
+one that does not name Agent Basics MCP as its companion. Nothing can be
+read back.
 
-## Keys are per-app knowledge
+### Sending to a watchapp
 
-Nothing in the transport describes or validates an app's keys. With no
-file in `pebble-apps/`, the keys come from the watchapp's own
-`package.json` (`messageKeys`) and its inbox handler in C, which also
-decides whether an empty ping is safe.
+One call does the whole job when the watchapp may not be running:
 
-## Watchapps that cannot be reached
+```
+pebblekit_launch_and_send
+{
+  "app": "<watchapp uuid>",
+  "ping": [],
+  "tuples": [{"key": <key>, "type": "int", "value": <value>}]
+}
+```
 
-- **System apps.** Stock watchapps cannot be sent to at all.
-- **Apps that name a different Android companion app.** Their sends go
-  through a path that checks the calling package, and Agent Basics MCP
-  is not it. They can still be launched and stopped.
-- **No watch connected.** This one is caught: every tool that acts on
-  the watch preflights the link and fails fast naming it.
+`ping` is sent about once a second until the watch replies, which shows
+the app is ready; the payload is then sent exactly once. Take the ping
+from the app's file. It is usually `[]`, which is inert for any app
+whose handler only reacts to keys it knows.
 
-Apps with a JavaScript companion only (PKJS) are fine, over
-`pebblekit_*`.
+`pebblekit_send_message {"app", "tuples"}` sends to an app already
+running. A message to an app that is not running vanishes without an
+error.
+
+If no inert ping is known for an app, use `pebblekit2_launch_app`, then
+`pebblekit_send_message`, and accept it as best-effort.
