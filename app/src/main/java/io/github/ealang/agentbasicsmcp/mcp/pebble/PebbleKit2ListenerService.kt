@@ -60,7 +60,10 @@ class PebbleKit2ListenerService : Service() {
                 val dictionary = data.getBundle(PebbleKit2.KEY_DATA_DICTIONARY) ?: Bundle()
                 WatchInbox.put(uuid, WatchInbox.Kind.MESSAGE, PebbleKit2.toTuples(dictionary))
             }
-            ACTION_APP_OPENED -> WatchInbox.put(uuid, WatchInbox.Kind.OPENED)
+            ACTION_APP_OPENED -> {
+                WatchInbox.put(uuid, WatchInbox.Kind.OPENED)
+                PebbleKit2.reportOpened(uuid)
+            }
             ACTION_APP_CLOSED -> WatchInbox.put(uuid, WatchInbox.Kind.CLOSED)
             // Datalogging and anything newer: not something this app takes.
             else -> Log.i(TAG, "Ignored $action for $uuid")

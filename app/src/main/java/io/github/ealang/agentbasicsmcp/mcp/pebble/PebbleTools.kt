@@ -36,6 +36,9 @@ object PebbleTools {
      */
     private const val MAX_WAIT_S = 600L
 
+    /** A send's whole allowance when the caller names none. */
+    private const val DEFAULT_SEND_TIMEOUT_S = 60L
+
     private const val MAX_AGE_CEILING_S = 10L * 365 * 24 * 3600
 
     private const val COMPANION_ONLY =
@@ -71,8 +74,28 @@ object PebbleTools {
             "properties",
             JSONObject()
                 .put("app", appProperty)
-                .put("tuples", payloadProperty),
-        ).put("required", JSONArray().put("app").put("tuples"))
+                .put("tuples", payloadProperty)
+                .put(
+                    "messages",
+                    JSONObject().put("type", "array").put("items", payloadProperty).put(
+                        "description",
+                        "Several AppMessages instead of tuples: an array of tuple arrays, " +
+                            "sent in order, each after the watch acknowledged the one " +
+                            "before. All are checked before any is sent. The first that " +
+                            "is not acknowledged ends the call and the rest are not sent.",
+                    ),
+                )
+                .put(
+                    "timeout_seconds",
+                    JSONObject().put("type", "integer").put(
+                        "description",
+                        "The longest the sending may take as a whole, counted from the " +
+                            "first send. A message whose turn comes after that is not " +
+                            "sent. Default $DEFAULT_SEND_TIMEOUT_S. Anything over " +
+                            "$MAX_WAIT_S is treated as $MAX_WAIT_S.",
+                    ),
+                ),
+        ).put("required", JSONArray().put("app"))
 
         val launchApp = ToolSpec(
             name = "pebblekit2_launch_app",
@@ -149,24 +172,12 @@ object PebbleTools {
                         "back. An ACK proves delivery to the running app, not that the keys " +
                         "meant anything. The watchapp must be open on the watch, and the " +
                         "failure says so when it is not — use pebblekit2_launch_and_send " +
-                        "when it may not be. $COMPANION_ONLY",
+                        "when it may not be. Give tuples for one message or messages for " +
+                        "several. $COMPANION_ONLY",
                 )
                 .put("inputSchema", messageArguments),
         ) { args ->
-            blocked(Preflight.watch(context)) ?: withMessage(args) { uuid, tuples ->
-                when (val result = PebbleKit2.send(context, uuid, tuples)) {
-                    PebbleKit2.Send.Acknowledged ->
-                        "The watch acknowledged delivery. That proves the message " +
-                            "reached the running watchapp — not that the keys meant " +
-                            "anything to it." to false
-                    PebbleKit2.Send.NotOpen ->
-                        "FAILED: the app is not open on the watch, or it does not name " +
-                            "this app as its Android companion. The message was not " +
-                            "delivered. pebblekit2_launch_and_send opens it first; " +
-                            "pebblekit2_watch_state shows what is open." to true
-                    is PebbleKit2.Send.Failed -> "FAILED: ${result.why}" to true
-                }
-            }
+            blocked(Preflight.watch(context)) ?: deliver(context, args, launch = false)
         }
 
         val launchAndSend2 = ToolSpec(
@@ -176,27 +187,18 @@ object PebbleTools {
                 .put("name", "pebblekit2_launch_and_send")
                 .put(
                     "description",
-                    "Open a Pebble watchapp, then deliver one AppMessage: launches the app " +
-                        "and waits (up to 10s) for the watch to report it running, then " +
-                        "sends the tuples and reports the watch's answer. The message is " +
-                        "delivered at most once. Use this when the watchapp may not be " +
-                        "open; pebblekit2_send_message alone is enough when it is. " +
+                    "Deliver an AppMessage to a Pebble watchapp, opening it first unless " +
+                        "the watch already has it running. A launch waits (up to 10s) for " +
+                        "the watch to report the app running. The message is then sent " +
+                        "once, never retried, and the watch's answer is reported. Give " +
+                        "tuples for one message or messages for several. Use this " +
+                        "when the watchapp may not be open; pebblekit2_send_message alone " +
+                        "is enough when it is. " +
                         COMPANION_ONLY,
                 )
                 .put("inputSchema", messageArguments),
         ) { args ->
-            blocked(Preflight.watch(context)) ?: withMessage(args) { uuid, tuples ->
-                when (val result = PebbleKit2.launchAndSend(context, uuid, tuples)) {
-                    PebbleKit2.LaunchAndSend.Acknowledged ->
-                        "The watchapp came up and the watch acknowledged the message. " +
-                            "That proves delivery to the running app — not that the " +
-                            "keys meant anything to it." to false
-                    is PebbleKit2.LaunchAndSend.NotLaunched ->
-                        "FAILED: ${result.why} The message was not sent." to true
-                    is PebbleKit2.LaunchAndSend.NotSent ->
-                        "FAILED: the watchapp came up, but ${result.why}" to true
-                }
-            }
+            blocked(Preflight.watch(context)) ?: deliver(context, args, launch = true)
         }
 
         val receiveMessages = ToolSpec(
@@ -381,18 +383,86 @@ object PebbleTools {
         return Watch.resolve(app)?.let(then) ?: notAUuid(app)
     }
 
-    /** The app and tuples of a PebbleKit 2 send, checked before anything is sent. */
-    private inline fun withMessage(
-        args: JSONObject,
-        then: (String, JSONArray) -> Pair<String, Boolean>,
-    ): Pair<String, Boolean> = withUuid(args) { uuid ->
-        val tuples = args.optJSONArray("tuples")
-            ?: return "FAILED: give tuples, an array of {key, type, value}." to true
-        when (val wire = Watch.toWire(tuples)) {
-            is Watch.Wire.Ready -> then(uuid, wire.tuples)
-            is Watch.Wire.Unsendable -> malformed(wire.why)
+    /**
+     * A PebbleKit 2 send: one message given as tuples or several given as
+     * messages, all checked before anything is sent, then delivered in order.
+     */
+    private fun deliver(context: Context, args: JSONObject, launch: Boolean): Pair<String, Boolean> =
+        withUuid(args) { uuid ->
+            val single = args.optJSONArray("tuples")
+            val several = args.optJSONArray("messages")
+            if ((single == null) == (several == null)) {
+                return "FAILED: give either tuples, an array of {key, type, value}, or " +
+                    "messages, an array of those arrays. Nothing was sent." to true
+            }
+            val timeout = if (args.has("timeout_seconds")) args.optLong("timeout_seconds", -1) else DEFAULT_SEND_TIMEOUT_S
+            if (timeout <= 0) {
+                return "FAILED: timeout_seconds must be a whole number above 0. Nothing was sent." to true
+            }
+            val given = single?.let { listOf(it) } ?: (0 until several!!.length()).map {
+                several.optJSONArray(it)
+                    ?: return "FAILED: message ${it + 1} is not an array of tuples. Nothing was sent." to true
+            }
+            if (given.isEmpty()) return "FAILED: messages is empty. Nothing was sent." to true
+            val messages = given.mapIndexed { i, tuples ->
+                when (val wire = Watch.toWire(tuples)) {
+                    is Watch.Wire.Ready -> wire.tuples
+                    is Watch.Wire.Unsendable ->
+                        return if (single != null) {
+                            malformed(wire.why)
+                        } else {
+                            "FAILED: nothing was sent — message ${i + 1}: ${wire.why}. " +
+                                "Every tuple needs key, type and value." to true
+                        }
+                }
+            }
+            val result = PebbleKit2.deliver(
+                context, uuid, messages, launch,
+                timeout.coerceAtMost(MAX_WAIT_S) * 1000, ClientConnection::alive,
+            )
+            val count = messages.size
+            when (result) {
+                PebbleKit2.Delivery.Acknowledged -> when {
+                    single == null ->
+                        "The watch acknowledged all $count messages, in order. That proves " +
+                            "delivery to the running app — not that the keys meant " +
+                            "anything to it." to false
+                    launch ->
+                        "The watchapp is open and the watch acknowledged the message. " +
+                            "That proves delivery to the running app — not that the " +
+                            "keys meant anything to it." to false
+                    else ->
+                        "The watch acknowledged delivery. That proves the message " +
+                            "reached the running watchapp — not that the keys meant " +
+                            "anything to it." to false
+                }
+                is PebbleKit2.Delivery.NotLaunched ->
+                    "FAILED: ${result.why} ${if (single != null) "The message was not sent." else "Nothing was sent."}" to true
+                is PebbleKit2.Delivery.Stopped -> {
+                    val why = when (val cause = result.cause) {
+                        is PebbleKit2.Send.Failed -> cause.why
+                        else -> if (launch) {
+                            "it is not open to messages from this app. The usual reason is " +
+                                "that the watchapp does not name this app as its Android " +
+                                "companion. The message was not delivered."
+                        } else {
+                            "the app is not open on the watch, or it does not name " +
+                                "this app as its Android companion. The message was not " +
+                                "delivered. pebblekit2_launch_and_send opens it first; " +
+                                "pebblekit2_watch_state shows what is open."
+                        }
+                    }
+                    when {
+                        single == null ->
+                            "FAILED: the watch acknowledged ${result.acknowledged} of $count " +
+                                "messages. Message ${result.acknowledged + 1} failed: $why " +
+                                "Nothing after it was sent." to true
+                        launch -> "FAILED: the watchapp is running, but $why" to true
+                        else -> "FAILED: $why" to true
+                    }
+                }
+            }
         }
-    }
 
     private fun notAUuid(given: String): Pair<String, Boolean> =
         "FAILED: \"$given\" is not a UUID. Nothing was sent." to true

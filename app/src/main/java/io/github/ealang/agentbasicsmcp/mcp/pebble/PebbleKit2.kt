@@ -15,13 +15,14 @@ import io.rebble.pebblekit2.common.SendDataCallback
 import io.rebble.pebblekit2.common.UniversalRequestResponse
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
 /**
  * The requests this app makes of PebbleKit 2, CoreApp's newer companion
- * API: start a watchapp, stop one, send one an AppMessage, and read which
+ * API: start a watchapp, stop one, send one AppMessages, and read which
  * watches are connected and what each is running.
  *
  * PebbleKit 2 is a bound service that answers each request, where the
@@ -70,11 +71,22 @@ object PebbleKit2 {
         Uri.parse("content://${Watch.COREAPP_PACKAGE}.pebblekit/activeApp")
 
     /**
-     * How long [launchAndSend] keeps offering the message to an app the watch
-     * has reported running but CoreApp has not yet opened a session for.
+     * How long [launchAndSend] waits, after the watch has reported the app
+     * running, for CoreApp to report it opened.
      */
     private const val SESSION_TIMEOUT_MS = 10_000L
-    private const val SESSION_RETRY_MS = 300L
+
+    /** The [launchAndSend] calls waiting, right now, for CoreApp to report an app opened. */
+    private val openWaiters = CopyOnWriteArrayList<OpenWaiter>()
+
+    private class OpenWaiter(val uuid: String) {
+        val opened = CountDownLatch(1)
+    }
+
+    /** CoreApp reported [uuid] opened. Releases the calls waiting on it, and is otherwise forgotten. */
+    internal fun reportOpened(uuid: String) {
+        openWaiters.forEach { if (it.uuid == uuid) it.opened.countDown() }
+    }
 
     /** Binding is local and quick; this only guards against a hung CoreApp. */
     private const val BIND_TIMEOUT_MS = 5_000L
@@ -99,8 +111,8 @@ object PebbleKit2 {
          * Not delivered because CoreApp has no session for the watchapp:
          * closed, not installed, another app in front — or open, and not one
          * that names this app as its companion, which CoreApp answers the
-         * same way. Kept apart from [Failed] because it is the one failure
-         * worth retrying straight after a launch.
+         * same way. Kept apart from [Failed] because the caller is told
+         * what to look at.
          */
         data object NotOpen : Send
     }
@@ -117,8 +129,10 @@ object PebbleKit2 {
      * says why not — most often that the watch never reported it, which is what
      * an app the watch does not have looks like.
      */
-    fun start(context: Context, uuid: String): Launch {
-        val reply = request(context, action(ACTION_START_APP, uuid))
+    fun start(context: Context, uuid: String): Launch = linked(context) { start(it, uuid) }
+
+    private fun start(link: Link, uuid: String): Launch {
+        val reply = link.request(action(ACTION_START_APP, uuid))
             ?: return Launch.Failed("the Pebble app did not answer the launch request.")
         return when (val answer = interpret("START", uuid, reply)) {
             Answer.Success -> Launch.Running
@@ -133,10 +147,10 @@ object PebbleKit2 {
         }
     }
 
-    fun stop(context: Context, uuid: String): Stop {
-        val reply = request(context, action(ACTION_STOP_APP, uuid))
-            ?: return Stop.Failed("the Pebble app did not answer the stop request.")
-        return when (interpret("STOP", uuid, reply)) {
+    fun stop(context: Context, uuid: String): Stop = linked(context) { link ->
+        val reply = link.request(action(ACTION_STOP_APP, uuid))
+            ?: return@linked Stop.Failed("the Pebble app did not answer the stop request.")
+        when (interpret("STOP", uuid, reply)) {
             Answer.Success -> Stop.Accepted
             Answer.Malformed -> Stop.Failed("the Pebble app did not understand the stop request.")
             Answer.NoWatch -> Stop.Failed("no watch is connected.")
@@ -145,18 +159,25 @@ object PebbleKit2 {
     }
 
     /**
-     * One AppMessage to [uuid], sent once. [tuples] is the normalised form
+     * One AppMessage to [uuid], sent once, waiting no longer than
+     * [timeoutMs] for the answer. [tuples] is the normalised form
      * [Watch.toWire] produces, so it is known to fit the wire format.
      *
      * Unlike the classic send this always comes back with an answer, and a
      * send to an app that is not running is one of them rather than silence.
      */
-    fun send(context: Context, uuid: String, tuples: JSONArray): Send {
+    private fun send(link: Link, uuid: String, tuples: JSONArray, timeoutMs: Long): Send {
         val data = action(ACTION_SEND_DATA, uuid).apply {
             putBundle(KEY_DATA_DICTIONARY, toDictionary(tuples))
         }
-        val reply = request(context, data)
-            ?: return Send.Failed("the Pebble app did not answer the send request.")
+        val reply = link.request(data, timeoutMs)
+            ?: return Send.Failed(
+                if (timeoutMs < REQUEST_TIMEOUT_MS) {
+                    "the time allowed ran out before the watch answered. It may or may not have arrived."
+                } else {
+                    "the Pebble app did not answer the send request."
+                },
+            )
         return when (val answer = interpret("SEND", uuid, reply)) {
             Answer.Success -> Send.Acknowledged
             Answer.Malformed -> Send.Failed("the Pebble app did not understand the send request.")
@@ -167,7 +188,7 @@ object PebbleKit2 {
                     Send.Failed("NACK — the watch received the message and refused it.")
                 "FAILED_NO_PERMISSIONS" -> Send.Failed(
                     "the Pebble app refused the send. The watchapp must name this app's " +
-                        "package (${context.packageName}) as its Android companion, and the " +
+                        "package (${link.packageName}) as its Android companion, and the " +
                         "user must allow it in the Pebble app if asked.",
                 )
                 "FAILED_TIMEOUT" -> Send.Failed(
@@ -178,45 +199,80 @@ object PebbleKit2 {
         }
     }
 
-    sealed interface LaunchAndSend {
-        data object Acknowledged : LaunchAndSend
+    sealed interface Delivery {
+        /** The watch acknowledged every message, in order. */
+        data object Acknowledged : Delivery
         /** The watch never reported the app running; nothing was sent. */
-        data class NotLaunched(val why: String) : LaunchAndSend
-        /** The app came up and the send failed; [why] says how. */
-        data class NotSent(val why: String) : LaunchAndSend
+        data class NotLaunched(val why: String) : Delivery
+        /**
+         * The watch acknowledged the first [acknowledged] messages. The next
+         * one ended as [cause], never [Send.Acknowledged], and nothing after
+         * it was sent.
+         */
+        data class Stopped(val acknowledged: Int, val cause: Send) : Delivery
     }
 
     /**
-     * Start the watchapp, then deliver one message.
+     * Deliver [messages] to a watchapp in order, over one binding: each is
+     * sent once, after the watch acknowledged the one before, and the first
+     * that is not acknowledged ends the call. Nothing is ever offered twice.
      *
-     * The start returns when the watch reports the app running, and CoreApp
-     * opens its session for the app a beat after that. A send in the gap is
-     * answered "not open" — refused before anything goes to the watch, so
-     * offering it again cannot deliver it twice. That is what makes a retry
-     * safe here and why no ping is needed, where the classic route has only
-     * silence to go on.
+     * [timeoutMs] bounds the sending as a whole, counted from the first
+     * send; a message whose turn comes after it is not sent. [alive] is
+     * asked between messages, so a caller that hung up stops the stream.
+     *
+     * With [launch], the app is started first unless the watch already has
+     * it running. The start returns when the watch reports the app running,
+     * and CoreApp opens its session for the app a beat after that; a send in
+     * the gap is answered "not open". CoreApp tells a companion when the
+     * session is up (the APP_OPENED [PebbleKit2ListenerService] receives),
+     * so a call that had to start the app waits for that before sending.
+     * The wait belongs to the call: nothing is remembered about which apps
+     * are open. If the report does not come, as for a watchapp that does not
+     * name this app, sending goes ahead and CoreApp's answer is the result.
      */
-    fun launchAndSend(context: Context, uuid: String, tuples: JSONArray): LaunchAndSend {
-        when (val launched = start(context, uuid)) {
-            Launch.Running -> Unit
-            is Launch.Failed -> return LaunchAndSend.NotLaunched(launched.why)
-        }
-        val deadline = SystemClock.elapsedRealtime() + SESSION_TIMEOUT_MS
-        while (true) {
-            when (val sent = send(context, uuid, tuples)) {
-                Send.Acknowledged -> return LaunchAndSend.Acknowledged
-                is Send.Failed -> return LaunchAndSend.NotSent(sent.why)
-                Send.NotOpen -> {
-                    if (SystemClock.elapsedRealtime() >= deadline) {
-                        return LaunchAndSend.NotSent(
-                            "it was not open to messages from this app within 10s. The " +
-                                "usual reason is that the watchapp does not name this app as " +
-                                "its Android companion. The message was not delivered.",
-                        )
-                    }
-                    Thread.sleep(SESSION_RETRY_MS)
+    fun deliver(
+        context: Context,
+        uuid: String,
+        messages: List<JSONArray>,
+        launch: Boolean,
+        timeoutMs: Long,
+        alive: () -> Boolean,
+    ): Delivery = linked(context) { link ->
+        if (launch && !running(context, uuid)) {
+            val waiter = OpenWaiter(uuid)
+            openWaiters += waiter
+            try {
+                when (val launched = start(link, uuid)) {
+                    Launch.Running -> Unit
+                    is Launch.Failed -> return@linked Delivery.NotLaunched(launched.why)
                 }
+                if (!waiter.opened.await(SESSION_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+                    Log.w(TAG, "No APP_OPENED for $uuid within $SESSION_TIMEOUT_MS ms; sending anyway")
+                }
+            } finally {
+                openWaiters -= waiter
             }
+        }
+        val deadline = SystemClock.elapsedRealtime() + timeoutMs
+        messages.forEachIndexed { i, tuples ->
+            val left = deadline - SystemClock.elapsedRealtime()
+            val cause = when {
+                left <= 0 -> Send.Failed("the time allowed ran out before it was sent.")
+                i > 0 && !alive() -> Send.Failed("the caller hung up before it was sent.")
+                else -> send(link, uuid, tuples, left.coerceAtMost(REQUEST_TIMEOUT_MS))
+            }
+            if (cause != Send.Acknowledged) return@linked Delivery.Stopped(i, cause)
+        }
+        Delivery.Acknowledged
+    }
+
+    /** Whether any connected watch reports [uuid] as its running app. */
+    private fun running(context: Context, uuid: String): Boolean {
+        val watches = state(context)?.optJSONArray("watches") ?: return false
+        return (0 until watches.length()).any {
+            watches.getJSONObject(it).optJSONObject("running")
+                ?.optString("app")?.lowercase() == uuid
         }
     }
 
@@ -350,41 +406,66 @@ object PebbleKit2 {
     }
 
     /**
-     * One request over one binding: bind, ask, wait for the callback, unbind.
-     * Null when CoreApp never answered — no service to bind, the bind did not
-     * complete, or the request went unanswered.
+     * One binding to CoreApp's PebbleKit 2 service, held for the length of
+     * one call and used for every request the call makes.
      *
      * Blocks the calling thread, which must not be the main thread: the
      * binding callbacks arrive there.
      */
-    private fun request(context: Context, data: Bundle): Bundle? {
-        val connection = Connection()
-        val intent = Intent(SERVICE_ACTION).setPackage(Watch.COREAPP_PACKAGE)
-        try {
+    private class Link(private val context: Context) {
+        private val connection = Connection()
+        private var service: UniversalRequestResponse? = null
+
+        val packageName: String get() = context.packageName
+
+        fun open() {
+            val intent = Intent(SERVICE_ACTION).setPackage(Watch.COREAPP_PACKAGE)
             if (!context.bindService(intent, connection, Context.BIND_AUTO_CREATE)) {
                 Log.w(TAG, "CoreApp has no PebbleKit 2 service to bind")
-                return null
+                return
             }
-            val service = connection.await(BIND_TIMEOUT_MS)
+            service = connection.await(BIND_TIMEOUT_MS)
             if (service == null) {
                 Log.w(TAG, "CoreApp's PebbleKit 2 service did not bind within $BIND_TIMEOUT_MS ms")
-                return null
             }
-            val reply = Reply()
-            service.request(data, reply)
-            return reply.await(REQUEST_TIMEOUT_MS).also {
-                if (it == null) Log.w(TAG, "No PebbleKit 2 answer within $REQUEST_TIMEOUT_MS ms")
+        }
+
+        /**
+         * Asks and waits for the callback. Null when CoreApp never answered:
+         * nothing bound, the binding died, or no answer within [timeoutMs].
+         */
+        fun request(data: Bundle, timeoutMs: Long = REQUEST_TIMEOUT_MS): Bundle? {
+            val bound = service ?: return null
+            return try {
+                val reply = Reply()
+                bound.request(data, reply)
+                reply.await(timeoutMs).also {
+                    if (it == null) Log.w(TAG, "No PebbleKit 2 answer within $timeoutMs ms")
+                }
+            } catch (e: RemoteException) {
+                Log.w(TAG, "PebbleKit 2 request failed", e)
+                null
             }
-        } catch (e: RemoteException) {
-            Log.w(TAG, "PebbleKit 2 request failed", e)
-            return null
-        } finally {
+        }
+
+        fun close() {
             // Documented as required even when bindService returned false.
             try {
                 context.unbindService(connection)
             } catch (e: IllegalArgumentException) {
                 Log.w(TAG, "PebbleKit 2 connection was already gone", e)
             }
+        }
+    }
+
+    /** Runs [block] with one binding, opened before it and released after. */
+    private inline fun <T> linked(context: Context, block: (Link) -> T): T {
+        val link = Link(context)
+        try {
+            link.open()
+            return block(link)
+        } finally {
+            link.close()
         }
     }
 
