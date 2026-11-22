@@ -75,8 +75,8 @@ pebblekit2_launch_and_send
 - This is much faster than one call per message.
 - Messages are sent in order, each after the watch acknowledged the one
   before.
-- `timeout_seconds`, default 60, is the time allowed
-  for the whole array.
+- `timeout_seconds`, default 15, is the time allowed for the whole
+  array.
 - A failure is returned as an error that says how far the sending got,
   for example: "FAILED: the watch acknowledged 11 of 30 messages.
   Message 12 failed: the time allowed ran out before it was sent.
