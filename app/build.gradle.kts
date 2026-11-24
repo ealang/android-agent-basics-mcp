@@ -2,7 +2,6 @@ import java.util.Properties
 
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
@@ -82,6 +81,8 @@ android {
 
     buildFeatures {
         compose = true
+        // The per-build-type labels above are resValue entries.
+        resValues = true
         // Two interfaces under src/main/aidl: the PebbleKit 2 binder contract
         // CoreApp's service speaks. See PebbleKit2.kt.
         aidl = true

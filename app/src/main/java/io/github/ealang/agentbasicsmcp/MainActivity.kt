@@ -331,6 +331,10 @@ class MainActivity : ComponentActivity(), PageActions {
 
     fun toast(text: String) = Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
 
+    /** The system permission dialog; the page redraws on whatever it answers. */
+    private val permissionDialog =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { bump() }
+
     /**
      * The one routing rule behind every permission button whose grant has
      * a system dialog (the same mechanism for all of them):
@@ -345,14 +349,13 @@ class MainActivity : ComponentActivity(), PageActions {
     private fun requestPermissionOrSettings(
         askedKey: String,
         permissions: Array<String>,
-        requestCode: Int,
         settings: Intent,
     ) {
         val dialogCanShow = !config.permissionAsked(askedKey) ||
             permissions.any { shouldShowRequestPermissionRationale(it) }
         if (dialogCanShow) {
             config.setPermissionAsked(askedKey)
-            requestPermissions(permissions, requestCode)
+            permissionDialog.launch(permissions)
         } else {
             startActivity(settings)
         }
@@ -376,7 +379,7 @@ class MainActivity : ComponentActivity(), PageActions {
             } else {
                 Locator.PERMISSIONS
             }
-            requestPermissionOrSettings("location", wanted, 2, appDetailsSettings())
+            requestPermissionOrSettings("location", wanted, appDetailsSettings())
         }
     }
 
@@ -398,7 +401,7 @@ class MainActivity : ComponentActivity(), PageActions {
     fun requestBackgroundLocation() {
         if (!Locator.hasPermission(this)) {
             toast("Grant location first, then allow it all the time.")
-            requestPermissions(Locator.PERMISSIONS, 2)
+            permissionDialog.launch(Locator.PERMISSIONS)
             return
         }
         if (Locator.hasBackgroundPermission(this)) {
@@ -409,7 +412,6 @@ class MainActivity : ComponentActivity(), PageActions {
             requestPermissionOrSettings(
                 "background_location",
                 arrayOf(Locator.BACKGROUND_PERMISSION),
-                2,
                 appDetailsSettings(),
             )
             return
@@ -467,19 +469,9 @@ class MainActivity : ComponentActivity(), PageActions {
             requestPermissionOrSettings(
                 "notifications",
                 arrayOf(Manifest.permission.POST_NOTIFICATIONS),
-                1,
                 notifSettings,
             )
         }
-    }
-
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<String>,
-        grantResults: IntArray,
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        bump()
     }
 
     private companion object {
