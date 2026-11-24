@@ -16,7 +16,9 @@ val localProps = Properties().apply {
 
 android {
     namespace = "io.github.ealang.agentbasicsmcp"
-    compileSdk = 35
+    compileSdk {
+        version = release(37) { minorApiLevel = 2 }
+    }
 
     defaultConfig {
         applicationId = "io.github.ealang.agentbasicsmcp"
@@ -103,15 +105,17 @@ dependencies {
     implementation("io.ktor:ktor-server-cio:3.6.1")
     // MediaBrowserCompat, for the experimental media_search only: search is
     // part of the androidx media protocol, not the framework MediaBrowser.
-    implementation("androidx.media:media:1.7.0")
+    implementation("androidx.media:media:1.7.1")
 
     // The UI. Compose draws every widget itself — none of this is in the OS —
     // so the whole toolkit rides in the APK. The BOM pins the androidx.compose
     // artifacts to versions tested together; only it carries a version.
-    implementation(platform("androidx.compose:compose-bom:2024.09.03"))
+    implementation(platform("androidx.compose:compose-bom:2026.11.01"))
     implementation("androidx.compose.material3:material3")
-    implementation("androidx.activity:activity-compose:1.9.2")
+    // The three icons the page draws. Material 3 stopped bringing these along.
+    implementation("androidx.compose.material:material-icons-core")
+    implementation("androidx.activity:activity-compose:1.13.0")
     // ContextCompat.registerReceiver: the exported flag on every Android,
     // not only the ones whose framework method takes it.
-    implementation("androidx.core:core-ktx:1.13.1")
+    implementation("androidx.core:core-ktx:1.19.1")
 }
