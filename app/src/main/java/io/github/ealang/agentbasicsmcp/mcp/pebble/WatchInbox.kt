@@ -76,16 +76,17 @@ object WatchInbox {
      * Events older than [maxAgeMs] are discarded here and not counted as
      * dropped: the caller asked not to see them.
      *
-     * Taking an event is the only copy of it leaving, so a caller that has
-     * been kept waiting is checked with [stillThere] first — when an event
-     * wakes it, and every [CHECK_MS] besides — and one that has gone gets
-     * nothing: the events stay for whoever asks next, and the thread it
-     * was holding is let go. A caller answered without waiting is not
-     * checked; it asked a moment ago.
+     * One reader at a time, across all watchapps, and the latest has it: a
+     * call arriving wakes whichever is waiting, and that one returns null
+     * at once, taking nothing. Taking an event is the only copy of it
+     * leaving, so this is what keeps a reader nobody is listening to any
+     * more from taking events meant for the one that replaced it.
      */
-    fun take(uuid: String, maxAgeMs: Long, waitMs: Long, stillThere: () -> Boolean): JSONObject {
+    fun take(uuid: String, maxAgeMs: Long, waitMs: Long): JSONObject? {
         val key = uuid.lowercase()
         lock.withLock {
+            val mine = ++reader
+            arrived.signalAll()
             var remaining = TimeUnit.MILLISECONDS.toNanos(waitMs)
             while (true) {
                 val queue = queues[key]
@@ -101,15 +102,14 @@ object WatchInbox {
                 } else if (remaining <= 0) {
                     return render(emptyList(), 0)
                 }
-                val slice = minOf(remaining, TimeUnit.MILLISECONDS.toNanos(CHECK_MS))
-                remaining -= slice - arrived.awaitNanos(slice)
-                if (!stillThere()) return render(emptyList(), 0)
+                remaining = arrived.awaitNanos(remaining)
+                if (reader != mine) return null
             }
         }
     }
 
-    /** How often a waiting caller is checked for having gone. */
-    private const val CHECK_MS = 30_000L
+    /** Counts calls to [take]; the latest is the reader. Under [lock]. */
+    private var reader = 0L
 
     private fun render(events: Collection<Event>, dropped: Int): JSONObject {
         val out = JSONArray()

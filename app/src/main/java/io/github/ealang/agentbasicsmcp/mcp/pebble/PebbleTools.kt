@@ -1,7 +1,6 @@
 package io.github.ealang.agentbasicsmcp.mcp.pebble
 
 import android.content.Context
-import io.github.ealang.agentbasicsmcp.mcp.ClientConnection
 import io.github.ealang.agentbasicsmcp.mcp.Preflight
 import io.github.ealang.agentbasicsmcp.mcp.ToolSpec
 import io.github.ealang.agentbasicsmcp.mcp.blocked
@@ -82,7 +81,9 @@ object PebbleTools {
                         "Several AppMessages instead of tuples: an array of tuple arrays, " +
                             "sent in order, each after the watch acknowledged the one " +
                             "before. All are checked before any is sent. The first that " +
-                            "is not acknowledged ends the call and the rest are not sent.",
+                            "is not acknowledged ends the call and the rest are not sent. " +
+                            "One send runs at a time: a newer one stops this one at " +
+                            "its next message.",
                     ),
                 )
                 .put(
@@ -215,7 +216,9 @@ object PebbleTools {
                         "so each event is returned once. Events are held in memory only, at " +
                         "most ${WatchInbox.CAPACITY} per watchapp; dropped counts those lost to that " +
                         "limit since the last read. Nothing queued is an empty list, not " +
-                        "an error. The watch was already told each message arrived, " +
+                        "an error. One call reads at a time: a newer one ends a call " +
+                        "that is waiting, with an error. " +
+                        "The watch was already told each message arrived, " +
                         "whether or not anything reads it. " +
                         "Only a watchapp that names this app as its Android companion " +
                         "is heard from.",
@@ -258,8 +261,8 @@ object PebbleTools {
                         // Far past any uptime, and safely short of overflow.
                         maxAge.coerceAtMost(MAX_AGE_CEILING_S) * 1000,
                         wait.coerceAtMost(MAX_WAIT_S) * 1000,
-                        ClientConnection::alive,
-                    ).toString() to false
+                    )?.let { it.toString() to false }
+                        ?: ("FAILED: a newer pebblekit2_receive_messages call took over." to true)
                 }
             }
         }
@@ -417,7 +420,7 @@ object PebbleTools {
             }
             val result = PebbleKit2.deliver(
                 context, uuid, messages, launch,
-                timeout.coerceAtMost(MAX_WAIT_S) * 1000, ClientConnection::alive,
+                timeout.coerceAtMost(MAX_WAIT_S) * 1000,
             )
             val count = messages.size
             when (result) {

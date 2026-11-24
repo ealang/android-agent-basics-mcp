@@ -18,7 +18,10 @@ import org.json.JSONObject
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 
 /**
  * The requests this app makes of PebbleKit 2, CoreApp's newer companion
@@ -218,8 +221,11 @@ object PebbleKit2 {
      * that is not acknowledged ends the call. Nothing is ever offered twice.
      *
      * [timeoutMs] bounds the sending as a whole, counted from the first
-     * send; a message whose turn comes after it is not sent. [alive] is
-     * asked between messages, so a caller that hung up stops the stream.
+     * send; a message whose turn comes after it is not sent.
+     *
+     * One sender at a time, across all watchapps, and the latest has it: a
+     * call arriving stops the one before it at its next message. A message
+     * already with the watch is waited for first, so the two never overlap.
      *
      * With [launch], the app is started first unless the watch already has
      * it running. The start returns when the watch reports the app running,
@@ -237,8 +243,8 @@ object PebbleKit2 {
         messages: List<JSONArray>,
         launch: Boolean,
         timeoutMs: Long,
-        alive: () -> Boolean,
     ): Delivery = linked(context) { link ->
+        val mine = senders.incrementAndGet()
         if (launch && !running(context, uuid)) {
             val waiter = OpenWaiter(uuid)
             openWaiters += waiter
@@ -256,16 +262,24 @@ object PebbleKit2 {
         }
         val deadline = SystemClock.elapsedRealtime() + timeoutMs
         messages.forEachIndexed { i, tuples ->
-            val left = deadline - SystemClock.elapsedRealtime()
-            val cause = when {
-                left <= 0 -> Send.Failed("the time allowed ran out before it was sent.")
-                i > 0 && !alive() -> Send.Failed("the caller hung up before it was sent.")
-                else -> send(link, uuid, tuples, left.coerceAtMost(REQUEST_TIMEOUT_MS))
+            val cause = sending.withLock {
+                val left = deadline - SystemClock.elapsedRealtime()
+                when {
+                    left <= 0 -> Send.Failed("the time allowed ran out before it was sent.")
+                    senders.get() != mine -> Send.Failed("a newer send took over.")
+                    else -> send(link, uuid, tuples, left.coerceAtMost(REQUEST_TIMEOUT_MS))
+                }
             }
             if (cause != Send.Acknowledged) return@linked Delivery.Stopped(i, cause)
         }
         Delivery.Acknowledged
     }
+
+    /** Counts calls to [deliver]; the latest is the sender. */
+    private val senders = AtomicLong()
+
+    /** Held for one message at a time, from the send to the watch's answer. */
+    private val sending = ReentrantLock()
 
     /** Whether any connected watch reports [uuid] as its running app. */
     private fun running(context: Context, uuid: String): Boolean {

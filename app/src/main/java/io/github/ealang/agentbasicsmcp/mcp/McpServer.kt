@@ -18,8 +18,9 @@ import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.decodeURLPart
 import io.ktor.server.application.ApplicationCall
-import io.ktor.server.application.ApplicationCallPipeline
-import io.ktor.server.application.call
+import io.ktor.server.application.createApplicationPlugin
+import io.ktor.server.application.hooks.ResponseSent
+import io.ktor.server.application.install
 import io.ktor.server.application.serverConfig
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.connector
@@ -32,6 +33,11 @@ import io.ktor.server.request.receiveStream
 import io.ktor.server.response.header
 import io.ktor.server.response.respondOutputStream
 import io.ktor.server.response.respondText
+import io.ktor.server.routing.IgnoreTrailingSlash
+import io.ktor.server.routing.post
+import io.ktor.server.routing.route
+import io.ktor.server.routing.routing
+import io.ktor.util.AttributeKey
 import java.io.InputStream
 import java.net.InetSocketAddress
 import java.net.ServerSocket
@@ -84,6 +90,43 @@ class McpServer(
     @Volatile
     private var started = false
 
+    /**
+     * What happens to every request whatever its path: it is counted, held
+     * to the token, told its connection will close, and logged once
+     * answered.
+     */
+    private val everyRequest = createApplicationPlugin("EveryRequest") {
+        onCall { call ->
+            log.bump("requests")
+            call.attributes.put(EXCHANGE, Exchange())
+            // One request per connection. A connection left open is closed
+            // by the server after a spell of silence, and a client that
+            // pools connections (an HTTP proxy, a keep-alive agent) can
+            // reuse one at the moment it is being closed and get an empty
+            // reply.
+            call.response.header(HttpHeaders.Connection, "close")
+            // Auth before routing: an unauthenticated caller learns nothing,
+            // not even which paths exist.
+            if (!authorized(call)) {
+                log.bump("rejected")
+                log.warn(
+                    "rejected an unauthorized request",
+                    "from ${call.request.local.remoteAddress}",
+                )
+                json(call, HttpStatusCode.Unauthorized, JSONObject().put("error", "Unauthorized"))
+            }
+        }
+        // Every request, at debug: the wire-level record underneath whatever
+        // higher-level line the handler wrote about the same exchange.
+        on(ResponseSent) { call ->
+            val what = call.attributes.getOrNull(EXCHANGE)?.detail?.let { " $it" } ?: ""
+            log.debug(
+                "${call.request.httpMethod.value} ${call.request.path()}$what → ${call.response.status()}",
+                "from ${call.request.local.remoteAddress}",
+            )
+        }
+    }
+
     private val engine = embeddedServer(
         CIO,
         rootConfig = serverConfig {
@@ -102,7 +145,35 @@ class McpServer(
                     onDied()
                 }
             }
-            module { intercept(ApplicationCallPipeline.Call) { serve(call) } }
+            module {
+                install(everyRequest)
+                install(IgnoreTrailingSlash)
+                routing {
+                    route(MCP_PATH) {
+                        post { mcp(call) }
+                        // The server-to-client notification stream is
+                        // optional; we have nothing to push, so GET is
+                        // refused by design.
+                        handle {
+                            json(
+                                call,
+                                HttpStatusCode.MethodNotAllowed,
+                                JSONObject().put("error", "streaming not supported"),
+                            )
+                        }
+                    }
+                    route("$FILES_PATH/{...}") { handle { files(call) } }
+                    route("{...}") {
+                        handle {
+                            json(
+                                call,
+                                HttpStatusCode.NotFound,
+                                JSONObject().put("error", "Not found: ${decodedPath(call)}"),
+                            )
+                        }
+                    }
+                }
+            }
         },
         configure = {
             connector {
@@ -172,6 +243,8 @@ class McpServer(
         const val MCP_PATH = "/mcp"
         const val FILES_PATH = "/files"
 
+        private val EXCHANGE = AttributeKey<Exchange>("Exchange")
+
         /** Argument names that identify a call's subject, most specific first. */
         private val SUBJECT_KEYS =
             listOf("action", "uri", "app", "package", "destination", "query")
@@ -185,57 +258,12 @@ class McpServer(
         var detail: String? = null
     }
 
-    private suspend fun serve(call: ApplicationCall) {
-        log.bump("requests")
-        val exchange = Exchange()
-        // One request per connection. A connection left open is closed by the
-        // server after a spell of silence, and a client that pools
-        // connections (an HTTP proxy, a keep-alive agent) can reuse one at
-        // the moment it is being closed and get an empty reply.
-        call.response.header(HttpHeaders.Connection, "close")
-        val status = handle(call, exchange)
-        val what = exchange.detail?.let { " $it" } ?: ""
-        // Every request, at debug: the wire-level record underneath whatever
-        // higher-level line the handler wrote about the same exchange.
-        log.debug(
-            "${call.request.httpMethod.value} ${call.request.path()}$what → $status",
-            "from ${call.request.local.remoteAddress}",
-        )
-    }
+    /** The request path, percent-decoding undone, without a trailing slash. */
+    private fun decodedPath(call: ApplicationCall): String =
+        call.request.path().decodeURLPart().trimEnd('/').ifEmpty { "/" }
 
-    /** Answers the call and returns the status it was answered with. */
-    private suspend fun handle(call: ApplicationCall, exchange: Exchange): HttpStatusCode {
-        val uri = call.request.path().decodeURLPart().trimEnd('/').ifEmpty { "/" }
-
-        // Auth before routing: an unauthenticated caller learns nothing, not
-        // even which paths exist.
-        if (!authorized(call)) {
-            log.bump("rejected")
-            log.warn(
-                "rejected an unauthorized request",
-                "from ${call.request.local.remoteAddress}",
-            )
-            return json(call, HttpStatusCode.Unauthorized, JSONObject().put("error", "Unauthorized"))
-        }
-
-        if (uri == FILES_PATH || uri.startsWith("$FILES_PATH/")) {
-            return filesRoute(call, exchange, uri.removePrefix(FILES_PATH))
-        }
-
-        if (uri != MCP_PATH) {
-            return json(call, HttpStatusCode.NotFound, JSONObject().put("error", "Not found: $uri"))
-        }
-
-        if (call.request.httpMethod != HttpMethod.Post) {
-            // The server-to-client notification stream is optional; we have
-            // nothing to push, so GET is refused by design.
-            return json(
-                call,
-                HttpStatusCode.MethodNotAllowed,
-                JSONObject().put("error", "streaming not supported"),
-            )
-        }
-
+    /** One JSON-RPC message in, one answer out. */
+    private suspend fun mcp(call: ApplicationCall) {
         val request = try {
             // JSON is UTF-8 by definition (RFC 8259), so the body is decoded
             // as such whatever charset the Content-Type header names or omits.
@@ -243,16 +271,17 @@ class McpServer(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            return json(call, HttpStatusCode.BadRequest, rpcError(null, -32700, "Parse error"))
+            json(call, HttpStatusCode.BadRequest, rpcError(null, -32700, "Parse error"))
+            return
         }
 
         // Tools block, some for minutes; not on the server's own threads.
-        val response = withContext(Dispatchers.IO) { dispatch(request, exchange) }
+        val response = withContext(Dispatchers.IO) { dispatch(request, call.attributes[EXCHANGE]) }
         if (response == null) {
             call.respondText("", ContentType.Text.Plain, HttpStatusCode.Accepted)
-            return HttpStatusCode.Accepted
+        } else {
+            json(call, HttpStatusCode.OK, response)
         }
-        return json(call, HttpStatusCode.OK, response)
     }
 
     // ------------------------------- files -------------------------------
@@ -262,11 +291,9 @@ class McpServer(
      * path is the same `<folder>/<sub/path>` the file tools take, and the
      * same switch turns both off.
      */
-    private suspend fun filesRoute(
-        call: ApplicationCall,
-        exchange: Exchange,
-        path: String,
-    ): HttpStatusCode {
+    private suspend fun files(call: ApplicationCall): HttpStatusCode {
+        val exchange = call.attributes[EXCHANGE]
+        val path = decodedPath(call).removePrefix(FILES_PATH)
         val method = call.request.httpMethod
         if (method != HttpMethod.Put && method != HttpMethod.Get) {
             return json(

@@ -81,6 +81,10 @@ pebblekit2_launch_and_send
   for example: "FAILED: the watch acknowledged 11 of 30 messages.
   Message 12 failed: the time allowed ran out before it was sent.
   Nothing after it was sent."
+- One send runs at a time, across all watchapps. A newer send call
+  stops one still working through its array: that call returns the
+  same error with "a newer send took over" as the reason, and its
+  count of acknowledged messages is exact.
 
 ### Reading what a watchapp sends
 
@@ -110,6 +114,10 @@ returns
   Nothing is lost between calls. Keep the wait shorter than the
   caller's own request timeout: a caller that gives up first can lose
   the event that arrives next.
+- One call reads at a time, across all watchapps. A newer
+  `pebblekit2_receive_messages` call, waiting or not, ends one that is
+  waiting, which returns "FAILED: a newer pebblekit2_receive_messages
+  call took over." No event is lost to that.
 - `max_age_seconds`, default an hour, discards older events instead of
   returning them.
 - The queue is memory only and holds 1024 events per watchapp. `dropped`
