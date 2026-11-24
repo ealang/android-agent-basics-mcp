@@ -32,8 +32,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.padding
 import io.github.ealang.agentbasicsmcp.MainActivity
 import io.github.ealang.agentbasicsmcp.MediaListenerService
-import io.github.ealang.agentbasicsmcp.SecretStore
-import io.github.ealang.agentbasicsmcp.ServerLog
 import io.github.ealang.agentbasicsmcp.mcp.apps.Clock
 import io.github.ealang.agentbasicsmcp.mcp.apps.Locator
 
@@ -100,11 +98,10 @@ fun ServerHeader(
  */
 @Composable
 fun SetupCard(
-    activity: MainActivity,
-    needs: List<Grant>,
-    pointers: List<String> = emptyList(),
+    missing: List<Grant>,
+    pointers: List<String>,
+    onOpen: (Grant) -> Unit,
 ) {
-    val missing = needs.filterNot { it.granted(activity) }
     if (missing.isEmpty() && pointers.isEmpty()) return
 
     Card(
@@ -121,7 +118,7 @@ fun SetupCard(
             missing.forEachIndexed { i, grant ->
                 if (i > 0) HorizontalDivider()
                 Text(grant.ask, style = MaterialTheme.typography.bodySmall)
-                OutlinedButton(onClick = { grant.open(activity) }) { Text(grant.button) }
+                OutlinedButton(onClick = { onOpen(grant) }) { Text(grant.button) }
             }
             pointers.forEachIndexed { i, line ->
                 if (i > 0 || missing.isNotEmpty()) HorizontalDivider()
@@ -229,6 +226,15 @@ val MCP_GRANTS = listOf(
     BATTERY_GRANT,
 )
 
+/** Every grant the page can show, so one read covers them all. */
+val ALL_GRANTS = listOf(
+    BATTERY_GRANT,
+    OVERLAY_GRANT,
+    MEDIA_GRANT,
+    NOTIFICATIONS_GRANT,
+    LOCATION_GRANT,
+)
+
 /**
  * The HTTP counters line the Server logs card opens with, counting since app start.
  * Accepted and rejected are kept apart because an auth rejection still
@@ -237,24 +243,19 @@ val MCP_GRANTS = listOf(
  * hiding-until-nonzero was tried (2026-09-18) and a fixed shape whose
  * numbers move won readability over lines that reword themselves.
  */
-fun requestsLine(log: ServerLog): String {
-    val rejected = log.count("rejected")
-    val accepted = log.count("requests") - rejected
-    return "Server requests — accepted: $accepted   rejected: $rejected"
-}
+fun requestsLine(requests: Long, rejected: Long): String =
+    "Server requests — accepted: ${requests - rejected}   rejected: $rejected"
 
-/** The bearer token, shown inside the settings card. */
+/** The bearer token, shown inside the settings card; null while it is being unlocked. */
 @Composable
-fun TokenBlock(activity: MainActivity, token: () -> String, regenerate: () -> Unit) {
+fun TokenBlock(token: String?, onCopy: () -> Unit, onRegenerate: () -> Unit) {
     StatusText("Clients send it in an Authorization: Bearer header.")
     Text(
-        if (SecretStore.ready) token() else "unlocking…",
+        token ?: "unlocking…",
         style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp),
     )
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(onClick = {
-            activity.copyToClipboard("token", token())
-        }) { Text("Copy") }
-        OutlinedButton(onClick = regenerate) { Text("Regenerate") }
+        OutlinedButton(onClick = onCopy) { Text("Copy") }
+        OutlinedButton(onClick = onRegenerate) { Text("Regenerate") }
     }
 }

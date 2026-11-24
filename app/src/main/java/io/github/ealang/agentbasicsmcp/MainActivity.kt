@@ -23,7 +23,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.core.content.ContextCompat
 import io.github.ealang.agentbasicsmcp.mcp.McpServer
@@ -31,31 +30,36 @@ import io.github.ealang.agentbasicsmcp.mcp.apps.Locator
 import io.github.ealang.agentbasicsmcp.mcp.files.FileFolder
 import io.github.ealang.agentbasicsmcp.ui.AgentBasicsMcpApp
 import io.github.ealang.agentbasicsmcp.ui.AgentBasicsMcpTheme
+import io.github.ealang.agentbasicsmcp.ui.Grant
+import io.github.ealang.agentbasicsmcp.ui.PageActions
+import io.github.ealang.agentbasicsmcp.ui.UiState
+import io.github.ealang.agentbasicsmcp.ui.readUiState
 
 /**
  * One page: the server switch, its address and token, the tool switches and
  * the grants they need.
  *
  * The activity owns the non-UI glue — config, service calls, permission
- * requests — and one piece of state the whole UI hangs off: [tick], a counter
- * bumped whenever anything on screen may have changed. Every card reads it, so
- * a bump recomposes everything; the cards re-read live state (McpService,
- * grants) directly in composition. Cheap reads, tiny UI — simpler than
- * plumbing each fact through its own observable.
+ * requests — and the one piece of state the page is drawn from: [ui], read
+ * afresh by [bump] whenever anything on screen may have changed. Compose
+ * redraws only what shows a value that differs from the last read.
  */
-class MainActivity : ComponentActivity() {
+class MainActivity : ComponentActivity(), PageActions {
 
     lateinit var config: Config
         private set
 
-    /** Bumped on any state change; every card subscribes by reading it. */
-    val tick = mutableIntStateOf(0)
+    /** What the page shows. Null until the first read, in onCreate. */
+    private val ui = mutableStateOf<UiState?>(null)
 
     private val handler = Handler(Looper.getMainLooper())
 
+    /** Something on screen may have changed: read it all again. */
     fun bump() {
-        tick.intValue++
+        ui.value = readUiState(this)
     }
+
+    override fun refresh() = bump()
 
     /** For actions whose effect lands a beat later — a service start, a retry. */
     fun bumpSoon(delayMs: Long = 400) {
@@ -107,9 +111,11 @@ class MainActivity : ComponentActivity() {
         // symptom is a server that is silently not running.
         config.lastStartFailure?.let { why -> Logs.mcp.warn("earlier", why) }
 
+        bump()
+
         setContent {
             AgentBasicsMcpTheme {
-                AgentBasicsMcpApp(this)
+                ui.value?.let { AgentBasicsMcpApp(it, pickedFolder.value, this) }
             }
         }
     }
@@ -166,7 +172,7 @@ class MainActivity : ComponentActivity() {
         bumpSoon()
     }
 
-    fun saveNetwork(portText: String, bindText: String) {
+    override fun saveNetwork(portText: String, bindText: String) {
         val port = portText.toIntOrNull()
         if (port == null || port !in 1024..65535) {
             toast("Port must be between 1024 and 65535")
@@ -201,7 +207,7 @@ class MainActivity : ComponentActivity() {
         bump()
     }
 
-    fun regenerateToken() {
+    override fun regenerateToken() {
         config.regenerateToken()
         bump()
         // No restart: the server reads the token per request, so the new one
@@ -214,7 +220,7 @@ class MainActivity : ComponentActivity() {
      * the bind address when one is set, else the first interface the phone has
      * (in every-interface mode any of them reaches the server), else null.
      */
-    fun mcpUrl(): String? {
+    private fun mcpUrl(): String? {
         val bind = config.bindAddress.ifBlank { Networks.ALL_IPV4 }
         val host = if (bind == Networks.ALL_IPV4) {
             Networks.live(this).firstOrNull()?.address ?: return null
@@ -224,8 +230,34 @@ class MainActivity : ComponentActivity() {
         return "http://${Networks.hostForUrl(host)}:${config.port}${McpServer.MCP_PATH}"
     }
 
+    override fun copyMcpUrl() {
+        val url = mcpUrl()
+        if (url == null) {
+            toast("No address to build a URL from — is the phone on a network?")
+        } else {
+            copyToClipboard("MCP URL", url)
+        }
+    }
+
+    override fun copyToken() = copyToClipboard("token", config.token)
+
+    override fun copyLog(text: String) = copyToClipboard("server log", text, echo = "Log copied")
+
+    override fun clearLog() {
+        Logs.mcp.clear()
+        toast("Log cleared")
+        bump()
+    }
+
+    override fun setFeatureEnabled(key: String, on: Boolean) {
+        config.setFeatureEnabled(key, on)
+        bump()
+    }
+
+    override fun openGrant(grant: Grant) = grant.open(this)
+
     /** The one switch: on starts the service, off stops it. */
-    fun setServerEnabled(on: Boolean) {
+    override fun setServerEnabled(on: Boolean) {
         if (on) startServer() else McpService.stop(this)
         // The switch reads the config flag, which the service sets as it
         // starts and clears as it stops — the delayed bump catches that
@@ -248,7 +280,7 @@ class MainActivity : ComponentActivity() {
     // ------------------------------------------------------- file folders
 
     /** A folder back from the picker, waiting for the name agents will see. */
-    val pickedFolder = mutableStateOf<Uri?>(null)
+    private val pickedFolder = mutableStateOf<Uri?>(null)
 
     private val folderPicker =
         registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
@@ -260,21 +292,28 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-    fun pickFileFolder() = folderPicker.launch(null)
+    override fun pickFileFolder() { folderPicker.launch(null) }
 
-    fun addFileFolder(name: String, tree: Uri) {
+    override fun addFileFolder(name: String, tree: Uri) {
         config.fileFolders = config.fileFolders + FileFolder(name, tree.toString(), writable = false)
         pickedFolder.value = null
         bump()
     }
 
     /** The picker was answered but the folder not named: hand the grant back. */
-    fun dropPickedFolder() {
+    override fun dropPickedFolder() {
         pickedFolder.value?.let { releaseUnlessUsed(it) }
         pickedFolder.value = null
     }
 
-    fun removeFileFolder(folder: FileFolder) {
+    override fun setFolderWritable(folder: FileFolder, on: Boolean) {
+        config.fileFolders = config.fileFolders.map {
+            if (it.name == folder.name) it.copy(writable = on) else it
+        }
+        bump()
+    }
+
+    override fun removeFileFolder(folder: FileFolder) {
         config.fileFolders = config.fileFolders.filterNot { it.name == folder.name }
         releaseUnlessUsed(Uri.parse(folder.treeUri))
         bump()
@@ -404,7 +443,7 @@ class MainActivity : ComponentActivity() {
      * some OEM Settings apps show only the app-level toggle and no way to
      * reach a single channel.
      */
-    fun openServiceNotificationSettings() {
+    override fun openServiceNotificationSettings() {
         McpService.ensureChannels(this)
         startActivity(
             Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)

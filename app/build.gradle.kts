@@ -94,26 +94,6 @@ kotlin {
     }
 }
 
-composeCompiler {
-    // The whole UI hangs off one invariant: bumping MainActivity.tick
-    // recomposes everything, and composables re-read live state (Config,
-    // service statics) as they run. Strong skipping — the default since
-    // Kotlin 2.0.20 — breaks that: it skips a composable whose arguments
-    // are reference-equal and memoizes content lambdas even over unstable
-    // captures, so a row whose inputs are `activity` and a constant never
-    // re-ran and its switch sat stale after a toggle. Seen on-device.
-    // Turning the feature off restores "a bump repaints everything" as a
-    // global guarantee instead of a per-callsite audit.
-    //
-    // Kotlin 2.4 makes naming the flag an error and 2.5 removes it, so the
-    // UI has to stop depending on this before that upgrade.
-    @Suppress("DEPRECATION_ERROR")
-    featureFlags.add(
-        org.jetbrains.kotlin.compose.compiler.gradle.ComposeFeatureFlag
-            .StrongSkipping.disabled(),
-    )
-}
-
 dependencies {
     // org.json is in the Android framework already.
     // The HTTP server. CIO is Ktor's own engine: coroutines over NIO, no

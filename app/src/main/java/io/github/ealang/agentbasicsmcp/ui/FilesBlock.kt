@@ -23,7 +23,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import io.github.ealang.agentbasicsmcp.MainActivity
 import io.github.ealang.agentbasicsmcp.mcp.files.FileFolder
 import io.github.ealang.agentbasicsmcp.mcp.files.FileStore
 
@@ -33,10 +32,7 @@ import io.github.ealang.agentbasicsmcp.mcp.files.FileStore
  * named. tmp is the app's own and is not listed; there is nothing to set.
  */
 @Composable
-fun FilesBlock(activity: MainActivity) {
-    val config = activity.config
-    val folders = config.fileFolders
-
+fun FilesBlock(folders: List<FileFolder>, picked: Uri?, actions: PageActions) {
     Text(
         "Folders",
         style = MaterialTheme.typography.labelLarge,
@@ -61,7 +57,7 @@ fun FilesBlock(activity: MainActivity) {
                 // The error colour is the theme's word for destructive, in
                 // light and dark alike.
                 TextButton(
-                    onClick = { activity.removeFileFolder(folder) },
+                    onClick = { actions.removeFileFolder(folder) },
                     colors = ButtonDefaults.textButtonColors(
                         contentColor = MaterialTheme.colorScheme.error,
                     ),
@@ -75,25 +71,20 @@ fun FilesBlock(activity: MainActivity) {
                 Text("Write access", style = MaterialTheme.typography.bodyMedium)
                 Switch(
                     checked = folder.writable,
-                    onCheckedChange = { on ->
-                        config.fileFolders = config.fileFolders.map {
-                            if (it.name == folder.name) it.copy(writable = on) else it
-                        }
-                        activity.bump()
-                    },
+                    onCheckedChange = { on -> actions.setFolderWritable(folder, on) },
                 )
             }
         }
     }
 
-    OutlinedButton(onClick = { activity.pickFileFolder() }) { Text("Add folder") }
+    OutlinedButton(onClick = { actions.pickFileFolder() }) { Text("Add folder") }
 
-    activity.pickedFolder.value?.let { picked ->
+    if (picked != null) {
         NameFolderDialog(
             picked = picked,
             taken = folders.map { it.name } + FileStore.TMP,
-            onDismiss = { activity.dropPickedFolder() },
-            onConfirm = { name -> activity.addFileFolder(name, picked) },
+            onDismiss = { actions.dropPickedFolder() },
+            onConfirm = { name -> actions.addFileFolder(name, picked) },
         )
     }
 }

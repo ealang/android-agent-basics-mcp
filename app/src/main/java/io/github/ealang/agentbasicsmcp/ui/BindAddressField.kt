@@ -35,11 +35,10 @@ import io.github.ealang.agentbasicsmcp.Networks
 fun BindAddressField(
     value: String,
     onValueChange: (String) -> Unit,
-    /** Re-read on every open and every recomposition, so a tunnel that comes up appears. */
-    live: () -> List<Endpoint>,
+    /** The phone's addresses right now, so a tunnel that comes up appears. */
+    endpoints: List<Endpoint>,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val endpoints = live()
 
     ExposedDropdownMenuBox(
         expanded = expanded,
