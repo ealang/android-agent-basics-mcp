@@ -77,18 +77,22 @@ object WatchInbox {
      * dropped: the caller asked not to see them.
      *
      * One reader at a time, across all watchapps, and the latest has it: a
-     * call arriving wakes whichever is waiting, and that one returns null
+     * [claim] wakes whichever reader is waiting, and that one returns null
      * at once, taking nothing. Taking an event is the only copy of it
      * leaving, so this is what keeps a reader nobody is listening to any
      * more from taking events meant for the one that replaced it.
+     *
+     * A single read claims as it goes. A reader that comes back for more
+     * claims once and passes the same [claim] each time, and gets null from
+     * the moment anyone else has claimed.
      */
-    fun take(uuid: String, maxAgeMs: Long, waitMs: Long): JSONObject? {
+    fun take(uuid: String, maxAgeMs: Long, waitMs: Long, claim: Long = claim()): JSONObject? {
         val key = uuid.lowercase()
         lock.withLock {
-            val mine = ++reader
-            arrived.signalAll()
+            val mine = claim
             var remaining = TimeUnit.MILLISECONDS.toNanos(waitMs)
             while (true) {
+                if (reader != mine) return null
                 val queue = queues[key]
                 if (queue != null) {
                     val oldest = SystemClock.elapsedRealtime() - maxAgeMs
@@ -103,12 +107,25 @@ object WatchInbox {
                     return render(emptyList(), 0)
                 }
                 remaining = arrived.awaitNanos(remaining)
-                if (reader != mine) return null
             }
         }
     }
 
-    /** Counts calls to [take]; the latest is the reader. Under [lock]. */
+    /** Becomes the reader, ending whichever read is waiting. */
+    fun claim(): Long = lock.withLock {
+        arrived.signalAll()
+        ++reader
+    }
+
+    /** Gives up [claim] if it is still the reader's, ending its own waiting read. */
+    fun release(claim: Long) = lock.withLock {
+        if (reader == claim) {
+            reader++
+            arrived.signalAll()
+        }
+    }
+
+    /** Counts claims; the latest is the reader. Under [lock]. */
     private var reader = 0L
 
     private fun render(events: Collection<Event>, dropped: Int): JSONObject {

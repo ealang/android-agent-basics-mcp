@@ -5,6 +5,10 @@ import io.github.ealang.agentbasicsmcp.mcp.files.FileProblem
 import io.github.ealang.agentbasicsmcp.mcp.files.FileTools
 import io.github.ealang.agentbasicsmcp.mcp.files.ServedFile
 import io.github.ealang.agentbasicsmcp.mcp.files.ServedFiles
+import io.github.ealang.agentbasicsmcp.mcp.pebble.PebbleTools
+import io.github.ealang.agentbasicsmcp.mcp.pebble.WatchStream
+import io.github.ealang.agentbasicsmcp.mcp.pebble.WatchStreams
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.InputStream
@@ -14,14 +18,25 @@ import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
+import java.net.http.WebSocket
+import java.net.http.WebSocketHandshakeException
 import java.nio.file.Files
+import java.util.Optional
+import java.util.concurrent.CompletionStage
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.TimeUnit
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.test.fail
 
 /**
  * The real server on a loopback port, asked real HTTP requests. Only the
@@ -36,6 +51,8 @@ class McpServerTest {
     private val port = ServerSocket(0).use { it.localPort }
     private val http = HttpClient.newHttpClient()
 
+    private val watch = FakeWatch()
+
     private val tools = listOf(
         tool("echo", featureKey = null) { args -> args.optString("text") to false },
         tool("guarded", featureKey = "guarded_feature") { "ran" to false },
@@ -47,6 +64,7 @@ class McpServerTest {
         tools = tools,
         featureEnabled = { it !in off },
         files = FolderFiles(File(root, "files")),
+        watch = watch,
     )
 
     @BeforeTest
@@ -205,7 +223,191 @@ class McpServerTest {
         assertEquals(404, send(request("/files/docs/cut.txt").GET()).statusCode())
     }
 
+    // -------------------------------------------------------------- pebble
+
+    @Test
+    fun `a stream needs the token`() {
+        val refused = assertFailsWith<ExecutionException> { Client(bearer = null) }
+        assertEquals(401, (refused.cause as WebSocketHandshakeException).response.statusCode())
+        assertTrue(watch.opened.isEmpty())
+    }
+
+    @Test
+    fun `connecting opens the watchapp and says ready`() {
+        val client = Client()
+        assertEquals("ready", client.next().getString("type"))
+        assertEquals(listOf(APP to 0L), watch.opened)
+    }
+
+    @Test
+    fun `max_age_seconds is passed on in milliseconds`() {
+        Client("&max_age_seconds=30").next()
+        assertEquals(listOf(APP to 30_000L), watch.opened)
+    }
+
+    @Test
+    fun `a refused opening is explained and the stream ends`() {
+        watch.refusal = "no watch is connected."
+        val client = Client()
+        val frame = client.next()
+        assertEquals("closed", frame.getString("type"))
+        assertEquals("no watch is connected.", frame.getString("error"))
+        client.awaitClose()
+    }
+
+    @Test
+    fun `a stream is refused when the PebbleKit tools are off`() {
+        off += PebbleTools.FEATURE
+        val client = Client()
+        assertEquals("closed", client.next().getString("type"))
+        client.awaitClose()
+        assertTrue(watch.opened.isEmpty())
+    }
+
+    @Test
+    fun `sends are answered in order with the caller's ids`() {
+        val client = Client()
+        client.next()
+        watch.answers += listOf(null, "NACK")
+        client.say(JSONObject().put("id", 7).put("tuples", JSONArray().put(tuple(1))))
+        client.say(JSONObject().put("id", "b").put("tuples", JSONArray().put(tuple(2))))
+
+        val first = client.next()
+        assertEquals("ack", first.getString("type"))
+        assertEquals(7, first.getInt("id"))
+        val second = client.next()
+        assertEquals("failed", second.getString("type"))
+        assertEquals("b", second.getString("id"))
+        assertEquals("NACK", second.getString("error"))
+        assertEquals(listOf(1, 2), watch.sent.map { it.getJSONObject(0).getInt("key") })
+    }
+
+    @Test
+    fun `a frame with no tuples fails without a send`() {
+        val client = Client()
+        client.next()
+        client.say(JSONObject().put("id", 1))
+        assertEquals("failed", client.next().getString("type"))
+        client.say("not json")
+        assertEquals("failed", client.next().getString("type"))
+        assertTrue(watch.sent.isEmpty())
+    }
+
+    @Test
+    fun `events are pushed in the receive tool's form`() {
+        val client = Client()
+        client.next()
+        val events = JSONArray().put(JSONObject().put("type", "message").put("tuples", JSONArray().put(tuple(5))))
+        watch.events.put(JSONObject().put("events", events).put("dropped", 2))
+
+        val frame = client.next()
+        assertEquals("events", frame.getString("type"))
+        assertEquals(2, frame.getInt("dropped"))
+        assertEquals(events.toString(), frame.getJSONArray("events").toString())
+    }
+
+    @Test
+    fun `a stream that loses its place is told and ended`() {
+        val client = Client()
+        client.next()
+        watch.events.put(TAKEN_OVER)
+        val frame = client.next()
+        assertEquals("closed", frame.getString("type"))
+        assertEquals("a newer caller took over.", frame.getString("error"))
+        client.awaitClose()
+        assertTrue(watch.closed.await(5, TimeUnit.SECONDS))
+    }
+
+    @Test
+    fun `the client leaving closes the stream`() {
+        val client = Client()
+        client.next()
+        client.socket.sendClose(WebSocket.NORMAL_CLOSURE, "").get(5, TimeUnit.SECONDS)
+        assertTrue(watch.closed.await(5, TimeUnit.SECONDS))
+    }
+
+    @Test
+    fun `stopping the server closes the stream`() {
+        val client = Client()
+        client.next()
+        server.stop()
+        assertTrue(watch.closed.await(5, TimeUnit.SECONDS))
+    }
+
     // ------------------------------------------------------------- helpers
+
+    private fun tuple(key: Int) = JSONObject().put("key", key).put("type", "string").put("value", "x")
+
+    /** A WebSocket client on the stream route, its text frames queued as they arrive. */
+    private inner class Client(query: String = "", bearer: String? = token) : WebSocket.Listener {
+        private val frames = LinkedBlockingQueue<String>()
+        private val closed = CountDownLatch(1)
+        private val partial = StringBuilder()
+
+        val socket: WebSocket = http.newWebSocketBuilder()
+            .apply { if (bearer != null) header("Authorization", "Bearer $bearer") }
+            .buildAsync(URI("ws://127.0.0.1:$port/pebblekit2/send_receive?app=$APP$query"), this)
+            .get(5, TimeUnit.SECONDS)
+
+        fun say(message: Any) {
+            socket.sendText(message.toString(), true).get(5, TimeUnit.SECONDS)
+        }
+
+        fun next() = JSONObject(frames.poll(5, TimeUnit.SECONDS) ?: fail("no frame within 5s"))
+
+        fun awaitClose() = assertTrue(closed.await(5, TimeUnit.SECONDS), "the server did not close the stream")
+
+        override fun onText(webSocket: WebSocket, data: CharSequence, last: Boolean): CompletionStage<*>? {
+            partial.append(data)
+            if (last) {
+                frames.put(partial.toString())
+                partial.clear()
+            }
+            return super.onText(webSocket, data, last)
+        }
+
+        override fun onClose(webSocket: WebSocket, statusCode: Int, reason: String): CompletionStage<*>? {
+            closed.countDown()
+            return null
+        }
+
+        override fun onError(webSocket: WebSocket, error: Throwable) = closed.countDown()
+    }
+
+    /** A watch that does what the test says and remembers what it was asked. */
+    private class FakeWatch : WatchStreams, WatchStream {
+        val opened = CopyOnWriteArrayList<Pair<String, Long>>()
+        val sent = CopyOnWriteArrayList<JSONArray>()
+        val closed = CountDownLatch(1)
+
+        /** Set to have [open] refuse. */
+        var refusal: String? = null
+
+        /** One per send to come, null for an ACK; with none left a send is acknowledged. */
+        val answers = LinkedBlockingQueue<Optional<String>>()
+
+        /** What [next] hands out, or [TAKEN_OVER]. */
+        val events = LinkedBlockingQueue<JSONObject>()
+
+        override fun open(app: String, maxAgeMs: Long): WatchStreams.Opening {
+            refusal?.let { return WatchStreams.Opening.Refused(it) }
+            opened += app to maxAgeMs
+            return WatchStreams.Opening.Ready(this)
+        }
+
+        override fun send(tuples: JSONArray): String? {
+            sent += tuples
+            return answers.poll()?.orElse(null)
+        }
+
+        override fun next(): JSONObject? = events.take().takeIf { it !== TAKEN_OVER }
+
+        override fun close() = closed.countDown()
+    }
+
+    private operator fun LinkedBlockingQueue<Optional<String>>.plusAssign(answers: List<String?>) {
+        answers.forEach { put(Optional.ofNullable(it)) }
+    }
 
     private fun tool(name: String, featureKey: String?, handler: (JSONObject) -> Pair<String, Boolean>) =
         ToolSpec(name, featureKey, JSONObject().put("name", name), handler)
@@ -244,6 +446,13 @@ class McpServerTest {
         socket.getOutputStream().apply { write(request.toByteArray()); flush() }
         socket.shutdownOutput()
         socket.getInputStream().readBytes().decodeToString()
+    }
+
+    private companion object {
+        const val APP = "00000000-0000-4000-8000-000000000001"
+
+        /** Put among a [FakeWatch]'s events to have its next read end as taken over. */
+        val TAKEN_OVER = JSONObject()
     }
 
     /** A folder standing in for the phone's file system, with FileStore's put contract. */

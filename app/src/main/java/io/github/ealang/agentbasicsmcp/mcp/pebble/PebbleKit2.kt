@@ -15,6 +15,7 @@ import io.rebble.pebblekit2.common.SendDataCallback
 import io.rebble.pebblekit2.common.UniversalRequestResponse
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.Closeable
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -224,8 +225,9 @@ object PebbleKit2 {
      * send; a message whose turn comes after it is not sent.
      *
      * One sender at a time, across all watchapps, and the latest has it: a
-     * call arriving stops the one before it at its next message. A message
-     * already with the watch is waited for first, so the two never overlap.
+     * call arriving stops the one before it at its next message, and ends
+     * a [Session]. A message already with the watch is waited for first, so
+     * the two never overlap.
      *
      * With [launch], the app is started first unless the watch already has
      * it running. The start returns when the watch reports the app running,
@@ -244,20 +246,11 @@ object PebbleKit2 {
         launch: Boolean,
         timeoutMs: Long,
     ): Delivery = linked(context) { link ->
-        val mine = senders.incrementAndGet()
-        if (launch && !running(context, uuid)) {
-            val waiter = OpenWaiter(uuid)
-            openWaiters += waiter
-            try {
-                when (val launched = start(link, uuid)) {
-                    Launch.Running -> Unit
-                    is Launch.Failed -> return@linked Delivery.NotLaunched(launched.why)
-                }
-                if (!waiter.opened.await(SESSION_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
-                    Log.w(TAG, "No APP_OPENED for $uuid within $SESSION_TIMEOUT_MS ms; sending anyway")
-                }
-            } finally {
-                openWaiters -= waiter
+        val mine = becomeSender()
+        if (launch) {
+            when (val launched = open(link, context, uuid)) {
+                Launch.Running -> Unit
+                is Launch.Failed -> return@linked Delivery.NotLaunched(launched.why)
             }
         }
         val deadline = SystemClock.elapsedRealtime() + timeoutMs
@@ -275,8 +268,77 @@ object PebbleKit2 {
         Delivery.Acknowledged
     }
 
-    /** Counts calls to [deliver]; the latest is the sender. */
+    /**
+     * Starts [uuid] unless the watch already has it running, and waits for
+     * CoreApp to report its session open, as [deliver] describes.
+     */
+    private fun open(link: Link, context: Context, uuid: String): Launch {
+        if (running(context, uuid)) return Launch.Running
+        val waiter = OpenWaiter(uuid)
+        openWaiters += waiter
+        try {
+            val launched = start(link, uuid)
+            if (launched is Launch.Failed) return launched
+            if (!waiter.opened.await(SESSION_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+                Log.w(TAG, "No APP_OPENED for $uuid within $SESSION_TIMEOUT_MS ms; going on anyway")
+            }
+            return Launch.Running
+        } finally {
+            openWaiters -= waiter
+        }
+    }
+
+    /**
+     * One binding to CoreApp kept for many sends to one watchapp, where
+     * [deliver] binds per call. The caller closes it.
+     *
+     * It is the sender from the moment it is made until another sender
+     * arrives, a [deliver] call or a newer session. [lost] is called then,
+     * once, and every later [send] fails.
+     */
+    class Session internal constructor(
+        private val context: Context,
+        private val uuid: String,
+        private val lost: () -> Unit,
+    ) : Closeable {
+        private val link = Link(context).also { it.open() }
+        private val mine = becomeSender().also { sessions += this }
+
+        internal fun displaced() {
+            if (sessions.remove(this)) lost()
+        }
+
+        /** Starts the app unless the watch already has it running. */
+        fun open(): Launch = open(link, context, uuid)
+
+        /** One message, sent once. */
+        fun send(tuples: JSONArray): Send = sending.withLock {
+            if (senders.get() != mine) {
+                Send.Failed("a newer send took over.")
+            } else {
+                send(link, uuid, tuples, REQUEST_TIMEOUT_MS)
+            }
+        }
+
+        override fun close() {
+            sessions -= this
+            link.close()
+        }
+    }
+
+    fun session(context: Context, uuid: String, lost: () -> Unit) = Session(context, uuid, lost)
+
+    /** Counts senders, a [deliver] call or a [Session] each; the latest is the sender. */
     private val senders = AtomicLong()
+
+    /** The sessions that have not been displaced or closed. */
+    private val sessions = CopyOnWriteArrayList<Session>()
+
+    private fun becomeSender(): Long {
+        val mine = senders.incrementAndGet()
+        sessions.forEach { it.displaced() }
+        return mine
+    }
 
     /** Held for one message at a time, from the send to the watch's answer. */
     private val sending = ReentrantLock()

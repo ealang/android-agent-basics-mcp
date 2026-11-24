@@ -12,7 +12,9 @@ import io.github.ealang.agentbasicsmcp.mcp.files.FileTools
 import io.github.ealang.agentbasicsmcp.mcp.files.ServedFiles
 import io.github.ealang.agentbasicsmcp.mcp.files.UploadCut
 import io.github.ealang.agentbasicsmcp.mcp.generic.GenericTools
+import io.github.ealang.agentbasicsmcp.mcp.pebble.PebbleStreams
 import io.github.ealang.agentbasicsmcp.mcp.pebble.PebbleTools
+import io.github.ealang.agentbasicsmcp.mcp.pebble.WatchStreams
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
@@ -38,15 +40,27 @@ import io.ktor.server.routing.IgnoreTrailingSlash
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
+import io.ktor.server.websocket.DefaultWebSocketServerSession
+import io.ktor.server.websocket.WebSockets
+import io.ktor.server.websocket.pingPeriod
+import io.ktor.server.websocket.timeout
+import io.ktor.server.websocket.webSocket
 import io.ktor.util.AttributeKey
+import io.ktor.websocket.Frame
+import io.ktor.websocket.close
+import io.ktor.websocket.readText
 import java.io.InputStream
 import java.net.InetSocketAddress
 import java.net.ServerSocket
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
+import kotlin.time.Duration.Companion.seconds
 import org.json.JSONArray
+import org.json.JSONException
 import org.json.JSONObject
 
 /**
@@ -65,6 +79,9 @@ import org.json.JSONObject
  * They exist because MCP is JSON: a file sent as a tool argument would be
  * base64 text the calling model has to write out, which stops being
  * practical well under a megabyte.
+ *
+ * And /pebblekit2/send_receive, a WebSocket to one watchapp, for a script exchanging
+ * messages with it faster than a tool call apiece allows.
  */
 class McpServer(
     bindAddress: String,
@@ -89,6 +106,8 @@ class McpServer(
     private val featureEnabled: (String) -> Boolean,
     /** What the /files routes read and write. */
     private val files: ServedFiles,
+    /** What the watch stream route opens. */
+    private val watch: WatchStreams,
 ) {
     // One literal address, or 0.0.0.0 for every IPv4 interface. The IPv4
     // wildcard rather than the dual-stack one: a carrier hands the phone a
@@ -113,7 +132,11 @@ class McpServer(
             // pools connections (an HTTP proxy, a keep-alive agent) can
             // reuse one at the moment it is being closed and get an empty
             // reply.
-            call.response.header(HttpHeaders.Connection, "close")
+            // A WebSocket upgrade is the exception: its connection is the
+            // point.
+            if (!call.request.headers[HttpHeaders.Upgrade].equals("websocket", ignoreCase = true)) {
+                call.response.header(HttpHeaders.Connection, "close")
+            }
             // Auth before routing: an unauthenticated caller learns nothing,
             // not even which paths exist.
             if (!authorized(call)) {
@@ -157,6 +180,12 @@ class McpServer(
             module {
                 install(everyRequest)
                 install(IgnoreTrailingSlash)
+                install(WebSockets) {
+                    // A client that vanishes without closing is noticed by
+                    // its missing pong.
+                    pingPeriod = PING
+                    timeout = PING
+                }
                 routing {
                     route(MCP_PATH) {
                         post { mcp(call) }
@@ -172,6 +201,7 @@ class McpServer(
                         }
                     }
                     route("$FILES_PATH/{...}") { handle { files(call) } }
+                    webSocket(STREAM_PATH) { pebble(this) }
                     route("{...}") {
                         handle {
                             json(
@@ -236,6 +266,8 @@ class McpServer(
         private const val FALLBACK_PROTOCOL = "2025-11-25"
         const val MCP_PATH = "/mcp"
         const val FILES_PATH = "/files"
+        const val STREAM_PATH = "/pebblekit2/send_receive"
+        private val PING = 15.seconds
 
         /**
          * The server as the app runs it: every tool, the user's switches,
@@ -259,6 +291,7 @@ class McpServer(
                     GenericTools.specs(context) + FileTools.specs(context),
                 featureEnabled = config::featureEnabled,
                 files = FileStore(context),
+                watch = PebbleStreams(context),
             )
         }
 
@@ -394,6 +427,98 @@ class McpServer(
         }
 
         override fun close() = source.close()
+    }
+
+    // ------------------------------- pebble -------------------------------
+
+    /**
+     * A WebSocket to one watchapp, for a script that talks with it faster
+     * than a tool call per message allows. The query carries app, the
+     * watchapp's UUID, and optionally max_age_seconds, as the receive tool
+     * takes it but defaulting to 0. Connecting opens the app on the watch.
+     * Text frames, one JSON object each:
+     *
+     *  - in: {"id": any, "tuples": [...]}, one AppMessage, sent in the order
+     *    received and answered {"type": "ack", "id"} or
+     *    {"type": "failed", "id", "error"}
+     *  - out: {"type": "ready"} once the app is open
+     *  - out: {"type": "events", "events": [...], "dropped": n} as the
+     *    watchapp speaks, in pebblekit2_receive_messages' form
+     *  - out: {"type": "closed", "error"} before the server ends the stream
+     *
+     * The same switch as the PebbleKit tools turns it off.
+     */
+    private suspend fun pebble(socket: DefaultWebSocketServerSession) {
+        val call = socket.call
+        val app = call.request.queryParameters["app"].orEmpty()
+        call.attributes[EXCHANGE].detail = "stream"
+
+        suspend fun say(type: String, fill: JSONObject.() -> Unit = {}) =
+            socket.send(Frame.Text(JSONObject().put("type", type).apply(fill).toString()))
+
+        suspend fun end(why: String) {
+            say("closed") { put("error", why) }
+            socket.close()
+        }
+
+        if (!featureEnabled(PebbleTools.FEATURE)) {
+            return end("the user has switched the PebbleKit tools off in the Agent Basics MCP app.")
+        }
+        val maxAge = call.request.queryParameters["max_age_seconds"].let { given ->
+            if (given == null) {
+                0
+            } else {
+                given.toLongOrNull()?.takeIf { it >= 0 }
+                    ?: return end("max_age_seconds must be a whole number, 0 or more.")
+            }
+        }
+        val opening = withContext(Dispatchers.IO) {
+            watch.open(app, maxAge.coerceAtMost(PebbleTools.MAX_AGE_CEILING_S) * 1000)
+        }
+        val stream = when (opening) {
+            is WatchStreams.Opening.Ready -> opening.stream
+            is WatchStreams.Opening.Refused -> {
+                log.warn("watch stream refused", opening.why)
+                return end(opening.why)
+            }
+        }
+        log.info("watch stream opened", app)
+        val events = socket.launch(Dispatchers.IO) {
+            while (true) {
+                val batch = runInterruptible { stream.next() } ?: break
+                say("events") {
+                    put("events", batch.getJSONArray("events"))
+                    put("dropped", batch.getInt("dropped"))
+                }
+            }
+            end("a newer caller took over.")
+        }
+        try {
+            say("ready")
+            for (frame in socket.incoming) {
+                if (frame !is Frame.Text) continue
+                val message = try {
+                    JSONObject(frame.readText())
+                } catch (e: JSONException) {
+                    say("failed") { put("error", "that frame is not a JSON object. Nothing was sent.") }
+                    continue
+                }
+                val tuples = message.optJSONArray("tuples")
+                val why = if (tuples == null) {
+                    "give tuples, an array of {key, type, value}. Nothing was sent."
+                } else {
+                    withContext(Dispatchers.IO) { stream.send(tuples) }
+                }
+                say(if (why == null) "ack" else "failed") {
+                    message.opt("id")?.let { put("id", it) }
+                    why?.let { put("error", it) }
+                }
+            }
+        } finally {
+            events.cancel()
+            stream.close()
+            log.info("watch stream closed", app)
+        }
     }
 
     private fun authorized(call: ApplicationCall): Boolean {

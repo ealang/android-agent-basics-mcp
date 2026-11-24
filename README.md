@@ -86,9 +86,8 @@ off is absent from the server's `tools/list`.
 
 ## Setting up
 
-The app runs a plain HTTP server on the phone with a single endpoint,
-`POST /mcp`, speaking JSON-RPC 2.0 / MCP and requiring
-`Authorization: Bearer <token>`. The
+The app runs a plain HTTP server on the phone, speaking MCP (JSON-RPC
+2.0) at `POST /mcp` and requiring `Authorization: Bearer <token>`. The
 traffic is unencrypted, so it is meant to be reached over a VPN rather than
 the open network. [Tailscale](https://play.google.com/store/apps/details?id=com.tailscale.ipn)
 is recommended. The app installs on Android 10 (API 29) or later.

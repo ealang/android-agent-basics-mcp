@@ -38,7 +38,7 @@ object PebbleTools {
     /** A send's whole allowance when the caller names none. */
     private const val DEFAULT_SEND_TIMEOUT_S = 15L
 
-    private const val MAX_AGE_CEILING_S = 10L * 365 * 24 * 3600
+    internal const val MAX_AGE_CEILING_S = 10L * 365 * 24 * 3600
 
     private const val COMPANION_ONLY =
         "Works only for a watchapp that names this app as its Android companion; " +
@@ -216,7 +216,7 @@ object PebbleTools {
                         "so each event is returned once. Events are held in memory only, at " +
                         "most ${WatchInbox.CAPACITY} per watchapp; dropped counts those lost to that " +
                         "limit since the last read. Nothing queued is an empty list, not " +
-                        "an error. One call reads at a time: a newer one ends a call " +
+                        "an error. One caller reads at a time: a newer one ends a call " +
                         "that is waiting, with an error. " +
                         "The watch was already told each message arrived, " +
                         "whether or not anything reads it. " +
@@ -262,7 +262,7 @@ object PebbleTools {
                         maxAge.coerceAtMost(MAX_AGE_CEILING_S) * 1000,
                         wait.coerceAtMost(MAX_WAIT_S) * 1000,
                     )?.let { it.toString() to false }
-                        ?: ("FAILED: a newer pebblekit2_receive_messages call took over." to true)
+                        ?: ("FAILED: a newer caller took over." to true)
                 }
             }
         }

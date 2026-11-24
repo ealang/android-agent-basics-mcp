@@ -114,10 +114,10 @@ returns
   Nothing is lost between calls. Keep the wait shorter than the
   caller's own request timeout: a caller that gives up first can lose
   the event that arrives next.
-- One call reads at a time, across all watchapps. A newer
-  `pebblekit2_receive_messages` call, waiting or not, ends one that is
-  waiting, which returns "FAILED: a newer pebblekit2_receive_messages
-  call took over." No event is lost to that.
+- One caller reads at a time, across all watchapps. A newer
+  `pebblekit2_receive_messages` call, waiting or not, or a stream
+  connecting, ends a call that is waiting, which returns "FAILED: a
+  newer caller took over." No event is lost to that.
 - `max_age_seconds`, default an hour, discards older events instead of
   returning them.
 - The queue is memory only and holds 1024 events per watchapp. `dropped`
@@ -127,6 +127,53 @@ returns
   not anything ever reads it.
 - `app_opened` and `app_closed` bracket a session. `app_closed` is sent
   once, best-effort: a session can end without one.
+
+### Streaming: send and receive on one WebSocket
+
+For a script that drives a watchapp interactively. It is the send and
+receive tools over one connection, without a request per message.
+
+```
+GET /pebblekit2/send_receive?app=<watchapp uuid>
+Authorization: Bearer <token>
+```
+
+upgraded to a WebSocket, on the same host and port as `/mcp`. A wrong
+token is refused with 401 before the upgrade. Every frame is text, one
+JSON object.
+
+```
+< {"type": "ready"}
+> {"id": 1, "tuples": [{"key": 0, "type": "uint", "length": 1, "value": 3}]}
+< {"type": "ack", "id": 1}
+< {"type": "events", "events": [...], "dropped": 0}
+```
+
+- Connecting opens the watchapp if it is not open, as
+  `pebblekit2_launch_and_send` does. `ready` follows once it can
+  receive messages.
+- A frame with `tuples` is one message, sent once. The answer echoes
+  its `id`: `ack` when the watch acknowledged it, otherwise
+  `{"type": "failed", "id": 1, "error": "..."}`. The stream stays open
+  after a `failed`. Frames are sent in the order they arrive.
+- `events` frames carry what `pebblekit2_receive_messages` returns,
+  from the same queue, pushed as events arrive.
+- The watchapp closing does not close the stream. An `app_closed`
+  event arrives, sends answer `failed` until the app is open again,
+  and `app_opened` says when it is. The stream does not reopen it;
+  reconnecting does.
+- `max_age_seconds` in the query, default 0: events queued before
+  connecting are discarded unless this allows them.
+- `{"type": "closed", "error": "..."}` is the last frame before the
+  server closes the socket: the watchapp did not open, no watch is
+  connected, or "a newer caller took over."
+- The stream is the one reader and the one sender while it lasts.
+  Connecting ends a `pebblekit2_receive_messages` call that is waiting
+  and stops a `pebblekit2_` send at its next message. A later
+  `pebblekit2_` send or receive call, or a newer stream, closes this
+  one.
+- The server pings every 15 seconds and closes a connection that does
+  not answer.
 
 ## PebbleKit 1 (`pebblekit_*`)
 

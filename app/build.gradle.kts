@@ -109,6 +109,7 @@ dependencies {
     // Netty or Jetty underneath.
     implementation("io.ktor:ktor-server-core:3.6.1")
     implementation("io.ktor:ktor-server-cio:3.6.1")
+    implementation("io.ktor:ktor-server-websockets:3.6.1")
     // MediaBrowserCompat, for the experimental media_search only: search is
     // part of the androidx media protocol, not the framework MediaBrowser.
     implementation("androidx.media:media:1.7.1")
