@@ -72,8 +72,12 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
+
+    packaging {
+        resources {
+            // Ktor's console colouring brings desktop native libraries along.
+            excludes += "org/fusesource/jansi/**"
+        }
     }
 
     buildFeatures {
@@ -81,6 +85,12 @@ android {
         // Two interfaces under src/main/aidl: the PebbleKit 2 binder contract
         // CoreApp's service speaks. See PebbleKit2.kt.
         aidl = true
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
 }
 
@@ -94,6 +104,10 @@ composeCompiler {
     // re-ran and its switch sat stale after a toggle. Seen on-device.
     // Turning the feature off restores "a bump repaints everything" as a
     // global guarantee instead of a per-callsite audit.
+    //
+    // Kotlin 2.4 makes naming the flag an error and 2.5 removes it, so the
+    // UI has to stop depending on this before that upgrade.
+    @Suppress("DEPRECATION_ERROR")
     featureFlags.add(
         org.jetbrains.kotlin.compose.compiler.gradle.ComposeFeatureFlag
             .StrongSkipping.disabled(),
@@ -102,7 +116,10 @@ composeCompiler {
 
 dependencies {
     // org.json is in the Android framework already.
-    implementation("org.nanohttpd:nanohttpd:2.3.1")
+    // The HTTP server. CIO is Ktor's own engine: coroutines over NIO, no
+    // Netty or Jetty underneath.
+    implementation("io.ktor:ktor-server-core:3.6.1")
+    implementation("io.ktor:ktor-server-cio:3.6.1")
     // MediaBrowserCompat, for the experimental media_search only: search is
     // part of the androidx media protocol, not the framework MediaBrowser.
     implementation("androidx.media:media:1.7.0")

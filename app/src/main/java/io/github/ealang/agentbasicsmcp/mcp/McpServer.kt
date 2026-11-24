@@ -4,7 +4,6 @@ import android.content.Context
 import android.util.Log
 import io.github.ealang.agentbasicsmcp.Config
 import io.github.ealang.agentbasicsmcp.Networks
-import io.github.ealang.agentbasicsmcp.ResilientServerSocket
 import io.github.ealang.agentbasicsmcp.ServerLog
 import io.github.ealang.agentbasicsmcp.mcp.apps.AppTools
 import io.github.ealang.agentbasicsmcp.mcp.files.FileProblem
@@ -13,11 +12,33 @@ import io.github.ealang.agentbasicsmcp.mcp.files.FileTools
 import io.github.ealang.agentbasicsmcp.mcp.files.UploadCut
 import io.github.ealang.agentbasicsmcp.mcp.generic.GenericTools
 import io.github.ealang.agentbasicsmcp.mcp.pebble.PebbleTools
-import fi.iki.elonen.NanoHTTPD
-import java.io.IOException
+import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpMethod
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.decodeURLPart
+import io.ktor.server.application.ApplicationCall
+import io.ktor.server.application.ApplicationCallPipeline
+import io.ktor.server.application.call
+import io.ktor.server.application.serverConfig
+import io.ktor.server.cio.CIO
+import io.ktor.server.engine.connector
+import io.ktor.server.engine.embeddedServer
+import io.ktor.server.request.contentLength
+import io.ktor.server.request.httpMethod
+import io.ktor.server.request.path
+import io.ktor.server.request.receive
+import io.ktor.server.request.receiveStream
+import io.ktor.server.response.header
+import io.ktor.server.response.respondOutputStream
+import io.ktor.server.response.respondText
 import java.io.InputStream
-import java.net.SocketTimeoutException
-import java.net.Socket
+import java.net.InetSocketAddress
+import java.net.ServerSocket
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -29,9 +50,9 @@ import org.json.JSONObject
  * millisecond have nothing to push — so every exchange here is ordinary
  * request/response JSON.
  *
- * The HTTP layer is here too: bearer-token auth, the resilient socket,
- * request logging, with the MCP dispatch past them. Every path requires
- * the token; nothing is answered without it.
+ * The HTTP layer is here too: bearer-token auth and request logging, with
+ * the MCP dispatch past them. Every path requires the token; nothing is
+ * answered without it.
  *
  * Beside /mcp sit the /files routes, PUT and GET of one file's raw bytes.
  * They exist because MCP is JSON: a file sent as a tool argument would be
@@ -41,7 +62,7 @@ import org.json.JSONObject
 class McpServer(
     private val context: Context,
     bindAddress: String,
-    port: Int,
+    private val port: Int,
     /**
      * Read per request, not captured at bind: pressing Regenerate must take
      * effect on the very next request, without a server restart. The provider
@@ -49,28 +70,77 @@ class McpServer(
      * request thread.
      */
     private val token: () -> String,
-    onDied: () -> Unit,
-    /** The server's log; the socket and every request line go here too. */
+    /** Called when the server fails underneath a caller that had started it. */
+    private val onDied: () -> Unit,
+    /** The server's log; every request line goes here too. */
     private val log: ServerLog,
+) {
     // One literal address, or 0.0.0.0 for every IPv4 interface. The IPv4
-    // wildcard rather than NanoHTTPD's null (the dual-stack wildcard): a
-    // carrier hands the phone a public IPv6 address, and "everything" is
-    // meant to mean the LAN, not the open internet.
-) : NanoHTTPD(bindAddress.ifBlank { Networks.ALL_IPV4 }, port) {
+    // wildcard rather than the dual-stack one: a carrier hands the phone a
+    // public IPv6 address, and "everything" is meant to mean the LAN, not
+    // the open internet.
+    private val host = bindAddress.ifBlank { Networks.ALL_IPV4 }
 
-    init {
-        serverSocketFactory = ServerSocketFactory { ResilientServerSocket(log, onDied) }
+    @Volatile
+    private var started = false
+
+    private val engine = embeddedServer(
+        CIO,
+        rootConfig = serverConfig {
+            // Without a handler here, a failure in the server's own
+            // coroutines, a refused bind among them, is an uncaught
+            // exception, which on Android ends the process.
+            //
+            // This does not see a listener that has gone dead, as when the
+            // bound address is taken away: the engine retries a failing
+            // accept quietly and for good, and nothing arrives here.
+            parentCoroutineContext = CoroutineExceptionHandler { _, e ->
+                Log.w(TAG, "The server failed", e)
+                if (started) {
+                    started = false
+                    log.error("server failed", e.message ?: e::class.java.simpleName)
+                    onDied()
+                }
+            }
+            module { intercept(ApplicationCallPipeline.Call) { serve(call) } }
+        },
+        configure = {
+            connector {
+                host = this@McpServer.host
+                port = this@McpServer.port
+            }
+            // The service rebinds the same port moments after a teardown;
+            // without this a lingering connection can hold the port hostage.
+            reuseAddress = true
+        },
+    )
+
+    /** Throws when the address cannot be bound. */
+    fun start() {
+        // The engine binds on a coroutine and reports a failure as a
+        // cancellation with no reason in it. Binding here first gets the
+        // reason, the one thing the caller shows the user.
+        ServerSocket().use {
+            it.reuseAddress = true
+            it.bind(InetSocketAddress(host, port))
+        }
+        try {
+            engine.start(wait = false)
+        } catch (e: Exception) {
+            runCatching { engine.stop(0, 0) }
+            throw e
+        }
+        started = true
     }
 
     /**
-     * Each connection is handled on a thread of its own. Noting the socket
-     * against that thread is what lets a tool that waits ask whether its
-     * client is still there: see [ClientConnection].
+     * Stops at once: requests being answered are dropped, not waited for.
+     * A tool still running is left to finish, and its answer goes nowhere.
      */
-    override fun createClientHandler(finalAccept: Socket, inputStream: InputStream): ClientHandler =
-        object : ClientHandler(inputStream, finalAccept) {
-            override fun run() = ClientConnection.serving(finalAccept) { super.run() }
-        }
+    fun stop() {
+        started = false
+        engine.stop(0, 0)
+    }
 
     /**
      * The whole tool surface, one [ToolSpec] per tool, in the order tools/list
@@ -102,86 +172,87 @@ class McpServer(
         const val MCP_PATH = "/mcp"
         const val FILES_PATH = "/files"
 
-        /** How much of a refused upload is read before answering; see [filesRoute]. */
-        private const val DRAIN_LIMIT = 64L * 1024 * 1024
-
         /** Argument names that identify a call's subject, most specific first. */
         private val SUBJECT_KEYS =
             listOf("action", "uri", "app", "package", "destination", "query")
     }
 
     /**
-     * Set on the handling thread, so the log line can name what a request
-     * meant (the MCP method and tool) instead of just "POST /mcp". NanoHTTPD
-     * keeps one session on one thread, which is what makes a ThreadLocal
-     * sound here.
+     * What one request meant (the MCP method and tool, the file path), so the
+     * log line can say more than "POST /mcp".
      */
-    private val detail = ThreadLocal<String?>()
+    private class Exchange {
+        var detail: String? = null
+    }
 
-    override fun serve(session: IHTTPSession): Response {
-        detail.remove()
+    private suspend fun serve(call: ApplicationCall) {
         log.bump("requests")
-        defaultToUtf8(session)
-        val response = handle(session)
-        // One request per connection. NanoHTTPD otherwise keeps the connection
-        // open and drops it after SOCKET_READ_MS of silence, and a client that
-        // pools connections (an HTTP proxy, a keep-alive agent) can reuse one
-        // at the moment it is being closed and get an empty reply. With this
-        // header the response is flushed and the socket closed; the client
-        // opens a fresh connection next time.
-        response.closeConnection(true)
-        val what = detail.get()?.let { " $it" } ?: ""
+        val exchange = Exchange()
+        // One request per connection. A connection left open is closed by the
+        // server after a spell of silence, and a client that pools
+        // connections (an HTTP proxy, a keep-alive agent) can reuse one at
+        // the moment it is being closed and get an empty reply.
+        call.response.header(HttpHeaders.Connection, "close")
+        val status = handle(call, exchange)
+        val what = exchange.detail?.let { " $it" } ?: ""
         // Every request, at debug: the wire-level record underneath whatever
         // higher-level line the handler wrote about the same exchange.
         log.debug(
-            "${session.method} ${session.uri}$what → ${response.status.description}",
-            "from ${session.remoteIpAddress}",
+            "${call.request.httpMethod.value} ${call.request.path()}$what → $status",
+            "from ${call.request.local.remoteAddress}",
         )
-        return response
     }
 
-    private fun handle(session: IHTTPSession): Response {
-        val uri = session.uri.trimEnd('/').ifEmpty { "/" }
+    /** Answers the call and returns the status it was answered with. */
+    private suspend fun handle(call: ApplicationCall, exchange: Exchange): HttpStatusCode {
+        val uri = call.request.path().decodeURLPart().trimEnd('/').ifEmpty { "/" }
 
         // Auth before routing: an unauthenticated caller learns nothing, not
         // even which paths exist.
-        if (!authorized(session)) {
+        if (!authorized(call)) {
             log.bump("rejected")
-            log.warn("rejected an unauthorized request", "from ${session.remoteIpAddress}")
-            return json(Response.Status.UNAUTHORIZED, JSONObject().put("error", "Unauthorized"))
+            log.warn(
+                "rejected an unauthorized request",
+                "from ${call.request.local.remoteAddress}",
+            )
+            return json(call, HttpStatusCode.Unauthorized, JSONObject().put("error", "Unauthorized"))
         }
 
         if (uri == FILES_PATH || uri.startsWith("$FILES_PATH/")) {
-            return filesRoute(session, uri.removePrefix(FILES_PATH))
+            return filesRoute(call, exchange, uri.removePrefix(FILES_PATH))
         }
 
         if (uri != MCP_PATH) {
-            return json(Response.Status.NOT_FOUND, JSONObject().put("error", "Not found: $uri"))
+            return json(call, HttpStatusCode.NotFound, JSONObject().put("error", "Not found: $uri"))
         }
 
-        if (session.method != Method.POST) {
+        if (call.request.httpMethod != HttpMethod.Post) {
             // The server-to-client notification stream is optional; we have
             // nothing to push, so GET is refused by design.
             return json(
-                Response.Status.METHOD_NOT_ALLOWED,
+                call,
+                HttpStatusCode.MethodNotAllowed,
                 JSONObject().put("error", "streaming not supported"),
             )
         }
 
-        val body = readBody(session) ?: return json(
-            Response.Status.BAD_REQUEST, rpcError(null, -32700, "Parse error"),
-        )
-
         val request = try {
-            JSONObject(body)
+            // JSON is UTF-8 by definition (RFC 8259), so the body is decoded
+            // as such whatever charset the Content-Type header names or omits.
+            JSONObject(String(call.receive<ByteArray>(), Charsets.UTF_8))
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            return json(Response.Status.BAD_REQUEST, rpcError(null, -32700, "Parse error"))
+            return json(call, HttpStatusCode.BadRequest, rpcError(null, -32700, "Parse error"))
         }
 
-        val response = dispatch(request)
-            ?: return newFixedLengthResponse(Response.Status.ACCEPTED, "text/plain", "")
-
-        return json(Response.Status.OK, response)
+        // Tools block, some for minutes; not on the server's own threads.
+        val response = withContext(Dispatchers.IO) { dispatch(request, exchange) }
+        if (response == null) {
+            call.respondText("", ContentType.Text.Plain, HttpStatusCode.Accepted)
+            return HttpStatusCode.Accepted
+        }
+        return json(call, HttpStatusCode.OK, response)
     }
 
     // ------------------------------- files -------------------------------
@@ -191,22 +262,27 @@ class McpServer(
      * path is the same `<folder>/<sub/path>` the file tools take, and the
      * same switch turns both off.
      */
-    private fun filesRoute(session: IHTTPSession, path: String): Response {
-        if (session.method != Method.PUT && session.method != Method.GET) {
+    private suspend fun filesRoute(
+        call: ApplicationCall,
+        exchange: Exchange,
+        path: String,
+    ): HttpStatusCode {
+        val method = call.request.httpMethod
+        if (method != HttpMethod.Put && method != HttpMethod.Get) {
             return json(
-                Response.Status.METHOD_NOT_ALLOWED,
+                call,
+                HttpStatusCode.MethodNotAllowed,
                 JSONObject().put("error", "PUT uploads a file and GET downloads one."),
             )
         }
-        val upload = if (session.method == Method.PUT) {
-            // Without a length there is no telling where the body ends:
-            // NanoHTTPD does not decode chunked request bodies.
-            val length = session.headers["content-length"]?.toLongOrNull()
+        val upload = if (method == HttpMethod.Put) {
+            val length = call.request.contentLength()
                 ?: return json(
-                    Response.Status.BAD_REQUEST,
+                    call,
+                    HttpStatusCode.BadRequest,
                     JSONObject().put("error", "A PUT needs a Content-Length header."),
                 )
-            BodyStream(session.inputStream, length)
+            BodyStream(call.receiveStream(), length)
         } else {
             null
         }
@@ -218,31 +294,33 @@ class McpServer(
                 )
             }
             if (upload != null) {
-                val written = files.put(path, upload)
-                detail.set("put $path")
+                val written = withContext(Dispatchers.IO) { files.put(path, upload) }
+                exchange.detail = "put $path"
                 log.info("file uploaded", path)
-                json(Response.Status.OK, written)
+                json(call, HttpStatusCode.OK, written)
             } else {
-                val (entry, stream) = files.open(path)
-                detail.set("get $path")
+                val (entry, stream) = withContext(Dispatchers.IO) { files.open(path) }
+                exchange.detail = "get $path"
                 log.info("file downloaded", path)
-                val mime = FileStore.mimeFor(entry.name)
-                entry.size?.let { newFixedLengthResponse(Response.Status.OK, mime, stream, it) }
-                    ?: newChunkedResponse(Response.Status.OK, mime, stream)
+                call.respondOutputStream(
+                    ContentType.parse(FileStore.mimeFor(entry.name)),
+                    HttpStatusCode.OK,
+                    entry.size,
+                ) {
+                    stream.use { it.copyTo(this) }
+                }
+                HttpStatusCode.OK
             }
         } catch (e: FileProblem) {
-            // A client that is still sending cannot read an answer, and
-            // closing on it mid-body turns the reason into a reset. So the
-            // rest of a refused upload is read and dropped, up to a limit.
-            upload?.drain(DRAIN_LIMIT)
             log.warn("file request refused", e.message)
             json(
+                call,
                 when (e.kind) {
-                    FileProblem.Kind.BAD_REQUEST -> Response.Status.BAD_REQUEST
-                    FileProblem.Kind.NOT_FOUND -> Response.Status.NOT_FOUND
-                    FileProblem.Kind.FORBIDDEN -> Response.Status.FORBIDDEN
-                    FileProblem.Kind.CONFLICT -> Response.Status.CONFLICT
-                    FileProblem.Kind.FAILED -> Response.Status.INTERNAL_ERROR
+                    FileProblem.Kind.BAD_REQUEST -> HttpStatusCode.BadRequest
+                    FileProblem.Kind.NOT_FOUND -> HttpStatusCode.NotFound
+                    FileProblem.Kind.FORBIDDEN -> HttpStatusCode.Forbidden
+                    FileProblem.Kind.CONFLICT -> HttpStatusCode.Conflict
+                    FileProblem.Kind.FAILED -> HttpStatusCode.InternalServerError
                 },
                 JSONObject().put("error", e.message),
             )
@@ -250,9 +328,10 @@ class McpServer(
     }
 
     /**
-     * Exactly the request body and no further: the connection's stream has
-     * no end of its own while the client waits for the answer. A body that
-     * stops short is an error, so half an upload is never kept as a file.
+     * The request body, checked against its declared length. A client that
+     * goes away mid-upload looks like the end of the body, so a body that
+     * stops short is made an error here and half an upload is never kept
+     * as a file. The same goes for a read ended by the server stopping.
      */
     private class BodyStream(private val source: InputStream, private var left: Long) : InputStream() {
         override fun read(): Int {
@@ -262,58 +341,21 @@ class McpServer(
 
         override fun read(b: ByteArray, off: Int, len: Int): Int {
             if (left <= 0) return -1
-            // The socket gives up after a few seconds of silence, which is
-            // right for an idle connection and too quick for a phone-sized
-            // upload over a link that hiccups. A timed-out read leaves the
-            // socket usable, so an upload is allowed several in a row.
-            var silences = 0
-            while (true) {
-                val n = try {
-                    source.read(b, off, minOf(len.toLong(), left).toInt())
-                } catch (e: SocketTimeoutException) {
-                    if (++silences >= MAX_SILENCES) throw UploadCut("the upload stalled")
-                    continue
-                }
-                if (n < 0) throw UploadCut("the upload ended $left bytes early")
-                left -= n
-                return n
+            val n = try {
+                source.read(b, off, minOf(len.toLong(), left).toInt())
+            } catch (e: CancellationException) {
+                throw UploadCut("the server stopped with $left bytes to come")
             }
+            if (n < 0) throw UploadCut("the upload ended $left bytes early")
+            left -= n
+            return n
         }
 
-        private companion object {
-            /** Consecutive socket timeouts an upload survives: about half a minute. */
-            const val MAX_SILENCES = 6
-        }
-
-        fun drain(limit: Long) {
-            if (left > limit) return
-            val buffer = ByteArray(64 * 1024)
-            try {
-                while (read(buffer, 0, buffer.size) >= 0) Unit
-            } catch (e: IOException) {
-                // The client went away; nothing left to be polite to.
-            }
-        }
+        override fun close() = source.close()
     }
 
-    /**
-     * NanoHTTPD decodes request bodies with the charset parameter of the
-     * Content-Type header, and falls back to ASCII when there is none, which
-     * mangles every multi-byte character into one '?' per byte. Nothing
-     * talking to this server sends anything but UTF-8 (JSON is UTF-8 by
-     * definition, RFC 8259), so a missing charset is declared to be UTF-8
-     * here, once. An explicit charset is left alone.
-     */
-    private fun defaultToUtf8(session: IHTTPSession) {
-        val contentType = session.headers["content-type"] ?: return
-        if (!contentType.contains("charset", ignoreCase = true)) {
-            session.headers["content-type"] = "$contentType; charset=utf-8"
-        }
-    }
-
-    private fun authorized(session: IHTTPSession): Boolean {
-        // NanoHTTPD lowercases header names.
-        val header = session.headers["authorization"] ?: return false
+    private fun authorized(call: ApplicationCall): Boolean {
+        val header = call.request.headers[HttpHeaders.Authorization] ?: return false
         return constantTimeEquals(header, "Bearer ${token()}")
     }
 
@@ -332,40 +374,25 @@ class McpServer(
         return diff == 0
     }
 
-    private fun json(status: Response.Status, body: JSONObject): Response =
-        newFixedLengthResponse(status, "application/json", body.toString())
-
-    private fun readBody(session: IHTTPSession): String? = try {
-        // Read the bytes ourselves rather than NanoHTTPD's parseBody: that
-        // decodes with the Content-Type charset and falls back to ASCII when
-        // a client sends bare application/json — turning every multi-byte
-        // character into one '?' per byte. JSON is UTF-8 by definition
-        // (RFC 8259), so decode it as such unconditionally.
-        val length = session.headers["content-length"]?.toIntOrNull() ?: 0
-        val bytes = ByteArray(length)
-        var read = 0
-        while (read < length) {
-            val n = session.inputStream.read(bytes, read, length - read)
-            if (n < 0) break
-            read += n
-        }
-        String(bytes, 0, read, Charsets.UTF_8)
-    } catch (e: Exception) {
-        Log.w(TAG, "Could not read the request body", e)
-        null
+    private suspend fun json(
+        call: ApplicationCall,
+        status: HttpStatusCode,
+        body: JSONObject,
+    ): HttpStatusCode {
+        call.respondText(body.toString(), ContentType.Application.Json, status)
+        return status
     }
 
     // ------------------------------ protocol ------------------------------
 
     /** Returns null for a notification, which the caller answers with 202. */
-    private fun dispatch(msg: JSONObject): JSONObject? {
+    private fun dispatch(msg: JSONObject, exchange: Exchange): JSONObject? {
         val method = msg.optString("method")
         val id = if (msg.isNull("id")) null else msg.opt("id")
         val params = msg.optJSONObject("params") ?: JSONObject()
 
-        detail.set(
-            if (method == "tools/call") "tools/call ${params.optString("name")}" else method,
-        )
+        exchange.detail =
+            if (method == "tools/call") "tools/call ${params.optString("name")}" else method
 
         return when {
             method == "initialize" -> rpcOk(
@@ -405,13 +432,10 @@ class McpServer(
             method == "tools/call" -> {
                 val name = params.optString("name")
                 val args = params.optJSONObject("arguments") ?: JSONObject()
-                // A tool that throws used to take the HTTP worker thread with
-                // it: NanoHTTPD lets anything unchecked out of serve() close
-                // the socket, so the client saw the connection drop rather
-                // than a failure — the server looked dead for that request.
-                // A generic tool firing an intent at a permission-guarded
-                // component is exactly how that happens, and the exception
-                // text is a finding worth returning.
+                // A tool that throws is answered as a failed call, not as a
+                // server error. A generic tool firing an intent at a
+                // permission-guarded component is exactly how that happens,
+                // and the exception text is a finding worth returning.
                 val spec = byName[name]
                 val (text, isError) = try {
                     when {

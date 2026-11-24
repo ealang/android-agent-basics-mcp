@@ -175,8 +175,8 @@ class MainActivity : ComponentActivity() {
 
         val bind = bindText.trim().ifEmpty { Networks.ALL_IPV4 }
         if (!Networks.isLiteral(bind)) {
-            // Only literal addresses: NanoHTTPD would otherwise resolve the
-            // string, and a name that resolves off-device binds nothing.
+            // Only literal addresses: a name would be resolved, and one that
+            // resolves off-device binds nothing.
             toast("Bind address must be an IP address, or 0.0.0.0 for every interface")
             return
         }

@@ -10,12 +10,19 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ServiceInfo
+import android.net.ConnectivityManager
+import android.net.InetAddresses
+import android.net.LinkProperties
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
+import java.net.InetAddress
 import io.github.ealang.agentbasicsmcp.mcp.McpServer
 import io.github.ealang.agentbasicsmcp.mcp.apps.Sound
 
@@ -166,6 +173,46 @@ class McpService : Service() {
         }
     }
 
+    /**
+     * The addresses each network holds, kept so that one being taken away
+     * is seen as it happens. Android destroys a listener bound to an address
+     * that goes, as when a VPN drops, and the server does not notice: it
+     * would stand there deaf, still reported as listening, after the address
+     * came back. Runs on the main thread.
+     *
+     * An interface that is not a network to Android, the phone's own
+     * hotspot, sends nothing here.
+     */
+    private val networks = object : ConnectivityManager.NetworkCallback() {
+        private val held = HashMap<Network, Set<InetAddress>>()
+
+        override fun onLinkPropertiesChanged(network: Network, link: LinkProperties) {
+            val now = link.linkAddresses.map { it.address }.toSet()
+            val before = held.put(network, now) ?: emptySet()
+            addressesChanged(gone = before - now, come = now - before)
+        }
+
+        override fun onLost(network: Network) {
+            addressesChanged(gone = held.remove(network) ?: emptySet(), come = emptySet())
+        }
+    }
+
+    private fun addressesChanged(gone: Set<InetAddress>, come: Set<InetAddress>) {
+        val bound = Config(this).bindAddress
+        // Bound to every interface, the listener belongs to no one address.
+        if (bound.isBlank() || bound == Networks.ALL_IPV4 || !Networks.isLiteral(bound)) return
+        val address = InetAddresses.parseNumericAddress(bound)
+        if (address in gone && server != null) {
+            Log.w(TAG, "The bind address is gone; rebinding")
+            Logs.mcp.warn("bind address gone", "restarting")
+            rebind()
+        } else if (address in come && server == null && failingSince != 0L) {
+            // Back before the next retry was due.
+            retryDelayMs = INITIAL_RETRY_MS
+            attemptStart()
+        }
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
@@ -179,6 +226,14 @@ class McpService : Service() {
         } else {
             registerReceiver(channelStateChanged, filter)
         }
+        getSystemService(ConnectivityManager::class.java).registerNetworkCallback(
+            // Every network, VPNs included: a request leaves those out by default.
+            NetworkRequest.Builder()
+                .removeCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+                .build(),
+            networks,
+            main,
+        )
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -311,8 +366,7 @@ class McpService : Service() {
             log = Logs.mcp,
         )
         try {
-            // daemon=false: the socket should outlive the thread that made it.
-            instance.start(NanoTimeouts.SOCKET_READ_MS, false)
+            instance.start()
             server = instance
             running = true
             retryDelayMs = INITIAL_RETRY_MS
@@ -346,23 +400,28 @@ class McpService : Service() {
     }
 
     /**
-     * Called from the listener thread when the socket has failed repeatedly
-     * and shut itself. Tears the server down and goes back to binding.
+     * Called from a server thread when the server has failed underneath us.
+     * Tears it down and goes back to binding.
      */
     private fun onServerDied() {
         main.post {
             Log.w(TAG, "Server died underneath us; rebinding")
-            Logs.mcp.warn("restarting after socket death")
-            server?.stop()
-            server = null
-            running = false
-            attemptStart()
+            Logs.mcp.warn("restarting after server failure")
+            rebind()
         }
+    }
+
+    private fun rebind() {
+        server?.stop()
+        server = null
+        running = false
+        attemptStart()
     }
 
     override fun onDestroy() {
         main.removeCallbacks(retry)
         unregisterReceiver(channelStateChanged)
+        getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(networks)
         // Not the foreground notification, so stopping does not remove it.
         getSystemService(NotificationManager::class.java).cancel(TROUBLE_NOTIFICATION_ID)
         // Nothing would be left able to answer find_my_phone_stop, so a ring that
@@ -447,9 +506,4 @@ class McpService : Service() {
             .setGroup("agent-basics-mcp-service")
             .build()
     }
-}
-
-private object NanoTimeouts {
-    /** NanoHTTPD's default; long enough for a keep-alive client to idle. */
-    const val SOCKET_READ_MS = 5000
 }

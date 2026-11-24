@@ -8,9 +8,9 @@ import java.net.SocketTimeoutException
  * The connection the current thread is answering, for a tool that holds its
  * request open and needs to know whether anyone is still there to answer.
  *
- * The server runs each connection on its own thread, start to finish, so
- * the thread is the handle: [McpServer] records the socket here before the
- * request is read and clears it after the response is written.
+ * The thread is the handle: a server that runs each connection on one
+ * thread records the socket here with [serving]. [McpServer] does not, so
+ * for now nothing is recorded and [alive] is always true.
  */
 object ClientConnection {
 
