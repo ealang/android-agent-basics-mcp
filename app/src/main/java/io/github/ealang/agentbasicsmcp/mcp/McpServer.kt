@@ -9,6 +9,7 @@ import io.github.ealang.agentbasicsmcp.mcp.apps.AppTools
 import io.github.ealang.agentbasicsmcp.mcp.files.FileProblem
 import io.github.ealang.agentbasicsmcp.mcp.files.FileStore
 import io.github.ealang.agentbasicsmcp.mcp.files.FileTools
+import io.github.ealang.agentbasicsmcp.mcp.files.ServedFiles
 import io.github.ealang.agentbasicsmcp.mcp.files.UploadCut
 import io.github.ealang.agentbasicsmcp.mcp.generic.GenericTools
 import io.github.ealang.agentbasicsmcp.mcp.pebble.PebbleTools
@@ -66,7 +67,6 @@ import org.json.JSONObject
  * practical well under a megabyte.
  */
 class McpServer(
-    private val context: Context,
     bindAddress: String,
     private val port: Int,
     /**
@@ -80,6 +80,15 @@ class McpServer(
     private val onDied: () -> Unit,
     /** The server's log; every request line goes here too. */
     private val log: ServerLog,
+    /** The whole tool surface, in the order tools/list shows it. */
+    private val tools: List<ToolSpec>,
+    /**
+     * The MCP Tools card's feature switches, asked per request, so a switch
+     * takes effect on the next call with no restart.
+     */
+    private val featureEnabled: (String) -> Boolean,
+    /** What the /files routes read and write. */
+    private val files: ServedFiles,
 ) {
     // One literal address, or 0.0.0.0 for every IPv4 interface. The IPv4
     // wildcard rather than the dual-stack one: a carrier hands the phone a
@@ -213,35 +222,45 @@ class McpServer(
         engine.stop(0, 0)
     }
 
-    /**
-     * The whole tool surface, one [ToolSpec] per tool, in the order tools/list
-     * shows them. Built once — the specs close over the Context, which lives
-     * as long as the app does.
-     */
-    private val tools: List<ToolSpec> =
-        AppTools.specs(context) + PebbleTools.specs(context) + GenericTools.specs(context) +
-            FileTools.specs(context)
-
     private val byName: Map<String, ToolSpec> = tools.associateBy { it.name }
 
-    private val config = Config(context)
-
-    private val files = FileStore(context)
-
     /**
-     * The MCP Tools card's feature switches, honoured per request — SharedPreferences
-     * is an in-memory map after first load, so reading it fresh each time *is*
-     * the real-time toggle, no restart involved. A null featureKey means
-     * always on: a capability of the phone itself, with no switch to check.
+     * A null featureKey means always on: a capability of the phone itself,
+     * with no switch to check.
      */
     private fun enabled(spec: ToolSpec): Boolean =
-        spec.featureKey == null || config.featureEnabled(spec.featureKey)
+        spec.featureKey == null || featureEnabled(spec.featureKey)
 
     companion object {
         private const val TAG = "AgentBasicsMcpServer"
         private const val FALLBACK_PROTOCOL = "2025-11-25"
         const val MCP_PATH = "/mcp"
         const val FILES_PATH = "/files"
+
+        /**
+         * The server as the app runs it: every tool, the user's switches,
+         * the real file system. The tool specs close over the Context, which
+         * lives as long as the app does.
+         */
+        fun forApp(
+            context: Context,
+            bindAddress: String,
+            port: Int,
+            token: () -> String,
+            onDied: () -> Unit,
+            log: ServerLog,
+        ): McpServer {
+            // SharedPreferences is an in-memory map after first load, so
+            // reading a switch fresh on each request costs nothing.
+            val config = Config(context)
+            return McpServer(
+                bindAddress, port, token, onDied, log,
+                tools = AppTools.specs(context) + PebbleTools.specs(context) +
+                    GenericTools.specs(context) + FileTools.specs(context),
+                featureEnabled = config::featureEnabled,
+                files = FileStore(context),
+            )
+        }
 
         private val EXCHANGE = AttributeKey<Exchange>("Exchange")
 
@@ -314,7 +333,7 @@ class McpServer(
             null
         }
         return try {
-            if (!config.featureEnabled(FileTools.FEATURE)) {
+            if (!featureEnabled(FileTools.FEATURE)) {
                 throw FileProblem(
                     FileProblem.Kind.FORBIDDEN,
                     "The user has switched the file tools off in the Agent Basics MCP app.",
@@ -326,15 +345,11 @@ class McpServer(
                 log.info("file uploaded", path)
                 json(call, HttpStatusCode.OK, written)
             } else {
-                val (entry, stream) = withContext(Dispatchers.IO) { files.open(path) }
+                val file = withContext(Dispatchers.IO) { files.serve(path) }
                 exchange.detail = "get $path"
                 log.info("file downloaded", path)
-                call.respondOutputStream(
-                    ContentType.parse(FileStore.mimeFor(entry.name)),
-                    HttpStatusCode.OK,
-                    entry.size,
-                ) {
-                    stream.use { it.copyTo(this) }
+                call.respondOutputStream(ContentType.parse(file.mime), HttpStatusCode.OK, file.size) {
+                    file.stream.use { it.copyTo(this) }
                 }
                 HttpStatusCode.OK
             }

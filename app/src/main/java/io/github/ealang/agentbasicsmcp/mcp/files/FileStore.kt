@@ -40,6 +40,17 @@ class Entry(
     val uri: Uri?,
 )
 
+/** A file being downloaded; whoever takes it closes the stream. */
+class ServedFile(val mime: String, val size: Long?, val stream: InputStream)
+
+/** The part of the file system the /files routes use. */
+interface ServedFiles {
+    /** Writes [input] to [path] and returns the new file's listing entry. */
+    fun put(path: String, input: InputStream): JSONObject
+
+    fun serve(path: String): ServedFile
+}
+
 /**
  * The virtual file system behind the file tools and the /files routes.
  *
@@ -49,7 +60,7 @@ class Entry(
  * outside those is reachable: a path is walked one name at a time from
  * the folder's root, and `.` and `..` are refused.
  */
-class FileStore(context: Context) {
+class FileStore(context: Context) : ServedFiles {
 
     private val context = context.applicationContext
     private val config = Config(context)
@@ -103,10 +114,15 @@ class FileStore(context: Context) {
         e to t.backend.read(node)
     }
 
+    override fun serve(path: String): ServedFile {
+        val (entry, stream) = open(path)
+        return ServedFile(mimeFor(entry.name), entry.size, stream)
+    }
+
     // ------------------------------------------------------------ writing
 
     /** Writes [input] to [path], making missing folders and replacing a file already there. */
-    fun put(path: String, input: InputStream): JSONObject = guarded {
+    override fun put(path: String, input: InputStream): JSONObject = guarded {
         val parts = split(path)
         val t = target(parts).writable()
         if (t.segments.isEmpty()) {

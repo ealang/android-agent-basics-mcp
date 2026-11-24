@@ -131,3 +131,15 @@ story — git keeps the history. The layout, the front matter and the
 authoring rules are in `skills/AGENTS.md`; read it before adding or
 editing a skill file.
 
+
+## Tests
+
+`./gradlew testDebugUnitTest` runs everything in `app/src/test` on the
+build machine's JVM; no device or emulator is involved.
+
+`McpServerTest` is the pattern for the HTTP layer: it starts the real
+server on a loopback port and makes real requests, with stand-ins only at
+the edges the server is handed, namely the tool list, the feature
+switches and the file system. New server behaviour gets a test there.
+Code that needs Android to run (the tools themselves, the UI) is checked
+on a device instead; no mocking library and no emulated Android.

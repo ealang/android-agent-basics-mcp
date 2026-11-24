@@ -81,6 +81,12 @@ android {
         }
     }
 
+    testOptions {
+        // android.util.Log and the like do nothing in a JVM test instead of
+        // throwing.
+        unitTests.isReturnDefaultValues = true
+    }
+
     buildFeatures {
         compose = true
         // The per-build-type labels above are resValue entries.
@@ -118,4 +124,9 @@ dependencies {
     // ContextCompat.registerReceiver: the exported flag on every Android,
     // not only the ones whose framework method takes it.
     implementation("androidx.core:core-ktx:1.19.1")
+
+    // Tests run on the build machine's JVM, no device: ./gradlew testDebugUnitTest
+    testImplementation("org.jetbrains.kotlin:kotlin-test-junit")
+    // The SDK's org.json is a stub off the device; this is the real one.
+    testImplementation("org.json:json:20260814")
 }

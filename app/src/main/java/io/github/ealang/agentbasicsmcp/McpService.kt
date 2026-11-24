@@ -357,7 +357,7 @@ class McpService : Service() {
         val listeningOn = config.bindAddress
             .ifBlank { Networks.ALL_IPV4 }
             .let { if (it == Networks.ALL_IPV4) "every interface" else Networks.hostForUrl(it) }
-        val instance = McpServer(
+        val instance = McpServer.forApp(
             applicationContext,
             config.bindAddress,
             config.port,
